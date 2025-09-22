@@ -135,6 +135,20 @@ npm run type-check   # Verifica tipos TypeScript
 - **SEO:** Meta tags e estrutura semântica
 - **Tipagem:** TypeScript rigoroso em todo o projeto
 
+## 🏢 Empresa Desenvolvedora
+
+**CESIRE Tecnologia**
+
+Este projeto foi desenvolvido pela [CESIRE](https://www.cesire.com.br), uma empresa especializada em soluções tecnológicas inovadoras. A CESIRE tem como missão criar aplicações modernas e eficientes que atendam às necessidades específicas de cada cliente.
+
+### Sobre a CESIRE
+- 🚀 **Especialização:** Desenvolvimento de aplicações web e mobile
+- 💡 **Foco:** Soluções personalizadas e tecnologias modernas
+- 🎯 **Missão:** Transformar ideias em produtos digitais de alta qualidade
+- 🌐 **Website:** [www.cesire.com.br](https://www.cesire.com.br)
+
+---
+
 ## 🤝 Contribuição
 
 1. Faça um fork do projeto
