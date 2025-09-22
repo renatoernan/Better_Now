@@ -5,7 +5,7 @@ export const translations = {
     navServices: 'Services',
     navAbout: 'About',
     navTestimonials: 'Testimonials',
-    navRequestQuote: 'Request Quote',
+    navRequestQuote: 'Quote',
 
     // Hero
     heroTitle: 'Your Celebration Starts Now',
@@ -157,7 +157,7 @@ export const translations = {
     navServices: 'Serviços',
     navAbout: 'Sobre',
     navTestimonials: 'Depoimentos',
-    navRequestQuote: 'Pedir Orçamento',
+    navRequestQuote: 'Orçamento',
 
     // Hero
     heroTitle: 'Sua Celebração Começa Agora',
@@ -309,7 +309,7 @@ export const translations = {
     navServices: 'Servicios',
     navAbout: 'Acerca de',
     navTestimonials: 'Testimonios',
-    navRequestQuote: 'Solicitar Presupuesto',
+    navRequestQuote: 'Presupuesto',
 
     // Hero
     heroTitle: 'Tu Celebración Comienza Ahora',

@@ -29,7 +29,7 @@ const Hero: React.FC = () => {
   }, [finalImages.length, settings.carousel_autoplay, settings.carousel_interval]);
 
   return (
-    <section id="home" className="relative h-[60vh] min-h-[500px] flex items-center justify-center text-center text-white">
+    <section id="home" className="relative h-[60vh] min-h-[500px] flex items-center justify-center text-center text-white pt-16 sm:pt-20 md:pt-24 lg:pt-28 xl:pt-32">
       {/* Carrossel de imagens de fundo */}
       {finalImages.map((image, index) => (
         <div
@@ -49,10 +49,9 @@ const Hero: React.FC = () => {
       <div className="absolute inset-0 bg-black opacity-50"></div>
       
       <div className="relative z-10 px-4 sm:px-6 max-w-4xl mx-auto">
-        <h1 className="text-3xl xs:text-4xl sm:text-5xl md:text-7xl font-bold leading-tight mb-3 sm:mb-4" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.7)'}}>
-          {translations.heroTitle}
-          <br />
-          <span className="text-blue-400">{translations.heroSubtitle}</span>
+        <h1 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-3 sm:mb-4" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.7)'}}>
+          <span className="block ">{translations.heroTitle}</span>
+          <span className="block text-blue-400">{translations.heroSubtitle}</span>
         </h1>
         <p className="text-sm xs:text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-6 sm:mb-8 px-2" style={{textShadow: '1px 1px 2px rgba(0,0,0,0.7)'}}>
           {translations.heroDescription}
