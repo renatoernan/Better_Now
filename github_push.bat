@@ -6,11 +6,12 @@ REM =========================================================
 
 REM ATENÇÃO:
 REM 1. Certifique-se de ter o Git instalado no seu sistema.
-REM 2. Se você nunca fez login no GitHub pelo Git nesta máquina,
-REM    o Git pode pedir suas credenciais (nome de usuário e Personal Access Token - PAT).
-REM    O GitHub não aceita mais senhas de conta via linha de comando para autenticação.
-REM    Crie seu PAT aqui: https://github.com/settings/tokens (selecione o escopo 'repo')
-REM 3. Por favor, edite a linha 'set "GITHUB_REPO_URL="' abaixo com a URL CORRETA do seu repositório GitHub!
+REM 2. *** Autenticação GitHub: ***
+REM    O GitHub não aceita mais senhas de conta via linha de comando para autenticação HTTPS.
+REM    Você DEVE usar um Personal Access Token (PAT).
+REM    Se for solicitado, use seu nome de usuário GitHub e o PAT como sua senha.
+REM    Crie seu PAT aqui: https://github.com/settings/tokens (selecione o escopo 'repo' para total acesso)
+REM    Guarde o PAT em segurança, pois ele só é exibido uma vez.
 
 echo.
 echo =========================================================
@@ -19,26 +20,26 @@ echo =========================================================
 echo.
 
 REM 1. DEFINE O DIRETÓRIO DO SEU PROJETO LOCAL
-REM    Este é o caminho da sua pasta Better_Now.
 set "PROJECT_DIR=C:\Users\renat\OneDrive\CESIRE\Cesire\Aplicativos\Better_Now"
 
 REM 2. DEFINE A URL DO SEU REPOSITÓRIO GITHUB REMOTO
-REM    !!! IMPORTANTE: VOCÊ DEVE SUBSTITUIR O VALOR ABAIXO PELA URL DO SEU REPOSITÓRIO !!!
-REM    Exemplo: set "GITHUB_REPO_URL=https://github.com/renatoernan/Better_Now.git"
-set "GITHUB_REPO_URL=https://github.com/renatoernan/Better_Now.git" 
+REM    !!! ESTA URL FOI ATUALIZADA COM BASE NA SUA INFORMACAO !!!
+set "GITHUB_REPO_URL=https://github.com/renatoernan/Better_Now.git"
 
 REM --- VERIFICAÇÕES INICIAIS ---
 if not exist "%PROJECT_DIR%" (
     echo ERRO: O diretório do projeto não foi encontrado: %PROJECT_DIR%
     echo Verifique o caminho especificado e tente novamente.
-    pause
+    echo Pressione qualquer tecla para sair...
+    pause > nul
     exit /b 1
 )
 
 if "%GITHUB_REPO_URL%"=="" (
     echo ERRO: A URL do seu repositório GitHub NAO foi definida no script.
     echo Por favor, edite este arquivo .bat e insira a URL correta em GITHUB_REPO_URL.
-    pause
+    echo Pressione qualquer tecla para sair...
+    pause > nul
     exit /b 1
 )
 
@@ -46,7 +47,8 @@ echo Navegando para o diretório do projeto: %PROJECT_DIR%
 cd /d "%PROJECT_DIR%"
 if %errorlevel% neq 0 (
     echo ERRO: Não foi possível navegar para o diretório do projeto.
-    pause
+    echo Pressione qualquer tecla para sair...
+    pause > nul
     exit /b %errorlevel%
 )
 
@@ -56,7 +58,8 @@ if not exist ".git" (
     git init --initial-branch=main
     if %errorlevel% neq 0 (
         echo ERRO ao inicializar o repositório Git.
-        pause
+        echo Pressione qualquer tecla para sair...
+        pause > nul
         exit /b %errorlevel%
     )
 ) else (
@@ -65,7 +68,8 @@ if not exist ".git" (
     git branch -M main
     if %errorlevel% neq 0 (
         echo ERRO ao garantir o branch 'main'.
-        pause
+        echo Pressione qualquer tecla para sair...
+        pause > nul
         exit /b %errorlevel%
     )
 )
@@ -74,17 +78,16 @@ echo Adicionando todos os arquivos alterados/novos ao staging area...
 git add .
 if %errorlevel% neq 0 (
     echo ERRO ao adicionar arquivos ao staging area.
-    pause
+    echo Pressione qualquer tecla para sair...
+    pause > nul
     exit /b %errorlevel%
 )
 
 echo Criando commit das alteracoes...
-REM Uma mensagem de commit padrão é usada. Você pode alterá-la no script se desejar.
 git commit -m "Atualizacao automatica via script BAT"
-REM Se não houver alterações, o Git commit pode retornar um aviso, mas o script continuará.
-if %errorlevel% neq 0 (
-    echo Aviso: Nenhuma alteracao para commitar ou erro nao fatal ao commitar. Continuar com o push.
-)
+REM O comando git commit retorna 0 mesmo se nao houver alteracoes.
+REM Se houver erro real (e.g., config inválida), ele terá outro errolevel.
+REM Para um commit 'vazio', o Git apenas avisa e segue.
 
 REM 4. ADICIONA OU VERIFICA O REPOSITÓRIO REMOTO (ORIGIN)
 echo Verificando configuracao do repositorio remoto 'origin'...
@@ -94,7 +97,8 @@ if %errorlevel% neq 0 (
     git remote add origin "%GITHUB_REPO_URL%"
     if %errorlevel% neq 0 (
         echo ERRO ao adicionar o repositorio remoto 'origin'.
-        pause
+        echo Pressione qualquer tecla para sair...
+        pause > nul
         exit /b %errorlevel%
     )
 ) else (
@@ -108,13 +112,15 @@ if %errorlevel% neq 0 (
         git remote remove origin
         if %errorlevel% neq 0 (
             echo ERRO ao remover o repositorio remoto existente.
-            pause
+            echo Pressione qualquer tecla para sair...
+            pause > nul
             exit /b %errorlevel%
         )
         git remote add origin "%GITHUB_REPO_URL%"
         if %errorlevel% neq 0 (
             echo ERRO ao adicionar 'origin' com a URL correta.
-            pause
+            echo Pressione qualquer tecla para sair...
+            pause > nul
             exit /b %errorlevel%
         )
     ) else (
@@ -122,16 +128,31 @@ if %errorlevel% neq 0 (
     )
 )
 
+echo.
 echo Enviando arquivos para o GitHub (branch main)...
-REM O '-u' (ou '--set-upstream') define o branch remoto padrão e só precisa ser usado na primeira vez.
+echo --- SE FOR SOLICITADO, USE SEU NOME DE USUÁRIO E SEU PERSONAL ACCESS TOKEN (PAT) COMO SENHA ---
+echo.
 git push -u origin main
+
 if %errorlevel% neq 0 (
-    echo ERRO FATAL ao enviar para o GitHub.
-    echo Por favor, verifique:
-    echo 1. Sua conexao com a internet.
-    echo 2. Suas credenciais Git (Personal Access Token - PAT/SSH) ou se voce esta logado corretamente.
-    echo 3. A URL do repositorio definida no script esta correta e acessivel.
-    pause
+    echo.
+    echo =========================================================
+    echo  ERRO FATAL DURANTE O ENVIO PARA O GITHUB! 🔴
+    echo =========================================================
+    echo.
+    echo O comando 'git push' falhou com codigo de erro: %errorlevel%
+    echo Por favor, verifique os seguintes pontos:
+    echo 1. Sua conexao com a internet esta funcionando?
+    echo 2. *** Autenticacao GitHub: VOCE PRECISA USAR UM PERSONAL ACCESS TOKEN (PAT)! ***
+    echo    Seu Git pode ter tentado pedir suas credenciais, mas o prompt pode ter fechado rapidamente.
+    echo    Crie um PAT no GitHub (https://github.com/settings/tokens) com escopo 'repo'.
+    echo    Ao ser solicitado pelo Git (seja no prompt ou em uma janela pop-up), use:
+    echo    Usuario: Seu nome de usuario do GitHub
+    echo    Senha: O Personal Access Token (PAT) que voce gerou
+    echo 3. Permissoes: Voce tem permissoes de escrita para o repositorio '%GITHUB_REPO_URL%'?
+    echo.
+    echo Pressione qualquer tecla para sair e tentar solucionar o problema...
+    pause > nul
     exit /b %errorlevel%
 )
 
@@ -141,4 +162,6 @@ echo  Projeto enviado com SUCESSO para o GitHub! ✨
 echo =========================================================
 echo.
 
-pause
+echo Pressione qualquer tecla para fechar...
+pause > nul
+exit /b 0
