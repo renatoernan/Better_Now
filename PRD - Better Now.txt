@@ -1,0 +1,372 @@
+---
+
+# 📋 **PRD - Plataforma Better Now**
+**Product Requirements Document**
+
+---
+
+##    **1. VISÃO GERAL DO PRODUTO**
+
+### **1.1 Objetivo**
+Desenvolver uma plataforma web responsiva para a Better Now que permita:
+- Divulgação da empresa e seus eventos
+- Comercialização de ingressos para eventos selecionados
+- Gestão administrativa completa de eventos e clientes
+- Controle financeiro individualizado por evento
+- Sistema de validação de acesso via QR Code
+
+### **1.2 Público-Alvo**
+- **Primário**: Famílias de médio e alto padrão
+- **Secundário**: Empresas para eventos corporativos
+- **Administrativo**: Equipe Better Now
+
+### **1.3 Escopo do Projeto**
+- **Prazo**: 1 mês
+- **Volume**: ~5 eventos/ano, ~200 pessoas/evento
+- **Plataforma**: Web responsiva (mobile-first)
+
+---
+
+## 🏗️ **2. ARQUITETURA DO SISTEMA**
+
+### **2.1 Módulos Principais**
+
+#### **🌐 Site Institucional**
+- Apresentação da empresa Better Now
+- Portfólio de eventos realizados
+- Informações de contato
+- Blog/notícias (opcional)
+
+#### **🎫 Sistema de Eventos**
+- Catálogo de eventos disponíveis
+- Páginas individuais de cada evento
+- Sistema de compra de ingressos
+- Lista de espera para eventos esgotados
+
+#### **👤 Gestão de Clientes**
+- Cadastro manual de clientes pelo admin
+- Base de dados validada
+- Lista de permissão por evento
+- Histórico de compras
+
+#### **💰 Sistema Financeiro**
+- Controle de receitas por evento
+- Lançamento manual de despesas
+- Relatórios de break-even
+- Análise de lucro/prejuízo
+
+#### **📱 Controle de Acesso**
+- Geração de QR Codes únicos
+- App/sistema de validação mobile
+- Controle de entrada em tempo real
+
+---
+
+## 🔧 **3. FUNCIONALIDADES DETALHADAS**
+
+### **3.1 Área Pública (Site)**
+
+#### **Homepage**
+- **Header**: Logo Better Now, menu de navegação
+- **Hero Section**: Apresentação da empresa com destaque para Roberta Forte
+- **Eventos em Destaque**: Cards dos próximos eventos
+- **Sobre a Empresa**: História, missão, valores
+- **Portfólio**: Galeria de eventos realizados
+- **Contato**: Formulário e informações
+- **Footer**: Links úteis, redes sociais
+
+#### **Página de Eventos**
+- **Lista de Eventos**: Filtros por data, tipo, status
+- **Cards de Evento**: 
+  - Imagem de capa
+  - Nome, data, local
+  - Preço atual (lote vigente)
+  - Status (disponível/esgotado/em breve)
+  - Botão "Comprar" ou "Lista de Espera"
+
+#### **Página Individual do Evento**
+- **Informações Completas**:
+  - Galeria de imagens
+  - Descrição detalhada
+  - Data, horário, local
+  - Programação
+  - Política de reembolso
+- **Sistema de Compra**:
+  - Verificação de permissão (cliente cadastrado)
+  - Seleção de quantidade
+  - Resumo do pedido
+  - Gateway de pagamento
+
+### **3.2 Sistema de Compra**
+
+#### **Fluxo de Compra**
+1. **Verificação de Cliente**: Email/CPF na base cadastrada
+2. **Seleção de Ingressos**: Quantidade (respeitando limite)
+3. **Dados do Comprador**: Confirmação/atualização
+4. **Pagamento**: PIX ou Cartão (até 6x)
+5. **Confirmação**: Email + WhatsApp com QR Code
+
+#### **Validações**
+- Cliente deve estar na lista de permissão do evento
+- Verificar capacidade disponível
+- Validar dados de pagamento
+- Gerar QR Code único por ingresso
+
+### **3.3 Área Administrativa**
+
+#### **Dashboard Principal**
+- **Métricas Gerais**:
+  - Total de eventos ativos
+  - Vendas do mês
+  - Próximos eventos
+  - Alertas importantes
+- **Gráficos**:
+  - Vendas por evento
+  - Evolução mensal
+  - Taxa de ocupação
+
+#### **Gestão de Clientes**
+- **Cadastro Manual**:
+  - Nome completo
+  - Email, telefone
+  - CPF/CNPJ
+  - Endereço
+  - Observações
+- **Lista de Clientes**:
+  - Busca e filtros
+  - Histórico de compras
+  - Status (ativo/inativo)
+  - Ações (editar/excluir)
+
+#### **Gestão de Eventos**
+- **Cadastro de Evento**:
+  - Informações básicas (nome, data, local)
+  - Descrição e programação
+  - Capacidade máxima
+  - Configuração de lotes e preços
+  - Upload de imagens
+  - Lista de clientes permitidos
+  - Tipo (com/sem venda de ingressos)
+
+- **Controle de Vendas**:
+  - Dashboard por evento
+  - Lista de compradores
+  - Controle de capacidade
+  - Gestão de lista de espera
+  - Exportação de listas
+
+#### **Sistema Financeiro**
+- **Por Evento**:
+  - Receitas (vendas de ingressos)
+  - Despesas (lançamento manual)
+  - Categorias de despesas
+  - Break-even point
+  - Margem de lucro/prejuízo
+
+- **Relatórios**:
+  - Financeiro consolidado
+  - Performance por evento
+  - Análise de público
+  - Exportação para Excel/PDF
+
+#### **Marketing e Comunicação**
+- **Email Marketing**:
+  - Templates para convites
+  - Segmentação de público
+  - Agendamento de envios
+  - Métricas de abertura
+
+- **Notificações Push**:
+  - Confirmação de compra
+  - Lembretes de evento
+  - Promoções especiais
+  - Comunicados importantes
+
+### **3.4 Sistema de Validação (QR Code)**
+
+#### **Geração de QR Codes**
+- **Código Único**: Por ingresso vendido
+- **Informações Criptografadas**:
+  - ID do evento
+  - ID do cliente
+  - Número do ingresso
+  - Data/hora de compra
+  - Hash de validação
+
+#### **App de Validação**
+- **Interface Mobile**: Para equipe no evento
+- **Funcionalidades**:
+  - Leitura de QR Code via câmera
+  - Validação em tempo real
+  - Histórico de entradas
+  - Modo offline (sincronização posterior)
+  - Relatório de validações
+
+---
+
+## 🎨 **4. DESIGN E EXPERIÊNCIA**
+
+### **4.1 Identidade Visual**
+- **Logo**: Better Now (fornecido pelo cliente)
+- **Cores**: Paleta profissional e elegante
+- **Tipografia**: Moderna e legível
+- **Estilo**: Clean, sofisticado, responsivo
+
+### **4.2 Responsividade**
+- **Mobile First**: Prioridade para dispositivos móveis
+- **Breakpoints**: 
+  - Mobile: 320px - 768px
+  - Tablet: 768px - 1024px
+  - Desktop: 1024px+
+
+### **4.3 Usabilidade**
+- **Navegação Intuitiva**: Menu claro e organizado
+- **Carregamento Rápido**: Otimização de imagens e código
+- **Acessibilidade**: Conformidade com WCAG 2.1
+- **SEO**: Estrutura otimizada para buscadores
+
+---
+
+## ⚙️ **5. ESPECIFICAÇÕES TÉCNICAS**
+
+### **5.1 Tecnologias Sugeridas**
+
+#### **Frontend**
+- **Framework**: React.js ou Vue.js
+- **CSS**: Tailwind CSS ou Styled Components
+- **Build**: Webpack/Vite
+- **PWA**: Service Workers para funcionalidades offline
+
+#### **Backend**
+- **Linguagem**: Node.js (Express) ou Python (Django/FastAPI)
+- **Banco de Dados**: PostgreSQL
+- **Autenticação**: JWT
+- **API**: RESTful
+
+#### **Infraestrutura**
+- **Hospedagem**: AWS, Google Cloud ou Vercel
+- **CDN**: CloudFlare
+- **Email**: SendGrid ou Amazon SES
+- **Storage**: AWS S3 para imagens
+
+### **5.2 Integrações**
+
+#### **Gateway de Pagamento**
+- **Opções**: Mercado Pago, PagSeguro, Stripe
+- **Métodos**: PIX, Cartão de Crédito/Débito
+- **Parcelamento**: Até 6x sem juros
+
+#### **Comunicação**
+- **Email**: Templates responsivos
+- **WhatsApp**: API Business (Twilio/ChatAPI)
+- **SMS**: Backup para notificações críticas
+
+---
+
+## 📊 **6. FLUXOS DE USUÁRIO**
+
+### **6.1 Fluxo do Cliente**
+1. **Descoberta**: Acessa site → Navega eventos
+2. **Interesse**: Seleciona evento → Verifica disponibilidade
+3. **Compra**: Insere dados → Escolhe pagamento → Confirma
+4. **Confirmação**: Recebe email/WhatsApp com QR Code
+5. **Evento**: Apresenta QR Code → Acesso liberado
+
+### **6.2 Fluxo do Administrador**
+1. **Planejamento**: Cadastra evento → Define capacidade/preços
+2. **Pré-venda**: Cadastra clientes → Configura lista de permissão
+3. **Vendas**: Monitora dashboard → Gerencia lista de espera
+4. **Evento**: Equipe valida QR Codes → Controla acesso
+5. **Pós-evento**: Analisa relatórios → Calcula resultado financeiro
+
+---
+
+##    **7. SEGURANÇA E PRIVACIDADE**
+
+### **7.1 Proteção de Dados**
+- **LGPD**: Conformidade total
+- **Criptografia**: Dados sensíveis criptografados
+- **Backup**: Rotina automatizada
+- **SSL**: Certificado para toda comunicação
+
+### **7.2 Segurança de Pagamentos**
+- **PCI DSS**: Conformidade com padrões
+- **Tokenização**: Dados de cartão não armazenados
+- **Fraud Detection**: Análise de transações suspeitas
+
+### **7.3 QR Code Security**
+- **Hash Único**: Impossível duplicação
+- **Expiração**: Códigos válidos apenas no dia do evento
+- **Validação Única**: Cada código usado apenas uma vez
+
+---
+
+## 📈 **8. MÉTRICAS E KPIs**
+
+### **8.1 Métricas de Negócio**
+- **Taxa de Conversão**: Visitantes → Compradores
+- **Ticket Médio**: Valor médio por transação
+- **Taxa de Ocupação**: % da capacidade vendida
+- **ROI por Evento**: Retorno sobre investimento
+
+### **8.2 Métricas Técnicas**
+- **Performance**: Tempo de carregamento < 3s
+- **Disponibilidade**: Uptime > 99.5%
+- **Conversão Mobile**: Taxa de compra mobile
+- **Abandono de Carrinho**: % de carrinhos abandonados
+
+---
+
+## 🚀 **9. ROADMAP DE DESENVOLVIMENTO**
+
+### **Semana 1: Setup e Estrutura**
+- Configuração do ambiente
+- Design system e wireframes
+- Estrutura do banco de dados
+- Setup da infraestrutura
+
+### **Semana 2: Core Features**
+- Sistema de autenticação
+- CRUD de eventos e clientes
+- Interface administrativa básica
+- Sistema de pagamentos
+
+### **Semana 3: Funcionalidades Avançadas**
+- Sistema de QR Code
+- Email marketing
+- Relatórios financeiros
+- App de validação
+
+### **Semana 4: Finalização e Deploy**
+- Testes completos
+- Otimizações de performance
+- Deploy em produção
+- Treinamento da equipe
+
+---
+
+## ✅ **10. CRITÉRIOS DE ACEITE**
+
+### **10.1 Funcionalidades Obrigatórias**
+- ✅ Site institucional responsivo
+- ✅ Sistema completo de venda de ingressos
+- ✅ Área administrativa funcional
+- ✅ Geração e validação de QR Codes
+- ✅ Controle financeiro por evento
+- ✅ Sistema de email marketing
+- ✅ Relatórios de vendas e financeiro
+
+### **10.2 Performance**
+- ✅ Carregamento < 3 segundos
+- ✅ Responsivo em todos os dispositivos
+- ✅ Funcional em navegadores principais
+- ✅ Segurança de dados implementada
+
+### **10.3 Entregáveis**
+- ✅ Código fonte documentado
+- ✅ Manual de usuário
+- ✅ Documentação técnica
+- ✅ Treinamento da equipe
+- ✅ 30 dias de suporte pós-entrega
+
+---
