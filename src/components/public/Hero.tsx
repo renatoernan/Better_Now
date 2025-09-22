@@ -29,7 +29,11 @@ const Hero: React.FC = () => {
   }, [finalImages.length, settings.carousel_autoplay, settings.carousel_interval]);
 
   return (
-    <section id="home" className="relative h-[60vh] min-h-[500px] flex items-center justify-center text-center text-white pt-16 sm:pt-20 md:pt-24 lg:pt-28 xl:pt-32">
+    <section 
+      id="home" 
+      className="relative h-[60vh] min-h-[500px] flex items-center justify-center text-center text-white 
+                 pt-8 sm:pt-10 md:pt-12 lg:pt-14 xl:pt-16" // <-- Alterado aqui
+    >
       {/* Carrossel de imagens de fundo */}
       {finalImages.map((image, index) => (
         <div
