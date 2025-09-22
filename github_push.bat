@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 > nul
 REM =========================================================
-REM  SCRIPT PARA ENVIAR SEU PROJETO PARA O GITHUB
+REM  SCRIPT PARA ENVIAR SEU PROJETO PARA O GITHUB - DEBUG MODE
 REM =========================================================
 
 REM ATENÇÃO:
@@ -15,7 +15,7 @@ REM    Guarde o PAT em segurança, pois ele só é exibido uma vez.
 
 echo.
 echo =========================================================
-echo  INÍCIO DO PROCESSO DE ENVIO PARA O GITHUB
+echo  INÍCIO DO PROCESSO DE ENVIO PARA O GITHUB (DEBUG)
 echo =========================================================
 echo.
 
@@ -31,7 +31,7 @@ if not exist "%PROJECT_DIR%" (
     echo ERRO: O diretório do projeto não foi encontrado: %PROJECT_DIR%
     echo Verifique o caminho especificado e tente novamente.
     echo Pressione qualquer tecla para sair...
-    pause > nul
+    pause
     exit /b 1
 )
 
@@ -39,7 +39,7 @@ if "%GITHUB_REPO_URL%"=="" (
     echo ERRO: A URL do seu repositório GitHub NAO foi definida no script.
     echo Por favor, edite este arquivo .bat e insira a URL correta em GITHUB_REPO_URL.
     echo Pressione qualquer tecla para sair...
-    pause > nul
+    pause
     exit /b 1
 )
 
@@ -48,7 +48,7 @@ cd /d "%PROJECT_DIR%"
 if %errorlevel% neq 0 (
     echo ERRO: Não foi possível navegar para o diretório do projeto.
     echo Pressione qualquer tecla para sair...
-    pause > nul
+    pause
     exit /b %errorlevel%
 )
 
@@ -59,7 +59,7 @@ if not exist ".git" (
     if %errorlevel% neq 0 (
         echo ERRO ao inicializar o repositório Git.
         echo Pressione qualquer tecla para sair...
-        pause > nul
+        pause
         exit /b %errorlevel%
     )
 ) else (
@@ -69,7 +69,7 @@ if not exist ".git" (
     if %errorlevel% neq 0 (
         echo ERRO ao garantir o branch 'main'.
         echo Pressione qualquer tecla para sair...
-        pause > nul
+        pause
         exit /b %errorlevel%
     )
 )
@@ -79,14 +79,14 @@ git add .
 if %errorlevel% neq 0 (
     echo ERRO ao adicionar arquivos ao staging area.
     echo Pressione qualquer tecla para sair...
-    pause > nul
+    pause
     exit /b %errorlevel%
 )
 
 echo Criando commit das alteracoes...
 git commit -m "Atualizacao automatica via script BAT"
 REM O comando git commit retorna 0 mesmo se nao houver alteracoes.
-REM Se houver erro real (e.g., config inválida), ele terá outro errolevel.
+REM Se houver erro real (e.g., config inválida), ele terá outro errorlevel.
 REM Para um commit 'vazio', o Git apenas avisa e segue.
 
 REM 4. ADICIONA OU VERIFICA O REPOSITÓRIO REMOTO (ORIGIN)
@@ -98,7 +98,7 @@ if %errorlevel% neq 0 (
     if %errorlevel% neq 0 (
         echo ERRO ao adicionar o repositorio remoto 'origin'.
         echo Pressione qualquer tecla para sair...
-        pause > nul
+        pause
         exit /b %errorlevel%
     )
 ) else (
@@ -113,14 +113,14 @@ if %errorlevel% neq 0 (
         if %errorlevel% neq 0 (
             echo ERRO ao remover o repositorio remoto existente.
             echo Pressione qualquer tecla para sair...
-            pause > nul
+            pause
             exit /b %errorlevel%
         )
         git remote add origin "%GITHUB_REPO_URL%"
         if %errorlevel% neq 0 (
             echo ERRO ao adicionar 'origin' com a URL correta.
             echo Pressione qualquer tecla para sair...
-            pause > nul
+            pause
             exit /b %errorlevel%
         )
     ) else (
@@ -129,10 +129,16 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo Enviando arquivos para o GitHub (branch main)...
+echo =========================================================
+echo  INICIANDO O COMANDO GIT PUSH - ATENCAO AS MENSAGENS ABAIXO!
+echo =========================================================
+echo.
 echo --- SE FOR SOLICITADO, USE SEU NOME DE USUÁRIO E SEU PERSONAL ACCESS TOKEN (PAT) COMO SENHA ---
 echo.
-git push -u origin main
+
+REM Executa o git push e redireciona a saida de erro (stderr) para a saida padrao (stdout)
+REM para que todas as mensagens (incluindo erros) sejam exibidas no console.
+git push -u origin main 2>&1
 
 if %errorlevel% neq 0 (
     echo.
@@ -141,18 +147,22 @@ if %errorlevel% neq 0 (
     echo =========================================================
     echo.
     echo O comando 'git push' falhou com codigo de erro: %errorlevel%
-    echo Por favor, verifique os seguintes pontos:
+    echo Por favor, verifique as mensagens de erro acima para mais detalhes.
+    echo Pontos a verificar novamente:
     echo 1. Sua conexao com a internet esta funcionando?
     echo 2. *** Autenticacao GitHub: VOCE PRECISA USAR UM PERSONAL ACCESS TOKEN (PAT)! ***
     echo    Seu Git pode ter tentado pedir suas credenciais, mas o prompt pode ter fechado rapidamente.
     echo    Crie um PAT no GitHub (https://github.com/settings/tokens) com escopo 'repo'.
     echo    Ao ser solicitado pelo Git (seja no prompt ou em uma janela pop-up), use:
     echo    Usuario: Seu nome de usuario do GitHub
-    echo    Senha: O Personal Access Token (PAT) que voce gerou
-    echo 3. Permissoes: Voce tem permissoes de escrita para o repositorio '%GITHUB_REPO_URL%'?
+    echo    Senha: O Personal Access Token (PAT) que voce gerou.
+    echo    Certifique-se de que o PAT nao expirou e tem as permissoes corretas ('repo').
+    echo 3. Tamanho dos arquivos: Ha arquivos individuais maiores que 100MB no seu projeto?
+    echo    Se sim, voce pode precisar configurar o Git LFS (Large File Storage).
+    echo 4. Permissoes: Voce tem permissoes de escrita para o repositorio '%GITHUB_REPO_URL%'?
     echo.
     echo Pressione qualquer tecla para sair e tentar solucionar o problema...
-    pause > nul
+    pause
     exit /b %errorlevel%
 )
 
@@ -163,5 +173,5 @@ echo =========================================================
 echo.
 
 echo Pressione qualquer tecla para fechar...
-pause > nul
+pause
 exit /b 0
