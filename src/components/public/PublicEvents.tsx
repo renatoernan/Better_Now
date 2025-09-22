@@ -224,7 +224,7 @@ const PublicEvents: React.FC = () => {
               <p className="text-red-600 text-lg">Erro ao carregar eventos: {error}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {events.map((event) => (
                 <EventCard key={event.id} event={event} />
               ))}
@@ -279,7 +279,7 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
       {/* Event Image */}
       <div 
         className="bg-gradient-to-br from-blue-500 to-purple-600 relative overflow-hidden flex-shrink-0"
-        style={{ height: IMAGE_HEIGHT }}
+        style={{ height: 'clamp(128px, 20vw, 192px)' }}
       >
         {(() => {
           console.log('🖼️ Renderizando imagem do evento:', {
@@ -321,7 +321,7 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
       </div>
 
       {/* Event Content */}
-      <div className="p-6 flex-1 flex flex-col">
+      <div className="p-3 sm:p-6 flex-1 flex flex-col">
         {(() => {
           console.log('📝 Renderizando conteúdo do evento:', {
             eventId: event.id,
@@ -331,7 +331,7 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
           });
           return null;
         })()}
-        <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2">
+        <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 sm:mb-3 line-clamp-2">
           {event.title}
         </h3>
         
@@ -353,8 +353,8 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
             return null;
           })()}
           <div className="flex items-center text-gray-600">
-            <Calendar className="w-4 h-4 mr-2" />
-            <span className="text-sm font-bold">
+            <Calendar className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 flex-shrink-0" />
+            <span className="text-xs sm:text-sm font-bold truncate">
               {formatSimpleDate(event.event_date)}
               {event.event_time && ` às ${formatTime(event.event_time)}`}
             </span>
@@ -362,14 +362,14 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
           
           {event.location && (
             <div className="flex text-gray-600">
-              <MapPin className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+              <MapPin className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 mt-0.5 flex-shrink-0" />
               <div 
-                className="text-sm leading-tight overflow-hidden"
+                className="text-xs sm:text-sm leading-tight overflow-hidden"
                 style={{
                   display: '-webkit-box',
-                  WebkitLineClamp: 3,
+                  WebkitLineClamp: 2,
                   WebkitBoxOrient: 'vertical',
-                  minHeight: '3.6em', // 3 linhas * 1.2em line-height
+                  minHeight: '2.4em',
                   lineHeight: '1.2em',
                   whiteSpace: 'pre-line'
                 }}
@@ -392,20 +392,20 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
             });
             return null;
           })()}
-          <div className="space-y-3">
-            <div className="flex items-center justify-center bg-gray-50 rounded-lg p-3 mb-2">
-              <Tag className="w-5 h-5 mr-2 text-blue-600" />
-              <span className="text-lg font-semibold text-gray-700">
+          <div className="space-y-2 sm:space-y-3">
+            <div className="flex items-center justify-center bg-gray-50 rounded-lg p-2 sm:p-3 mb-1 sm:mb-2">
+              <Tag className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 text-blue-600" />
+              <span className="text-sm sm:text-lg font-semibold text-gray-700">
                 Ingressos disponíveis
               </span>
             </div>
             <div className="text-center">
-              <span className="text-2xl font-bold text-blue-600 block">
+              <span className="text-lg sm:text-2xl font-bold text-blue-600 block">
                 {formatEventPrice(event.price_batches, event.price)}
               </span>
             </div>
             <button 
-              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="w-full bg-blue-600 text-white py-2 sm:py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base"
               onClick={(e) => {
                 e.stopPropagation();
                 console.log('🔘 Botão Ver Detalhes clicado:', event.id);

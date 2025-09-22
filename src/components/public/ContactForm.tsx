@@ -158,42 +158,42 @@ const ContactForm: React.FC = () => {
     };
 
     return (
-        <section id="contact" className="py-20 bg-white">
-            <div className="container mx-auto px-6">
-                <div className="text-center mb-12">
-                    <h2 className="text-4xl font-bold text-[#2c3e50] mb-4">{translations.contactTitle}</h2>
-                    <p className="text-lg text-gray-600 max-w-2xl mx-auto">{translations.contactSubtitle}</p>
+        <section id="contact" className="py-12 sm:py-20 bg-white">
+            <div className="container mx-auto px-4 sm:px-6">
+                <div className="text-center mb-8 sm:mb-12">
+                    <h2 className="text-2xl sm:text-4xl font-bold text-[#2c3e50] mb-2 sm:mb-4">{translations.contactTitle}</h2>
+                    <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-2">{translations.contactSubtitle}</p>
                 </div>
 
-                <div className="max-w-3xl mx-auto bg-gray-50 p-8 rounded-lg shadow-xl">
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <input type="text" name="name" placeholder={translations.contactForm.name} value={formData.name} onChange={handleChange} className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600" required />
-                            <input type="email" name="email" placeholder={translations.contactForm.email} value={formData.email} onChange={handleChange} className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600" required />
+                <div className="max-w-3xl mx-auto bg-gray-50 p-4 sm:p-8 rounded-lg shadow-xl">
+                    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                            <input type="text" name="name" placeholder={translations.contactForm.name} value={formData.name} onChange={handleChange} className="w-full p-3 text-sm sm:text-base rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600" required />
+                            <input type="email" name="email" placeholder={translations.contactForm.email} value={formData.email} onChange={handleChange} className="w-full p-3 text-sm sm:text-base rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600" required />
                         </div>
-                        <input type="tel" name="phone" placeholder={translations.contactForm.phone} value={formData.phone} onChange={handleChange} className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600" />
-                        <select name="eventType" value={formData.eventType} onChange={handleChange} className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 text-gray-500" required>
+                        <input type="tel" name="phone" placeholder={translations.contactForm.phone} value={formData.phone} onChange={handleChange} className="w-full p-3 text-sm sm:text-base rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                        <select name="eventType" value={formData.eventType} onChange={handleChange} className="w-full p-3 text-sm sm:text-base rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 text-gray-500" required>
                             <option value="" disabled>{translations.contactForm.eventType}</option>
                             {translations.contactForm.eventTypes.map(type => (
                                 <option key={type} value={type}>{type}</option>
                             ))}
                         </select>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <input type="number" name="guests" placeholder={translations.contactForm.guests} value={formData.guests} onChange={handleChange} className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600" />
-                            <input type="date" name="date" aria-label={translations.contactForm.date} value={formData.date} onChange={handleChange} className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 text-gray-500" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                            <input type="number" name="guests" placeholder={translations.contactForm.guests} value={formData.guests} onChange={handleChange} className="w-full p-3 text-sm sm:text-base rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                            <input type="date" name="date" aria-label={translations.contactForm.date} value={formData.date} onChange={handleChange} className="w-full p-3 text-sm sm:text-base rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 text-gray-500" />
                         </div>
                         <textarea 
                             name="message" 
                             placeholder="Mensagem adicional (opcional)" 
                             value={formData.message} 
                             onChange={(e) => setFormData(prev => ({...prev, message: e.target.value}))}
-                            rows={4}
-                            className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-vertical"
+                            rows={3}
+                            className="w-full p-3 text-sm sm:text-base rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-vertical"
                         />
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className={`w-full font-bold py-4 px-8 rounded-full text-lg transition-all duration-300 transform shadow-lg ${
+                            className={`w-full font-bold py-3 sm:py-4 px-6 sm:px-8 rounded-full text-base sm:text-lg transition-all duration-300 transform shadow-lg ${
                                 isLoading 
                                     ? 'bg-gray-400 cursor-not-allowed' 
                                     : 'bg-blue-600 hover:bg-blue-700 hover:scale-105'
@@ -213,7 +213,7 @@ const ContactForm: React.FC = () => {
                     {/* Modal de Confirmação */}
                     {showModal && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-                            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 transform shadow-2xl animate-scaleIn">
+                            <div className="bg-white rounded-2xl p-4 sm:p-8 max-w-sm sm:max-w-md mx-4 transform shadow-2xl animate-scaleIn">
                                 <div className="text-center">
                                     {/* Ícone de Sucesso Animado */}
                                     <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4 animate-bounce">
@@ -222,17 +222,17 @@ const ContactForm: React.FC = () => {
                                         </svg>
                                     </div>
                                     
-                                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
                                         Solicitação Enviada!
                                     </h3>
                                     
-                                    <p className="text-gray-600 mb-6">
+                                    <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
                                         Obrigado pelo seu interesse! Nossa equipe entrará em contato em breve para criar seu evento inesquecível.
                                     </p>
                                     
                                     <button
                                         onClick={() => setShowModal(false)}
-                                        className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-all duration-300 hover:scale-105 font-semibold"
+                                        className="bg-blue-600 text-white px-6 sm:px-8 py-2 sm:py-3 text-sm sm:text-base rounded-lg hover:bg-blue-700 transition-all duration-300 hover:scale-105 font-semibold"
                                     >
                                         Fechar
                                     </button>

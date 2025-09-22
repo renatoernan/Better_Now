@@ -8,8 +8,8 @@ export const translations = {
     navRequestQuote: 'Request Quote',
 
     // Hero
-    heroTitle: 'Your Celebration Starts Now.',
-    heroSubtitle: 'We Handle the Rest.',
+    heroTitle: 'Your Celebration Starts Now',
+    heroSubtitle: 'We Handle the Rest',
     heroDescription: 'With the energy and expertise of Roberta Forte, Better Now turns your dream event into a perfect, worry-free reality.',
     heroCta: 'Request Your Free Quote',
 
@@ -160,8 +160,8 @@ export const translations = {
     navRequestQuote: 'Pedir Orçamento',
 
     // Hero
-    heroTitle: 'Sua Celebração Começa Agora.',
-    heroSubtitle: 'Nós Cuidamos do Resto.',
+    heroTitle: 'Sua Celebração Começa Agora',
+    heroSubtitle: 'Nós Cuidamos do Resto',
     heroDescription: 'Com a energia e expertise de Roberta Forte, a Better Now transforma seu evento dos sonhos em uma realidade perfeita e sem preocupações.',
     heroCta: 'Solicite Seu Orçamento Gratuito',
 
@@ -312,8 +312,8 @@ export const translations = {
     navRequestQuote: 'Solicitar Presupuesto',
 
     // Hero
-    heroTitle: 'Tu Celebración Comienza Ahora.',
-    heroSubtitle: 'Nosotros Nos Encargamos del Resto.',
+    heroTitle: 'Tu Celebración Comienza Ahora',
+    heroSubtitle: 'Nosotros Nos Encargamos del Resto',
     heroDescription: 'Con la energía y experiencia de Roberta Forte, Better Now convierte tu evento soñado en una realidad perfecta y sin preocupaciones.',
     heroCta: 'Solicita tu Presupuesto Gratuito',
 

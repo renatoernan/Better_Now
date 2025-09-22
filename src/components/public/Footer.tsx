@@ -10,73 +10,73 @@ const Footer: React.FC = () => {
   const { settings } = useAppSettings();
 
   return (
-    <footer className="bg-[#2c3e50] text-white py-6">
-      <div className="container mx-auto px-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
+    <footer className="bg-[#2c3e50] text-white py-4 sm:py-6">
+      <div className="container mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-3 sm:mb-4">
           
           {/* Informações de Contato */}
           <div className="space-y-2">
-            <h3 className="text-lg flex justify-center font-bold text-blue-300 mb-2">{translations.contactInfo}</h3>
+            <h3 className="text-base sm:text-lg flex justify-center font-bold text-blue-300 mb-2">{translations.contactInfo}</h3>
             
             <div className="flex items-center space-x-2 hover:text-blue-300 transition-colors duration-300">
-              <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <Mail className="w-3 h-3" />
+              <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <Mail className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
               </div>
               <div>
-                <a href={`mailto:${settings.contact_email}`} className="text-sm hover:text-blue-300 transition-colors">
+                <a href={`mailto:${settings.contact_email}`} className="text-xs sm:text-sm hover:text-blue-300 transition-colors break-all">
                   {settings.contact_email}
                 </a>
               </div>
             </div>
             
             <div className="flex items-center space-x-2 hover:text-blue-300 transition-colors duration-300">
-              <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <Phone className="w-3 h-3" />
+              <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <Phone className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
               </div>
               <div>
-                <a href={`tel:${settings.phone?.replace(/\D/g, '') || ''}`} className="text-sm hover:text-blue-300 transition-colors">
+                <a href={`tel:${settings.phone?.replace(/\D/g, '') || ''}`} className="text-xs sm:text-sm hover:text-blue-300 transition-colors">
                   {settings.phone}
                 </a>
               </div>
             </div>
             
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <MapPin className="w-3 h-3" />
+            <div className="flex items-start space-x-2">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
               </div>
               <div>
-                <p className="text-sm">{settings.address}</p>
+                <p className="text-xs sm:text-sm leading-tight">{settings.address}</p>
               </div>
             </div>
           </div>
           
           {/* Horário de Atendimento */}
           <div className="space-y-2">
-            <h3 className="text-lg font-bold text-blue-300 mb-2">{translations.businessHours}</h3>
+            <h3 className="text-base sm:text-lg font-bold text-blue-300 mb-2">{translations.businessHours}</h3>
             
             <div className="flex items-start space-x-2">
-              <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Clock className="w-3 h-3" />
+              <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
               </div>
               <div className="space-y-1">
                 {settings.business_hours_weekdays && (
-                  <p className="text-sm">
+                  <p className="text-xs sm:text-sm leading-tight">
                     <span className="text-gray-300">{translations.mondayToFriday}:</span> {settings.business_hours_weekdays}
                   </p>
                 )}
                 {settings.business_hours_weekend && (
-                  <p className="text-sm">
+                  <p className="text-xs sm:text-sm leading-tight">
                     <span className="text-gray-300">{translations.saturday}:</span> {settings.business_hours_weekend}
                   </p>
                 )}
                 {settings.business_hours_closed_days && (
-                  <p className="text-sm text-red-300">{settings.business_hours_closed_days}</p>
+                  <p className="text-xs sm:text-sm text-red-300 leading-tight">{settings.business_hours_closed_days}</p>
                 )}
                 {!settings.business_hours_weekdays && !settings.business_hours_weekend && (
                   <div className="space-y-0.5">
-                    <p className="text-sm">{translations.mondayToFriday}: 8h às 18h</p>
-                    <p className="text-sm">{translations.saturday}: 8h às 12h</p>
-                    <p className="text-sm text-red-300">{translations.sundaysAndHolidays}</p>
+                    <p className="text-xs sm:text-sm leading-tight">{translations.mondayToFriday}: 8h às 18h</p>
+                    <p className="text-xs sm:text-sm leading-tight">{translations.saturday}: 8h às 12h</p>
+                    <p className="text-xs sm:text-sm text-red-300 leading-tight">{translations.sundaysAndHolidays}</p>
                   </div>
                 )}
               </div>
@@ -85,7 +85,7 @@ const Footer: React.FC = () => {
           
           {/* Redes Sociais */}
           <div className="space-y-2">
-            <h3 className="text-lg flex justify-center font-bold text-blue-300 mb-2">{translations.followUs}</h3>
+            <h3 className="text-base sm:text-lg flex justify-center font-bold text-blue-300 mb-2">{translations.followUs}</h3>
             
             <div className="flex justify-center">
               <a
@@ -93,10 +93,10 @@ const Footer: React.FC = () => {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={translations.followUsInstagram}
-                className="inline-flex items-center justify-center w-10 h-10 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 rounded-full hover:scale-110 transition-transform duration-300 group"
+                className="inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 rounded-full hover:scale-110 transition-transform duration-300 group"
               >
                 <svg
-                  className="w-5 h-5 text-white group-hover:text-gray-100 transition-colors duration-300"
+                  className="w-4 h-4 sm:w-5 sm:h-5 text-white group-hover:text-gray-100 transition-colors duration-300"
                   fill="currentColor"
                   viewBox="0 0 24 24"
                   xmlns="http://www.w3.org/2000/svg"
@@ -109,7 +109,7 @@ const Footer: React.FC = () => {
           
           {/* Desenvolvido por CESIRE */}
           <div className="space-y-2">
-            <h3 className="text-lg font-bold text-blue-300 mb-2">Desenvolvido por</h3>
+            <h3 className="text-base sm:text-lg font-bold text-blue-300 mb-2">Desenvolvido por</h3>
             
             <div className="flex items-center space-x-2">
               <a 
@@ -122,24 +122,24 @@ const Footer: React.FC = () => {
                 <img 
                   src={cesireLogo} 
                   alt="CESIRE - Desenvolvedor" 
-                  className="h-12 w-auto object-contain group-hover:scale-105 transition-transform duration-300"
+                  className="h-8 sm:h-12 w-auto object-contain group-hover:scale-105 transition-transform duration-300"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                     e.currentTarget.nextElementSibling.style.display = 'inline';
                   }}
                 />
-                <span className="text-sm text-blue-300 hover:text-blue-200 transition-colors font-medium" style={{display: 'none'}}>CESIRE</span>
+                <span className="text-xs sm:text-sm text-blue-300 hover:text-blue-200 transition-colors font-medium" style={{display: 'none'}}>CESIRE</span>
               </a>
             </div>
             
-            <p className="text-xs text-gray-400">Tecnologia e Inovação</p>
+            <p className="text-xs text-gray-400 leading-tight">Tecnologia e Inovação</p>
           </div>
         </div>
         
         {/* Copyright */}
-        <div className="border-t border-gray-600 pt-3 text-center">
-          <p className="text-sm">&copy; {new Date().getFullYear()} {translations.footerCopyright}</p>
-          <p className="text-xs text-gray-400 mt-1">{translations.footerTagline}</p>
+        <div className="border-t border-gray-600 pt-2 sm:pt-3 text-center">
+          <p className="text-xs sm:text-sm">&copy; {new Date().getFullYear()} {translations.footerCopyright}</p>
+          <p className="text-xs text-gray-400 mt-0.5 sm:mt-1 leading-tight">{translations.footerTagline}</p>
         </div>
       </div>
     </footer>
