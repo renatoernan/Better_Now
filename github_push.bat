@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 > nul
 REM =========================================================
-REM  SCRIPT PARA ENVIAR SEU PROJETO PARA O GITHUB - DEBUG MODE
+REM  SCRIPT PARA ENVIAR SEU PROJETO PARA O GITHUB - DIAGNÓSTICO FINAL
 REM =========================================================
 
 REM ATENÇÃO:
@@ -15,7 +15,7 @@ REM    Guarde o PAT em segurança, pois ele só é exibido uma vez.
 
 echo.
 echo =========================================================
-echo  INÍCIO DO PROCESSO DE ENVIO PARA O GITHUB (DEBUG)
+echo  INÍCIO DO PROCESSO DE ENVIO PARA O GITHUB
 echo =========================================================
 echo.
 
@@ -23,7 +23,6 @@ REM 1. DEFINE O DIRETÓRIO DO SEU PROJETO LOCAL
 set "PROJECT_DIR=C:\Users\renat\OneDrive\CESIRE\Cesire\Aplicativos\Better_Now"
 
 REM 2. DEFINE A URL DO SEU REPOSITÓRIO GITHUB REMOTO
-REM    !!! ESTA URL FOI ATUALIZADA COM BASE NA SUA INFORMACAO !!!
 set "GITHUB_REPO_URL=https://github.com/renatoernan/Better_Now.git"
 
 REM --- VERIFICAÇÕES INICIAIS ---
@@ -86,8 +85,6 @@ if %errorlevel% neq 0 (
 echo Criando commit das alteracoes...
 git commit -m "Atualizacao automatica via script BAT"
 REM O comando git commit retorna 0 mesmo se nao houver alteracoes.
-REM Se houver erro real (e.g., config inválida), ele terá outro errorlevel.
-REM Para um commit 'vazio', o Git apenas avisa e segue.
 
 REM 4. ADICIONA OU VERIFICA O REPOSITÓRIO REMOTO (ORIGIN)
 echo Verificando configuracao do repositorio remoto 'origin'...
@@ -102,12 +99,9 @@ if %errorlevel% neq 0 (
         exit /b %errorlevel%
     )
 ) else (
-    REM 'origin' já existe, verifica se a URL corresponde
     for /f "tokens=*" %%i in ('git remote get-url origin') do set "current_remote_url=%%i"
     if /i not "%current_remote_url%"=="%GITHUB_REPO_URL%" (
         echo ATENCAO: A URL remota 'origin' existente e diferente da definida no script.
-        echo URL existente: %current_remote_url%
-        echo URL definida no script: %GITHUB_REPO_URL%
         echo Removendo 'origin' existente e adicionando novamente com a URL do script.
         git remote remove origin
         if %errorlevel% neq 0 (
@@ -130,10 +124,9 @@ if %errorlevel% neq 0 (
 
 echo.
 echo =========================================================
-echo  INICIANDO O COMANDO GIT PUSH - ATENCAO AS MENSAGENS ABAIXO!
+echo  INICIANDO O COMANDO GIT PUSH - POR FAVOR, AGUARDE...
+echo  (Pode ser que seja solicitada sua autenticação com PAT)
 echo =========================================================
-echo.
-echo --- SE FOR SOLICITADO, USE SEU NOME DE USUÁRIO E SEU PERSONAL ACCESS TOKEN (PAT) COMO SENHA ---
 echo.
 
 REM Executa o git push e redireciona a saida de erro (stderr) para a saida padrao (stdout)
@@ -148,30 +141,24 @@ if %errorlevel% neq 0 (
     echo.
     echo O comando 'git push' falhou com codigo de erro: %errorlevel%
     echo Por favor, verifique as mensagens de erro acima para mais detalhes.
-    echo Pontos a verificar novamente:
-    echo 1. Sua conexao com a internet esta funcionando?
-    echo 2. *** Autenticacao GitHub: VOCE PRECISA USAR UM PERSONAL ACCESS TOKEN (PAT)! ***
-    echo    Seu Git pode ter tentado pedir suas credenciais, mas o prompt pode ter fechado rapidamente.
-    echo    Crie um PAT no GitHub (https://github.com/settings/tokens) com escopo 'repo'.
-    echo    Ao ser solicitado pelo Git (seja no prompt ou em uma janela pop-up), use:
-    echo    Usuario: Seu nome de usuario do GitHub
-    echo    Senha: O Personal Access Token (PAT) que voce gerou.
-    echo    Certifique-se de que o PAT nao expirou e tem as permissoes corretas ('repo').
-    echo 3. Tamanho dos arquivos: Ha arquivos individuais maiores que 100MB no seu projeto?
-    echo    Se sim, voce pode precisar configurar o Git LFS (Large File Storage).
-    echo 4. Permissoes: Voce tem permissoes de escrita para o repositorio '%GITHUB_REPO_URL%'?
-    echo.
+    echo A janela nao fechará para que voce possa ver a mensagem de erro.
     echo Pressione qualquer tecla para sair e tentar solucionar o problema...
     pause
     exit /b %errorlevel%
+) else (
+    echo.
+    echo =========================================================
+    echo  CONFIRMADO: O COMANDO 'GIT PUSH' FOI EXECUTADO COM SUCESSO! ✅
+    echo  Verifique seu repositorio no GitHub para ver os arquivos.
+    echo =========================================================
+    echo.
 )
 
 echo.
 echo =========================================================
-echo  Projeto enviado com SUCESSO para o GitHub! ✨
+echo  PROCESSO CONCLUIDO.
+echo  Pressione qualquer tecla para fechar esta janela.
 echo =========================================================
 echo.
-
-echo Pressione qualquer tecla para fechar...
 pause
 exit /b 0
