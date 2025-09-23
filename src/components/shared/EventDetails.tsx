@@ -10,8 +10,17 @@ import { usePublicEvents } from '../../hooks/usePublicEvents';
 import { ArrowLeft } from 'lucide-react';
 import { Event as EventType, PriceBatch, ScheduleItem } from '../../types/event';
 import { processPriceBatches, getBatchStatus, formatPrice } from '../../utils/eventUtils';
+import PhoneLoginModal from './PhoneLoginModal';
+import TokenVerificationModal from './TokenVerificationModal';
+import ClientRegistrationModal from './ClientRegistrationModal';
+import SuccessModal from './SuccessModal';
+import { supabase } from '../../lib/supabase';
+import { toast } from 'sonner';
 
 const EventDetails: React.FC = () => {
+  // Constante para tempo de expiração do token em segundos
+  const TOKEN_EXPIRATION_TIME = 59;
+  
   const { id } = useParams<{ id: string }>();
   const { fetchEventById } = usePublicEvents();
   const [event, setEvent] = useState<EventType | null>(null);
@@ -19,6 +28,20 @@ const EventDetails: React.FC = () => {
   const [selectedBatch, setSelectedBatch] = useState<number>(0);
   const [quantity, setQuantity] = useState<number>(1);
   const [priceBatches, setPriceBatches] = useState<PriceBatch[]>([]);
+  
+  // Estados para autenticação
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showPendingValidationModal, setShowPendingValidationModal] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [currentPhone, setCurrentPhone] = useState('');
+  const [currentClientName, setCurrentClientName] = useState('');
+  const [generatedToken, setGeneratedToken] = useState('');
+  const [tokenError, setTokenError] = useState('');
+  const [tokenTimestamp, setTokenTimestamp] = useState<number>(0);
+  const [timeRemaining, setTimeRemaining] = useState<number>(30);
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -53,7 +76,290 @@ const EventDetails: React.FC = () => {
     }
   };
 
+  // Função para gerar token de 6 dígitos
+  const generateToken = (): string => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  };
+
+  // Função para verificar se cliente existe
+  const checkClientExists = async (phone: string): Promise<{exists: boolean, name?: string, validated?: boolean}> => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name, validated')
+        .eq('whatsapp', phone)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      if (data) {
+        return {
+          exists: true,
+          name: data.name,
+          validated: data.validated
+        };
+      }
+      
+      return { exists: false };
+    } catch (error) {
+      console.error('Erro ao verificar cliente:', error);
+      return { exists: false };
+    }
+  };
+
+  // Função para enviar webhook
+  const sendWebhook = async (url: string, data: any): Promise<boolean> => {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.error('Erro ao enviar webhook:', error);
+      return false;
+    }
+  };
+
+  // Handler para login com telefone
+  const handlePhoneLogin = async (phone: string) => {
+    setAuthLoading(true);
+    setCurrentPhone(phone);
+    
+    try {
+      const clientData = await checkClientExists(phone);
+      
+      if (clientData.exists) {
+        // Cliente existe - verificar se está validado
+        if (clientData.validated === false) {
+          // Cliente existe mas não está validado - mostrar modal específico
+          setCurrentClientName(clientData.name || '');
+          
+          // Enviar webhook para cliente pendente de validação
+          const webhookSuccess = await sendWebhook(
+            'https://n8n.tradersbots.com.br/webhook/login',
+            {
+              nome_evento: event?.title || 'Evento não identificado',
+              telefone: phone,
+              name: clientData.name,
+              tipo_mensagem: 'pendente_validacao'
+            }
+          );
+          
+          setShowPhoneModal(false);
+          setShowPendingValidationModal(true);
+          
+          if (!webhookSuccess) {
+            console.error('Erro ao enviar webhook de pendente validação');
+          }
+        } else {
+          // Cliente validado - gerar token e enviar webhook
+          const token = generateToken();
+          setGeneratedToken(token);
+          const timestamp = Date.now();
+          setTokenTimestamp(timestamp);
+          
+          const webhookSuccess = await sendWebhook(
+            'https://n8n.tradersbots.com.br/webhook/login',
+            { 
+              telefone: phone, 
+              token,
+              titulo_evento: event?.title || 'Evento não identificado',
+              tipo_mensagem: 'cliente_existente'
+            }
+          );
+          
+          if (webhookSuccess) {
+            setShowPhoneModal(false);
+            setShowTokenModal(true);
+          } else {
+            toast.error('Erro ao enviar código de verificação. Tente novamente.');
+          }
+        }
+      } else {
+        // Cliente não existe - mostrar formulário de cadastro
+        setShowPhoneModal(false);
+        setShowRegistrationModal(true);
+      }
+    } catch (error) {
+      console.error('Erro no login:', error);
+      toast.error('Erro ao processar login. Tente novamente.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Handler para verificação de token
+  const handleTokenVerification = async (token: string) => {
+    setAuthLoading(true);
+    setTokenError('');
+    
+    // Verificar se o token ainda é válido
+    const currentTime = Date.now();
+    const tokenAge = (currentTime - tokenTimestamp) / 1000;
+    
+    if (tokenAge > TOKEN_EXPIRATION_TIME) {
+      setTokenError('Código expirado. Solicite um novo código.');
+      setAuthLoading(false);
+      return;
+    }
+    
+    if (token === generatedToken) {
+      // Atualizar cliente como validado
+      try {
+        const { error: updateError } = await supabase
+          .from('clients')
+          .update({ validated: true })
+          .eq('whatsapp', currentPhone);
+        
+        if (updateError) {
+          console.error('Erro ao validar cliente:', updateError);
+        }
+      } catch (error) {
+        console.error('Erro ao atualizar validação:', error);
+      }
+      
+      setShowTokenModal(false);
+      setShowSuccessModal(true);
+    } else {
+      setTokenError('Código inválido. Verifique e tente novamente.');
+    }
+    
+    setAuthLoading(false);
+  };
+  
+  // Handler para reenvio de token
+  const handleResendToken = async () => {
+    setAuthLoading(true);
+    // Limpar qualquer erro existente imediatamente
+    setTokenError('');
+    
+    try {
+      // Gerar novo token
+      const token = generateToken();
+      setGeneratedToken(token);
+      const timestamp = Date.now();
+      setTokenTimestamp(timestamp);
+      
+      // Enviar webhook com novo token
+      const webhookSuccess = await sendWebhook(
+        'https://n8n.tradersbots.com.br/webhook/login',
+        { 
+          telefone: currentPhone, 
+          token,
+          titulo_evento: event?.title || 'Evento não identificado',
+          tipo_mensagem: 'cliente_existente'
+        }
+      );
+      
+      if (webhookSuccess) {
+        toast.success('Novo código enviado!');
+      } else {
+        toast.error('Erro ao reenviar código. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('Erro ao reenviar token:', error);
+      toast.error('Erro ao reenviar código. Tente novamente.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Handler para cadastro de novo cliente
+  const handleClientRegistration = async (data: { nome: string; telefone: string; comoSoube: string }) => {
+    setAuthLoading(true);
+    
+    try {
+      // Verificar se o telefone já existe na tabela clients
+      const clientData = await checkClientExists(data.telefone);
+      
+      if (clientData.exists) {
+        // Cliente já existe - não inserir novamente
+        if (clientData.validated === false) {
+          // Cliente existe mas não está validado - mostrar modal de pendência
+          setCurrentClientName(clientData.name || '');
+          
+          // Enviar webhook para cliente pendente de validação
+          const webhookSuccess = await sendWebhook(
+            'https://n8n.tradersbots.com.br/webhook/login',
+            {
+              nome_evento: event?.title || 'Evento não identificado',
+              telefone: data.telefone,
+              name: clientData.name,
+              tipo_mensagem: 'pendente_validacao'
+            }
+          );
+          
+          setShowRegistrationModal(false);
+          setShowPendingValidationModal(true);
+          
+          if (!webhookSuccess) {
+            console.error('Erro ao enviar webhook de pendente validação');
+          }
+        } else {
+          // Cliente existe e está validado - tratar como cliente existente
+          setShowRegistrationModal(false);
+          toast.info('Este número já está cadastrado e validado.');
+        }
+        return;
+      }
+      
+      // Cliente não existe - inserir na tabela clients
+      const { error: supabaseError } = await supabase
+        .from('clients')
+        .insert({
+          name: data.nome,
+          whatsapp: data.telefone,
+          notes: data.comoSoube,
+          validated: false
+        });
+      
+      if (supabaseError) {
+        console.error('Erro ao salvar no Supabase:', supabaseError);
+        toast.error('Erro ao salvar dados. Tente novamente.');
+        return;
+      }
+      
+      // Enviar webhook para cliente inexistente
+      const webhookSuccess = await sendWebhook(
+        'https://n8n.tradersbots.com.br/webhook/login',
+        {
+          ...data,
+          tipo_mensagem: 'cliente_inexistente'
+        }
+      );
+      
+      if (webhookSuccess) {
+        setShowRegistrationModal(false);
+        toast.success('Cadastro realizado com sucesso!');
+        // Aqui você pode prosseguir com a compra ou mostrar próximos passos
+      } else {
+        toast.error('Erro ao enviar notificação. Cadastro foi salvo, mas tente novamente.');
+      }
+    } catch (error) {
+      console.error('Erro no cadastro:', error);
+      toast.error('Erro ao realizar cadastro. Tente novamente.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handlePurchase = () => {
+    if (!event || !priceBatches[selectedBatch]) return;
+    
+    // Verificar se é evento privado
+    if (!event.is_public) {
+      setShowPhoneModal(true);
+      return;
+    }
+    
+    // Lógica normal de compra para eventos públicos
     const selectedBatchData = priceBatches[selectedBatch];
     const status = getBatchStatus(selectedBatchData);
     if (selectedBatchData && status === 'active') {
@@ -127,6 +433,53 @@ const EventDetails: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Modais de autenticação */}
+      <PhoneLoginModal
+        isOpen={showPhoneModal}
+        onClose={() => setShowPhoneModal(false)}
+        onSubmit={handlePhoneLogin}
+        loading={authLoading}
+      />
+      
+      <TokenVerificationModal
+        isOpen={showTokenModal}
+        onClose={() => {
+          setShowTokenModal(false);
+          setTokenError('');
+        }}
+        onSubmit={handleTokenVerification}
+        onResend={handleResendToken}
+        phone={currentPhone}
+        loading={authLoading}
+        error={tokenError}
+        timeRemaining={timeRemaining}
+        tokenTimestamp={tokenTimestamp}
+      />
+      
+      <ClientRegistrationModal
+        isOpen={showRegistrationModal}
+        onClose={() => setShowRegistrationModal(false)}
+        onSubmit={handleClientRegistration}
+        loading={authLoading}
+        prefilledPhone={currentPhone}
+      />
+      
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        title="Cliente Existente!"
+        message="Verificação realizada com sucesso. Você pode prosseguir com a compra."
+        buttonText="Continuar Compra"
+      />
+      
+      <SuccessModal
+        isOpen={showPendingValidationModal}
+        onClose={() => setShowPendingValidationModal(false)}
+        title="Validação Pendente"
+        message={`Olá, ${currentClientName}, seu número já está cadastrado e está pendente de validação. Aguarde que entraremos em contato via WhatsApp.`}
+        buttonText="Entendi"
+      />
+      
       <Header />
       
       <div className="pt-32 pb-16">

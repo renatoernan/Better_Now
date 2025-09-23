@@ -20,6 +20,7 @@ interface Client {
   cidade?: string;
   uf?: string;
   notes?: string;
+  validated?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +37,7 @@ interface ClientFormData {
   cidade: string;
   uf: string;
   notes: string;
+  validated: boolean;
 }
 
 const AdminClients: React.FC = () => {
@@ -87,7 +89,8 @@ const AdminClients: React.FC = () => {
     bairro: '',
     cidade: '',
     uf: '',
-    notes: ''
+    notes: '',
+    validated: true
   });
   const [loadingCep, setLoadingCep] = useState(false);
 
@@ -208,7 +211,8 @@ const AdminClients: React.FC = () => {
       bairro: client.bairro || '',
       cidade: client.cidade || '',
       uf: client.uf || '',
-      notes: client.notes || ''
+      notes: client.notes || '',
+      validated: client.validated || false
     });
     setShowModal(true);
   };
@@ -365,6 +369,17 @@ const AdminClients: React.FC = () => {
     }
   };
 
+  // Função para atualizar apenas o campo validated
+  const handleValidatedToggle = async (clientId: string, validated: boolean) => {
+    try {
+      await updateClient(clientId, { validated });
+      toast.success(`Cliente ${validated ? 'validado' : 'invalidado'} com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao atualizar status de validação:', error);
+      toast.error('Erro ao atualizar status de validação');
+    }
+  };
+
   const openLinkEventModal = () => {
     setShowLinkEventModal(true);
     fetchEvents(); // Load available events
@@ -420,7 +435,8 @@ const AdminClients: React.FC = () => {
       bairro: '',
       cidade: '',
       uf: '',
-      notes: ''
+      notes: '',
+      validated: true
     });
   };
 
@@ -671,6 +687,11 @@ const AdminClients: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {translations.contact}
                   </th>
+                  {activeTab === 'active' && (
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Validado
+                    </th>
+                  )}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {activeTab === 'trash' ? translations.deletedAt : translations.createdAt}
                   </th>
@@ -712,6 +733,19 @@ const AdminClients: React.FC = () => {
                         )}
                       </div>
                     </td>
+                    {activeTab === 'active' && (
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={client.validated || false}
+                            onChange={(e) => handleValidatedToggle(client.id, e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center text-sm text-gray-500">
                         <Calendar className="h-4 w-4 mr-2" />
@@ -799,6 +833,25 @@ const AdminClients: React.FC = () => {
               </div>
               
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Cliente Validado
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Indica se o cliente foi validado no sistema
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.validated}
+                      onChange={(e) => setFormData({...formData, validated: e.target.checked})}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Nome *
@@ -874,31 +927,32 @@ const AdminClients: React.FC = () => {
                   />
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número {formData.logradouro.trim() && '*'}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.numero}
-                    onChange={(e) => setFormData({...formData, numero: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Número do endereço"
-                    required={formData.logradouro.trim() !== ''}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Complemento
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.complemento}
-                    onChange={(e) => setFormData({...formData, complemento: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Apartamento, casa, etc."
-                  />
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Número {formData.logradouro.trim() && '*'}
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.numero}
+                      onChange={(e) => setFormData({...formData, numero: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Número do endereço"
+                      required={formData.logradouro.trim() !== ''}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Complemento
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.complemento}
+                      onChange={(e) => setFormData({...formData, complemento: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Apartamento, casa, etc."
+                    />
+                  </div>
                 </div>
                 
                 <div>
@@ -956,6 +1010,8 @@ const AdminClients: React.FC = () => {
                     placeholder="Observações sobre o cliente"
                   />
                 </div>
+                
+                
                 
                 <div className="flex gap-3 pt-4">
                   <button

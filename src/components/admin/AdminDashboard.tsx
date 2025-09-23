@@ -7,6 +7,49 @@ const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { stats, recentActivity, eventStats, loading, error, refetch } = useDashboardData();
 
+  // Processar atividades recentes em um array único
+  const processedRecentActivity = React.useMemo(() => {
+    if (!recentActivity) return [];
+    
+    const activities = [];
+    
+    // Adicionar eventos
+    if (recentActivity.recentEvents) {
+      recentActivity.recentEvents.forEach(event => {
+        activities.push({
+          type: 'event',
+          description: `Novo evento: ${event.title}`,
+          created_at: event.created_at
+        });
+      });
+    }
+    
+    // Adicionar contatos
+    if (recentActivity.recentContacts) {
+      recentActivity.recentContacts.forEach(contact => {
+        activities.push({
+          type: 'contact',
+          description: `Novo contato de: ${contact.name}`,
+          created_at: contact.created_at
+        });
+      });
+    }
+    
+    // Adicionar depoimentos
+    if (recentActivity.recentTestimonials) {
+      recentActivity.recentTestimonials.forEach(testimonial => {
+        activities.push({
+          type: 'testimonial',
+          description: `Novo depoimento de: ${testimonial.name}`,
+          created_at: testimonial.created_at
+        });
+      });
+    }
+    
+    // Ordenar por data mais recente
+    return activities.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
+  }, [recentActivity]);
+
   if (error) {
     return (
       <div className="space-y-6">
@@ -163,13 +206,13 @@ const AdminDashboard: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {recentActivity.length === 0 ? (
+              {processedRecentActivity.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>Nenhuma atividade recente</p>
                 </div>
               ) : (
-                recentActivity.map((activity, index) => {
+                processedRecentActivity.map((activity, index) => {
                   const getActivityColor = (type: string) => {
                     switch (type) {
                       case 'event': return 'bg-blue-500';

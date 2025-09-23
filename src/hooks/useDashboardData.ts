@@ -47,14 +47,14 @@ export const useDashboardData = () => {
       const { count: clientsCount } = await supabase
         .from('clients')
         .select('*', { count: 'exact', head: true })
-        .eq('deleted_at', null);
+        .is('deleted_at', null);
 
       // Buscar eventos ativos (não deletados e futuros)
       const { count: eventsCount } = await supabase
         .from('events')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
-        .gte('date', new Date().toISOString().split('T')[0]);
+        .gte('event_date', new Date().toISOString().split('T')[0]);
 
       // Buscar total de depoimentos
       const { count: testimonialsCount } = await supabase
@@ -84,7 +84,7 @@ export const useDashboardData = () => {
       // Últimos 5 eventos criados
       const { data: recentEvents } = await supabase
         .from('events')
-        .select('id, title, date, created_at')
+        .select('id, title, event_date, created_at')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(5);
@@ -99,7 +99,7 @@ export const useDashboardData = () => {
       // Últimos 5 depoimentos
       const { data: recentTestimonials } = await supabase
         .from('testimonials')
-        .select('id, client_name, event_type, created_at')
+        .select('id, name, event_type, created_at')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(5);
@@ -123,7 +123,7 @@ export const useDashboardData = () => {
       
       const { data: eventsData } = await supabase
         .from('events')
-        .select('date, created_at')
+        .select('event_date, created_at')
         .is('deleted_at', null)
         .gte('created_at', sixMonthsAgo.toISOString());
 
@@ -143,11 +143,11 @@ export const useDashboardData = () => {
       
       const { data: allEvents } = await supabase
         .from('events')
-        .select('date')
+        .select('event_date')
         .is('deleted_at', null);
 
       const eventsByStatus = allEvents?.reduce((acc: any, event) => {
-        const eventDate = event.date;
+        const eventDate = event.event_date;
         let status = 'Passados';
         
         if (eventDate > today) {

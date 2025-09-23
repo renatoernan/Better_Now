@@ -85,9 +85,9 @@ const Footer: React.FC = () => {
           
           {/* Redes Sociais */}
           <div className="space-y-2">
-            <h3 className="text-base sm:text-lg flex justify-center font-bold text-blue-300 mb-2">{translations.followUs}</h3>
+            <h3 className="text-base sm:text-lg flex  font-bold text-blue-300 mb-2">{translations.followUs}</h3>
             
-            <div className="flex justify-center">
+            <div >
               <a
                 href="https://www.instagram.com/betternow_eventos/"
                 target="_blank"
