@@ -85,11 +85,16 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock do IntersectionObserver
-global.IntersectionObserver = class IntersectionObserver {
+(global as any).IntersectionObserver = class IntersectionObserver {
+  root: Element | null = null;
+  rootMargin: string = '';
+  thresholds: ReadonlyArray<number> = [];
+  
   constructor() {}
   observe() { return null; }
   disconnect() { return null; }
   unobserve() { return null; }
+  takeRecords(): IntersectionObserverEntry[] { return []; }
 };
 
 // Mock do ResizeObserver

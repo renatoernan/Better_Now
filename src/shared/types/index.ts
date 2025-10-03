@@ -9,5 +9,4 @@ export * from './types/core';
 export * from './types/eventTypes';
 
 // Export schemas
-export * from './schemas/testimonialSchema';
 export * from './schemas/validationSchemas';

@@ -10,11 +10,3 @@ export interface EventType extends BaseEntity {
   icon?: string;
   active: boolean;
 }
-
-export interface EventTypeFormData {
-  name: string;
-  description?: string;
-  color: string;
-  icon?: string;
-  active: boolean;
-}

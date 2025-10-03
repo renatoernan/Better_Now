@@ -33,9 +33,9 @@ interface Client extends BaseClient {
 
 
 const AdminClients: React.FC = () => {
-  const { clients, deletedClients, loading, createClient: addClient, updateClient, deleteClient, searchClients, restoreClient, permanentDeleteClient, fetchClients, fetchDeletedClients } = useSupabaseClients();
+  const { clients, deletedClients, loading, createClient: addClient, updateClient, deleteClient, searchClients, restoreClient, permanentDeleteClient, fetchClients, fetchDeletedClients, fetchClientEvents, linkClientToEvent, unlinkClientFromEvent } = useSupabaseClients();
   const { interactions, getClientInteractions, addInteraction } = useClientInteractions();
-  const { events, fetchEvents,  linkClientToEvent, unlinkClientFromEvent } = useSupabaseEvents() as any;
+  const { events, fetchEvents } = useSupabaseEvents();
   const { translations } = useLanguage();
   
   // Lista das UFs do Brasil
@@ -144,10 +144,17 @@ const AdminClients: React.FC = () => {
   });
 
   useEffect(() => {
-    if (searchTerm || Object.values(filters).some(f => f)) {
-      searchClients(searchTerm, filters);
-    }
-  }, [searchTerm, filters]);
+    const performSearch = async () => {
+      if (searchTerm || Object.values(filters).some(f => f)) {
+        await searchClients(searchTerm, filters);
+      } else {
+        // Se não há termo de busca nem filtros, carregar todos os clientes
+        await fetchClients();
+      }
+    };
+    
+    performSearch();
+  }, [searchTerm, filters, searchClients, fetchClients]);
 
   useEffect(() => {
     if (activeTab === 'trash') {
@@ -881,9 +888,10 @@ const AdminClients: React.FC = () => {
       {/* Client Form Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto mx-3 sm:mx-0">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] flex flex-col mx-3 sm:mx-0">
+            {/* Header fixo */}
+            <div className="p-4 sm:p-6 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center justify-between">
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
                   {editingClient ? 'Editar Cliente' : 'Novo Cliente'}
                 </h2>
@@ -894,302 +902,310 @@ const AdminClients: React.FC = () => {
                   <X className="h-6 w-6" />
                 </button>
               </div>
-              
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            </div>
+            
+            {/* Conteúdo scrollável */}
+            <div className="flex-1 overflow-y-auto">
+              <form id="client-form" onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 pb-20">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Cliente Validado
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Indica se o cliente foi validado no sistema
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        {...register('validated')}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Cliente Validado
-                    </label>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Indica se o cliente foi validado no sistema
-                    </p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      {...register('validated')}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nome *
-                  </label>
-                  <input
-                    type="text"
-                    {...register('name')}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.name ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Nome completo do cliente"
-                  />
-                  {errors.name && (
-                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.name.message}
-                    </div>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Apelido
-                  </label>
-                  <input
-                    type="text"
-                    {...register('apelido')}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.apelido ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Nome informal ou apelido"
-                  />
-                  {errors.apelido && (
-                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.apelido.message}
-                    </div>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    WhatsApp
-                  </label>
-                  <PhoneInput
-                    value={whatsappValue}
-                    onChange={(value) => {
-                      setWhatsappValue(value);
-                      setValue('whatsapp', value);
-                    }}
-                    placeholder="Ex: (11) 99999-9999"
-                    defaultCountry="+55"
-                    disabled={loading}
-                    className="w-full"
-                  />
-                  {errors.whatsapp && (
-                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.whatsapp.message}
-                    </div>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    {...register('email')}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.email ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="cliente@email.com"
-                  />
-                  {errors.email && (
-                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.email.message}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Campos de Endereço */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    CEP
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      {...register('cep')}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.cep ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="00000-000"
-                      maxLength={8}
-                    />
-                    {loadingCep && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                      </div>
-                    )}
-                  </div>
-                  {errors.cep && (
-                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.cep.message}
-                    </div>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Logradouro
-                  </label>
-                  <input
-                    type="text"
-                    {...register('logradouro')}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.logradouro ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Rua, Avenida, etc."
-                  />
-                  {errors.logradouro && (
-                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.logradouro.message}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex gap-3">
-                  <div className="flex-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Número
+                      Nome *
                     </label>
                     <input
                       type="text"
-                      {...register('numero')}
+                      {...register('name')}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.numero ? 'border-red-500' : 'border-gray-300'
+                        errors.name ? 'border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="Número do endereço"
+                      placeholder="Nome completo do cliente"
                     />
-                    {errors.numero && (
+                    {errors.name && (
                       <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                         <AlertCircle className="h-4 w-4" />
-                        {errors.numero.message}
+                        {errors.name.message}
                       </div>
                     )}
                   </div>
-                  <div className="flex-1">
+                  
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Complemento
+                      Apelido
                     </label>
                     <input
                       type="text"
-                      {...register('complemento')}
+                      {...register('apelido')}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.complemento ? 'border-red-500' : 'border-gray-300'
+                        errors.apelido ? 'border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="Apartamento, casa, etc."
+                      placeholder="Nome informal ou apelido"
                     />
-                    {errors.complemento && (
+                    {errors.apelido && (
                       <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                         <AlertCircle className="h-4 w-4" />
-                        {errors.complemento.message}
+                        {errors.apelido.message}
                       </div>
                     )}
                   </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bairro
-                  </label>
-                  <input
-                    type="text"
-                    {...register('bairro')}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.bairro ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Nome do bairro"
-                  />
-                  {errors.bairro && (
-                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.bairro.message}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex gap-3">
-                  <div className="flex-1">
+                  
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Cidade
+                      WhatsApp
+                    </label>
+                    <PhoneInput
+                      value={whatsappValue}
+                      onChange={(value) => {
+                        setWhatsappValue(value);
+                        setValue('whatsapp', value);
+                      }}
+                      placeholder="Ex: (11) 99999-9999"
+                      defaultCountry="+55"
+                      disabled={loading}
+                      className="w-full"
+                    />
+                    {errors.whatsapp && (
+                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.whatsapp.message}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      {...register('email')}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        errors.email ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="cliente@email.com"
+                    />
+                    {errors.email && (
+                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.email.message}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Campos de Endereço */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      CEP
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        {...register('cep')}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          errors.cep ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="00000-000"
+                        maxLength={8}
+                      />
+                      {loadingCep && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        </div>
+                      )}
+                    </div>
+                    {errors.cep && (
+                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.cep.message}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Logradouro
                     </label>
                     <input
                       type="text"
-                      {...register('cidade')}
+                      {...register('logradouro')}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.cidade ? 'border-red-500' : 'border-gray-300'
+                        errors.logradouro ? 'border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="Nome da cidade"
+                      placeholder="Rua, Avenida, etc."
                     />
-                    {errors.cidade && (
+                    {errors.logradouro && (
                       <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                         <AlertCircle className="h-4 w-4" />
-                        {errors.cidade.message}
+                        {errors.logradouro.message}
                       </div>
                     )}
                   </div>
-                  <div className="w-2/5">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      UF
-                    </label>
-                    <select
-                      {...register('uf')}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white ${
-                        errors.uf ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    >
-                      <option value="">Selecione UF</option>
-                      {brasilUFs.map(uf => (
-                        <option key={uf} value={uf}>{uf}</option>
-                      ))}
-                    </select>
-                    {errors.uf && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.uf.message}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Observações
-                  </label>
-                  <textarea
-                    {...register('notes')}
-                    rows={3}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.notes ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Observações sobre o cliente"
-                  />
-                  {errors.notes && (
-                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.notes.message}
+                  
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Número
+                      </label>
+                      <input
+                        type="text"
+                        {...register('numero')}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          errors.numero ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Número do endereço"
+                      />
+                      {errors.numero && (
+                        <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                          <AlertCircle className="h-4 w-4" />
+                          {errors.numero.message}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                
-                
-                
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Save className="h-4 w-4" />
-                    {editingClient ? 'Atualizar' : 'Cadastrar'}
-                  </button>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Complemento
+                      </label>
+                      <input
+                        type="text"
+                        {...register('complemento')}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          errors.complemento ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Apartamento, casa, etc."
+                      />
+                      {errors.complemento && (
+                        <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                          <AlertCircle className="h-4 w-4" />
+                          {errors.complemento.message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Bairro
+                    </label>
+                    <input
+                      type="text"
+                      {...register('bairro')}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        errors.bairro ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="Nome do bairro"
+                    />
+                    {errors.bairro && (
+                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.bairro.message}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Cidade
+                      </label>
+                      <input
+                        type="text"
+                        {...register('cidade')}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          errors.cidade ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Nome da cidade"
+                      />
+                      {errors.cidade && (
+                        <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                          <AlertCircle className="h-4 w-4" />
+                          {errors.cidade.message}
+                        </div>
+                      )}
+                    </div>
+                    <div className="w-2/5">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        UF
+                      </label>
+                      <select
+                        {...register('uf')}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white ${
+                          errors.uf ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        <option value="">Selecione UF</option>
+                        {brasilUFs.map(uf => (
+                          <option key={uf} value={uf}>{uf}</option>
+                        ))}
+                      </select>
+                      {errors.uf && (
+                        <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                          <AlertCircle className="h-4 w-4" />
+                          {errors.uf.message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Observações
+                    </label>
+                    <textarea
+                      {...register('notes')}
+                      rows={3}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        errors.notes ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="Observações sobre o cliente"
+                    />
+                    {errors.notes && (
+                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.notes.message}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </form>
+            </div>
+            
+            {/* Botões flutuantes fixos na parte inferior */}
+            <div className="flex-shrink-0 bg-white border-t border-gray-200 p-4 sm:p-6">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  form="client-form"
+                  onClick={handleSubmit(onSubmit)}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {editingClient ? 'Atualizar' : 'Cadastrar'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -21,33 +21,13 @@ export interface ApiResponse<T = any> {
 
 export interface PaginatedResponse<T = any> {
   data: T[];
-  total: number;
+  count: number;
   page: number;
   limit: number;
-  totalPages: number;
+  total_pages: number;
 }
 
 // Event related types
-export interface Event extends BaseEntity {
-  name: string;
-  description: string;
-  basic_description?: string;
-  detailed_description?: string;
-  event_date: string;
-  event_time?: string;
-  location: string;
-  location_link?: string;
-  capacity: number;
-  current_participants: number;
-  images: string[];
-  videos?: string[];
-  event_type_id: string;
-  is_active: boolean;
-  allow_ticket_sales: boolean;
-  event_types?: EventType;
-  price_batches?: PriceBatch[];
-  schedule?: ScheduleItem[];
-}
 
 
 
@@ -60,6 +40,7 @@ export interface PriceBatch extends BaseEntity {
   start_date: string;
   end_date: string;
   is_active: boolean;
+  description?: string;
 }
 
 export interface ScheduleItem {
@@ -74,13 +55,23 @@ export interface Client extends BaseEntity {
   name: string;
   email: string;
   phone?: string;
+  whatsapp?: string;
+  apelido?: string;
   cpf?: string;
   cnpj?: string;
   address?: string;
   numero?: string;
+  cep?: string;
+  logradouro?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
   city?: string;
   state?: string;
+  uf?: string;
   zip_code?: string;
+  notes?: string;
+  validated?: boolean;
   is_active: boolean;
 }
 
@@ -104,11 +95,13 @@ export interface Purchase extends BaseEntity {
 
 // Testimonial related types
 export interface Testimonial extends BaseEntity {
+  name: string; // Client name
   client_name: string;
   client_email: string;
   event_name: string;
   rating: number;
   comment: string;
+  testimonial_text: string; // Testimonial content
   is_approved: boolean;
   is_featured: boolean;
   event_type: string;
@@ -127,116 +120,35 @@ export interface ContactForm extends BaseEntity {
 }
 
 // Settings types
-export interface AppSettings {
-  company_name: string;
-  company_email: string;
-  company_phone: string;
-  company_address: string;
-  business_hours: {
-    monday: { open: string; close: string; closed: boolean };
-    tuesday: { open: string; close: string; closed: boolean };
-    wednesday: { open: string; close: string; closed: boolean };
-    thursday: { open: string; close: string; closed: boolean };
-    friday: { open: string; close: string; closed: boolean };
-    saturday: { open: string; close: string; closed: boolean };
-    sunday: { open: string; close: string; closed: boolean };
-  };
-  testimonial_carousel_interval: number;
-  max_file_size: number;
-  allowed_file_types: string[];
-}
 
-// Form data types
-export interface EventFormData {
-  name: string;
-  description: string;
-  basic_description?: string;
-  detailed_description?: string;
-  event_date: string;
-  event_time?: string;
-  location: string;
-  location_link?: string;
-  capacity: number;
-  event_type_id: string;
-  images: string[];
-  videos?: string[];
-  is_active: boolean;
-  allow_ticket_sales: boolean;
-  price_batches?: Omit<PriceBatch, 'id' | 'event_id' | 'created_at' | 'updated_at'>[];
-  schedule?: Omit<ScheduleItem, 'id'>[];
-}
 
-export interface ClientFormData {
-  name: string;
-  email: string;
-  phone?: string;
-  cpf?: string;
-  cnpj?: string;
-  address?: string;
-  numero?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
-  is_active: boolean;
-}
 
-export interface TestimonialFormData {
-  client_name: string;
-  client_email: string;
-  event_name: string;
-  rating: number;
-  comment: string;
-  event_type: string;
-}
 
-export interface ContactFormData {
-  name: string;
-  email: string;
-  phone?: string;
-  message: string;
-}
-
-// Filter and search types
-export interface EventFilters {
-  search?: string;
-  event_type_id?: string;
-  date_from?: string;
-  date_to?: string;
-  is_active?: boolean;
-  allow_ticket_sales?: boolean;
-}
-
-export interface ClientFilters {
-  search?: string;
-  is_active?: boolean;
-  city?: string;
-  state?: string;
-}
-
-export interface PaginationParams {
-  page: number;
-  limit: number;
-}
 
 // Utility types
 export type SortOrder = 'asc' | 'desc';
 export type SortField = string;
 
-export interface SortParams {
-  field: SortField;
-  order: SortOrder;
-}
-
 // Cache types
 export interface CacheEntry<T = any> {
-  data: T;
-  timestamp: number;
-  ttl: number;
+  key: string;
+  value: T;
+  data?: T; // For backward compatibility
+  expiresAt: number;
+  createdAt: number;
+  timestamp?: number; // For backward compatibility
+  ttl?: number; // For backward compatibility
+  accessCount: number;
+  lastAccessed: number;
+  size: number;
+  compressed: boolean;
 }
 
 export interface CacheConfig {
   defaultTTL: number;
   maxSize: number;
+  enableCompression?: boolean;
+  enableMetrics?: boolean;
   cleanupInterval: number;
 }
 
@@ -274,15 +186,7 @@ export interface RealtimeEvent<T = any> {
 // Export utility types
 export type ExportFormat = 'csv' | 'excel' | 'pdf';
 
-export interface ExportOptions {
-  format: ExportFormat;
-  filename?: string;
-  includeHeaders?: boolean;
-  dateRange?: {
-    start: string;
-    end: string;
-  };
-}
+
 
 // Notification types
 export interface Notification {
@@ -317,8 +221,10 @@ export interface BaseComponentProps {
 }
 
 export interface LoadingProps extends BaseComponentProps {
-  size?: 'sm' | 'md' | 'lg';
-  variant?: 'spinner' | 'dots' | 'pulse';
+  size?: 'sm' | 'default' | 'lg' | 'xl';
+  variant?: 'spinner' | 'dots' | 'pulse' | 'skeleton';
+  text?: string;
+  fullScreen?: boolean;
 }
 
 export interface ButtonProps extends BaseComponentProps {
@@ -330,14 +236,11 @@ export interface ButtonProps extends BaseComponentProps {
   type?: 'button' | 'submit' | 'reset';
 }
 
-export interface InputProps extends BaseComponentProps {
-  type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url';
-  placeholder?: string;
-  value?: string;
-  onChange?: (value: string) => void;
-  error?: string;
-  disabled?: boolean;
-  required?: boolean;
+export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
+  variant?: 'default' | 'ghost';
+  size?: 'sm' | 'default' | 'lg';
+  error?: boolean;
+  success?: boolean;
 }
 
 export interface ModalProps extends BaseComponentProps {
@@ -345,6 +248,11 @@ export interface ModalProps extends BaseComponentProps {
   onClose: () => void;
   title?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  showCloseButton?: boolean;
+  closeOnOverlayClick?: boolean;
+  closeOnEscape?: boolean;
+  overlayClassName?: string;
+  contentClassName?: string;
 }
 
 // Form validation types

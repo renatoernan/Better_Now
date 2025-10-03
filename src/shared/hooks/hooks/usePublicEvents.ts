@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/lib/supabase';
-import { Event } from '../types/event';
+import { Event } from '../../types/types/event';
 
 export const usePublicEvents = () => {
   const [events, setEvents] = useState<Event[]>([]);

@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle } from 'lucide-react';
-import { Event } from '../../shared/hooks/hooks/useSupabaseEvents';
+import { Event, PriceBatch } from '../../shared/types/types/event';
 import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEventTypes';
 import ImageUpload from '../shared/ImageUpload';
 import VideoUpload from '../shared/VideoUpload';
 import { toast } from 'sonner';
 import { PhoneInput } from '../ui/PhoneInput';
 
-interface PriceBatch {
+interface LocalPriceBatch {
   id: string;
   name: string;
   price: number;
@@ -53,7 +53,7 @@ const EventForm: React.FC<EventFormProps> = ({
       status: 'draft',
       is_public: true,
       requires_approval: false,
-      category: '',
+      event_type_id: '',
       contact_email: '',
       contact_phone: '',
       additional_info: '',
@@ -62,7 +62,7 @@ const EventForm: React.FC<EventFormProps> = ({
     }
   });
 
-  const [priceBatches, setPriceBatches] = useState<PriceBatch[]>([]);
+  const [priceBatches, setPriceBatches] = useState<LocalPriceBatch[]>([]);
 
   useEffect(() => {
     if (event) {
@@ -79,7 +79,7 @@ const EventForm: React.FC<EventFormProps> = ({
       setValue('status', event.status || 'draft');
       setValue('is_public', event.is_public ?? true);
       setValue('requires_approval', event.requires_approval ?? false);
-      setValue('category', event.category || '');
+      setValue('event_type_id', event.event_type_id || '');
       setValue('contact_email', event.contact_email || '');
       setValue('contact_phone', event.contact_phone || '');
       setValue('additional_info', event.additional_info || '');
@@ -98,7 +98,7 @@ const EventForm: React.FC<EventFormProps> = ({
     
     // Se é o primeiro lote, nomeia como "Lote Único"
     if (currentBatches.length === 0) {
-      const newBatch: PriceBatch = {
+      const newBatch: LocalPriceBatch = {
         id: Date.now().toString(),
         name: 'Lote Único',
         price: 0,
@@ -113,7 +113,7 @@ const EventForm: React.FC<EventFormProps> = ({
       }
       
       // Adiciona o novo lote com numeração sequencial
-      const newBatch: PriceBatch = {
+      const newBatch: LocalPriceBatch = {
         id: Date.now().toString(),
         name: `Lote ${currentBatches.length + 1}`,
         price: 0,
@@ -145,9 +145,9 @@ const EventForm: React.FC<EventFormProps> = ({
 
   const onSubmit = async (data: Event) => {
     try {
-      const eventData = {
+      const eventData: Partial<Event> = {
         ...data,
-        price_batches: priceBatches
+        price_batches: priceBatches as PriceBatch[]
       };
       await onSave(eventData);
     } catch (error) {
@@ -223,9 +223,8 @@ const EventForm: React.FC<EventFormProps> = ({
     });
   };
 
-  const handleVideoRemove = (videoUrl: string) => {
-    const currentVideos = watch('videos') || [];
-    setValue('videos', currentVideos.filter(url => url !== videoUrl));
+  const handleVideoRemove = () => {
+    setValue('videos', []);
   };
 
   // Carregar tipos de eventos ativos ao montar o componente
@@ -233,26 +232,13 @@ const EventForm: React.FC<EventFormProps> = ({
     fetchEventTypes(true); // Buscar apenas tipos ativos
   }, []);
 
-  const categories = [
-    'Tecnologia',
-    'Negócios',
-    'Saúde',
-    'Educação',
-    'Arte e Cultura',
-    'Esportes',
-    'Entretenimento',
-    'Ciência',
-    'Meio Ambiente',
-    'Outro'
-  ];
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[95vh] overflow-y-auto">
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="p-6">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col max-h-[90vh]">
+          {/* Header fixo */}
+          <div className="p-6 border-b border-gray-200 flex-shrink-0">
+            <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900">
                 {event ? 'Editar Evento' : 'Novo Evento'}
               </h2>
@@ -264,6 +250,10 @@ const EventForm: React.FC<EventFormProps> = ({
                 <X className="w-6 h-6" />
               </button>
             </div>
+          </div>
+
+          {/* Conteúdo scrollável */}
+          <div className="flex-1 overflow-y-auto p-6 min-h-0">
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Coluna Esquerda */}
@@ -321,30 +311,30 @@ const EventForm: React.FC<EventFormProps> = ({
                     )}
                   </div>
 
-                  {/* Categoria */}
+                  {/* Tipo Evento */}
                   <div className="mb-4">
-                    <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
-                      Categoria
+                    <label htmlFor="event_type_id" className="block text-sm font-medium text-gray-700 mb-2">
+                      Tipo Evento
                     </label>
                     <select
-                      {...register('category')}
-                      id="category"
+                      {...register('event_type_id')}
+                      id="event_type_id"
                       className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                        errors.event_type_id ? 'border-red-500 bg-red-50' : 'border-gray-300'
                       }`}
                       disabled={isSubmitting}
                     >
-                      <option value="">Selecione uma categoria</option>
-                      {categories.map((category) => (
-                        <option key={category} value={category}>
-                          {category}
+                      <option value="">Selecione um tipo de evento</option>
+                      {eventTypes.map((eventType) => (
+                        <option key={eventType.id} value={eventType.id}>
+                          {eventType.name}
                         </option>
                       ))}
                     </select>
-                    {errors.category && (
+                    {errors.event_type_id && (
                       <div className="flex items-center gap-1 mt-1 text-red-600">
                         <AlertCircle className="w-4 h-4" />
-                        <span className="text-sm">{errors.category.message}</span>
+                        <span className="text-sm">{errors.event_type_id.message}</span>
                       </div>
                     )}
                   </div>
@@ -365,7 +355,7 @@ const EventForm: React.FC<EventFormProps> = ({
                       </label>
                       <input
                         {...register('event_date', { required: 'Data de início é obrigatória' })}
-                        type="datetime-local"
+                        type="date"
                         id="event_date"
                         className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
                           errors.event_date ? 'border-red-500 bg-red-50' : 'border-gray-300'
@@ -380,6 +370,28 @@ const EventForm: React.FC<EventFormProps> = ({
                       )}
                     </div>
 
+                    {/* Horário de Início */}
+                    <div>
+                      <label htmlFor="event_time" className="block text-sm font-medium text-gray-700 mb-2">
+                        Horário de Início *
+                      </label>
+                      <input
+                        {...register('event_time', { required: 'Horário de início é obrigatório' })}
+                        type="time"
+                        id="event_time"
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                          errors.event_time ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                        }`}
+                        disabled={isSubmitting}
+                      />
+                      {errors.event_time && (
+                        <div className="flex items-center gap-1 mt-1 text-red-600">
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="text-sm">{errors.event_time.message}</span>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Data de Término */}
                     <div>
                       <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-2">
@@ -387,7 +399,7 @@ const EventForm: React.FC<EventFormProps> = ({
                       </label>
                       <input
                         {...register('end_date')}
-                        type="datetime-local"
+                        type="date"
                         id="end_date"
                         className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
                           errors.end_date ? 'border-red-500 bg-red-50' : 'border-gray-300'
@@ -398,6 +410,28 @@ const EventForm: React.FC<EventFormProps> = ({
                         <div className="flex items-center gap-1 mt-1 text-red-600">
                           <AlertCircle className="w-4 h-4" />
                           <span className="text-sm">{errors.end_date.message}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Horário de Término */}
+                    <div>
+                      <label htmlFor="end_time" className="block text-sm font-medium text-gray-700 mb-2">
+                        Horário de Término
+                      </label>
+                      <input
+                        {...register('end_time')}
+                        type="time"
+                        id="end_time"
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                          errors.end_time ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                        }`}
+                        disabled={isSubmitting}
+                      />
+                      {errors.end_time && (
+                        <div className="flex items-center gap-1 mt-1 text-red-600">
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="text-sm">{errors.end_time.message}</span>
                         </div>
                       )}
                     </div>
@@ -638,11 +672,11 @@ const EventForm: React.FC<EventFormProps> = ({
                         Telefone de Contato
                       </label>
                       <PhoneInput
-                        {...register('contact_phone')}
+                        value={watch('contact_phone')}
+                        onChange={(value) => setValue('contact_phone', value)}
                         placeholder="(11) 99999-9999"
                         error={!!errors.contact_phone}
                         disabled={isSubmitting}
-                        name="contact_phone"
                       />
                       {errors.contact_phone && (
                         <div className="flex items-center gap-1 mt-1 text-red-600">
@@ -676,9 +710,9 @@ const EventForm: React.FC<EventFormProps> = ({
                         disabled={isSubmitting}
                       >
                         <option value="draft">Rascunho</option>
-                        <option value="published">Publicado</option>
+                        <option value="active">Ativo</option>
                         <option value="cancelled">Cancelado</option>
-                        <option value="completed">Concluído</option>
+                        <option value="completed">Finalizado</option>
                       </select>
                       {errors.status && (
                         <div className="flex items-center gap-1 mt-1 text-red-600">
@@ -761,11 +795,10 @@ const EventForm: React.FC<EventFormProps> = ({
                     Imagem Principal
                   </label>
                   <ImageUpload
-                    onUpload={handleImageUpload}
-                    onRemove={handleImageRemove}
-                    currentImage={watch('image_url')}
-                    disabled={isSubmitting}
-                  />
+              onImageUpload={handleImageUpload}
+              currentImage={watch('image_url')}
+              onImageRemove={handleImageRemove}
+            />
                 </div>
 
                 {/* Upload de Vídeos */}
@@ -774,17 +807,19 @@ const EventForm: React.FC<EventFormProps> = ({
                     Vídeos do Evento
                   </label>
                   <VideoUpload
-                    onUpload={handleVideoUpload}
-                    onRemove={handleVideoRemove}
-                    currentVideos={watch('videos') || []}
-                    disabled={isSubmitting}
+                    onVideoUpload={handleVideoUpload}
+                    currentVideo={watch('videos')?.[0]}
+                    onVideoRemove={handleVideoRemove}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Botões de Ação */}
-            <div className="flex gap-4 pt-6 border-t border-gray-200 mt-6">
+          </div>
+
+          {/* Botões flutuantes fixos na parte inferior */}
+          <div className="flex-shrink-0 bg-white border-t border-gray-200 p-6">
+            <div className="flex gap-4">
               <button
                 type="button"
                 onClick={onCancel}
@@ -795,6 +830,7 @@ const EventForm: React.FC<EventFormProps> = ({
               </button>
               <button
                 type="submit"
+                form="event-form"
                 disabled={isSubmitting || !isValid}
                 className={`flex-1 px-6 py-3 rounded-lg transition-colors flex items-center justify-center gap-2 ${
                   isSubmitting || !isValid

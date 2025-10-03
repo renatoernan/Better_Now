@@ -87,7 +87,7 @@ export const useAppSettings = (): AppSettingsHook => {
           }
         }
         
-        settingsData[key] = value;
+        (settingsData as any)[key] = value;
       });
 
       // Mesclar com configurações padrão

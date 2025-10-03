@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../services/lib/supabase';
-import { ContactForm } from '../types/supabase';
+import { ContactForm } from '../../types/types/contacts';
 import { ActivityLogger } from '../../utils/utils/activityLogger';
 
 interface RealtimeContactsState {

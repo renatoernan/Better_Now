@@ -3,7 +3,7 @@ import { supabase } from '../../services/lib/supabase';
 import { toast } from 'sonner';
 import { ActivityLogger } from '../../utils/utils/activityLogger';
 import type { 
-  Testimonial, 
+  Testimonial as BaseTestimonial, 
   TestimonialFormData,
   PaginationParams, 
   UseAsyncState,
@@ -11,22 +11,13 @@ import type {
   PaginatedResponse 
 } from '../../types';
 
-export interface Testimonial {
-  id: string;
-  name: string;
+export interface LocalTestimonial extends BaseTestimonial {
   whatsapp: string;
-  event_type: string;
-  testimonial_text: string;
-  status: 'pending' | 'approved' | 'rejected';
-  is_featured: boolean;
-  created_at: string;
-  updated_at: string;
   approved_at?: string;
   approved_by?: string;
-  deleted_at?: string;
 }
 
-export interface TestimonialFormData {
+export interface LocalTestimonialFormData {
   name: string;
   whatsapp: string;
   event_type: string;
@@ -34,12 +25,12 @@ export interface TestimonialFormData {
 }
 
 // Hook return type
-interface UseSupabaseTestimonialsReturn extends UseAsyncState<Testimonial[]> {
-  testimonials: Testimonial[];
-  approvedTestimonials: Testimonial[];
-  pendingTestimonials: Testimonial[];
-  deletedTestimonials: Testimonial[];
-  featuredTestimonials: Testimonial[];
+interface UseSupabaseTestimonialsReturn extends UseAsyncState<LocalTestimonial[]> {
+  testimonials: LocalTestimonial[];
+  approvedTestimonials: LocalTestimonial[];
+  pendingTestimonials: LocalTestimonial[];
+  deletedTestimonials: LocalTestimonial[];
+  featuredTestimonials: LocalTestimonial[];
   totalCount: number;
   currentPage: number;
   totalPages: number;
@@ -51,8 +42,8 @@ interface UseSupabaseTestimonialsReturn extends UseAsyncState<Testimonial[]> {
   fetchApprovedTestimonials: (pagination?: PaginationParams) => Promise<void>;
   fetchPendingTestimonials: (pagination?: PaginationParams) => Promise<void>;
   fetchDeletedTestimonials: () => Promise<void>;
-  createTestimonial: (testimonialData: TestimonialFormData) => Promise<Testimonial>;
-  updateTestimonial: (id: string, testimonialData: Partial<TestimonialFormData>) => Promise<Testimonial>;
+  createTestimonial: (testimonialData: LocalTestimonialFormData) => Promise<LocalTestimonial>;
+  updateTestimonial: (id: string, testimonialData: Partial<LocalTestimonialFormData>) => Promise<LocalTestimonial>;
   approveTestimonial: (id: string, isFeatured?: boolean) => Promise<void>;
   rejectTestimonial: (id: string, reason?: string) => Promise<void>;
   deleteTestimonial: (id: string) => Promise<void>;
@@ -61,17 +52,17 @@ interface UseSupabaseTestimonialsReturn extends UseAsyncState<Testimonial[]> {
   toggleFeatured: (id: string) => Promise<void>;
   
   // Utility functions
-  getTestimonialById: (id: string) => Testimonial | undefined;
-  getTestimonialsByStatus: (status: 'pending' | 'approved' | 'rejected') => Testimonial[];
-  searchTestimonials: (query: string) => Testimonial[];
+  getTestimonialById: (id: string) => LocalTestimonial | undefined;
+  getTestimonialsByStatus: (status: 'pending' | 'approved' | 'rejected') => LocalTestimonial[];
+  searchTestimonials: (query: string) => LocalTestimonial[];
   clearError: () => void;
 }
 
 export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-  const [approvedTestimonials, setApprovedTestimonials] = useState<Testimonial[]>([]);
-  const [pendingTestimonials, setPendingTestimonials] = useState<Testimonial[]>([]);
-  const [deletedTestimonials, setDeletedTestimonials] = useState<Testimonial[]>([]);
+  const [testimonials, setTestimonials] = useState<LocalTestimonial[]>([]);
+  const [approvedTestimonials, setApprovedTestimonials] = useState<LocalTestimonial[]>([]);
+  const [pendingTestimonials, setPendingTestimonials] = useState<LocalTestimonial[]>([]);
+  const [deletedTestimonials, setDeletedTestimonials] = useState<LocalTestimonial[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
@@ -245,7 +236,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
   }, [handleError]);
 
   // Create testimonial
-  const createTestimonial = useCallback(async (testimonialData: TestimonialFormData): Promise<Testimonial> => {
+  const createTestimonial = useCallback(async (testimonialData: LocalTestimonialFormData): Promise<LocalTestimonial> => {
     try {
       setLoading(true);
       setError(null);
@@ -282,7 +273,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
   }, [handleError]);
 
   // Update testimonial
-  const updateTestimonial = useCallback(async (id: string, testimonialData: Partial<TestimonialFormData>): Promise<Testimonial> => {
+  const updateTestimonial = useCallback(async (id: string, testimonialData: Partial<LocalTestimonialFormData>): Promise<LocalTestimonial> => {
     try {
       setLoading(true);
       setError(null);

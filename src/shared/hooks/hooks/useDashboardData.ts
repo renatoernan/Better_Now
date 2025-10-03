@@ -17,6 +17,9 @@ interface RecentActivity {
 interface EventStats {
   eventsByMonth: { month: string; count: number }[];
   eventsByStatus: { status: string; count: number }[];
+  totalEvents: number;
+  pastEvents: number;
+  futureEvents: number;
 }
 
 export const useDashboardData = () => {
@@ -35,7 +38,10 @@ export const useDashboardData = () => {
   
   const [eventStats, setEventStats] = useState<EventStats>({
     eventsByMonth: [],
-    eventsByStatus: []
+    eventsByStatus: [],
+    totalEvents: 0,
+    pastEvents: 0,
+    futureEvents: 0
   });
   
   const [loading, setLoading] = useState(true);
@@ -160,6 +166,10 @@ export const useDashboardData = () => {
         return acc;
       }, {}) || {};
 
+      const totalEvents = allEvents?.length || 0;
+      const pastEvents = eventsByStatus['Passados'] || 0;
+      const futureEvents = eventsByStatus['Futuros'] || 0;
+
       setEventStats({
         eventsByMonth: Object.entries(eventsByMonth).map(([month, count]) => ({
           month,
@@ -168,7 +178,10 @@ export const useDashboardData = () => {
         eventsByStatus: Object.entries(eventsByStatus).map(([status, count]) => ({
           status,
           count: count as number
-        }))
+        })),
+        totalEvents,
+        pastEvents,
+        futureEvents
       });
     } catch (err) {
       console.error('Erro ao buscar estatísticas de eventos:', err);

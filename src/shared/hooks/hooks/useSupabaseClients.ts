@@ -35,6 +35,25 @@ export interface ClientStats {
   activeClients: number;
 }
 
+// Client event relationship interface
+export interface ClientEvent {
+  id: string;
+  client_id: string;
+  event_id: string;
+  relationship_type: 'participant' | 'organizer' | 'vendor' | 'guest';
+  notes?: string;
+  created_at: string;
+  event?: {
+    id: string;
+    title: string;
+    description?: string;
+    event_date: string;
+    event_time?: string;
+    location?: string;
+    status: string;
+  };
+}
+
 // Hook return type
 interface UseSupabaseClientsReturn extends UseAsyncState<Client[]> {
   clients: Client[];
@@ -59,12 +78,17 @@ interface UseSupabaseClientsReturn extends UseAsyncState<Client[]> {
   addInteraction: (interaction: Omit<ClientInteraction, 'id' | 'created_at' | 'updated_at'>) => Promise<ClientInteraction>;
   getClientInteractions: (clientId: string) => Promise<ClientInteraction[]>;
   
+  // Client-Event relationships
+  fetchClientEvents: (clientId: string) => Promise<ClientEvent[]>;
+  linkClientToEvent: (clientId: string, eventId: string, relationshipType: string, notes?: string) => Promise<void>;
+  unlinkClientFromEvent: (clientEventId: string) => Promise<void>;
+  
   // Utility functions
   getClientById: (id: string) => Client | undefined;
   getClientsByCity: (city: string) => Client[];
   getClientsWithWhatsApp: () => Client[];
   getClientsWithEmail: () => Client[];
-  searchClients: (query: string) => Client[];
+  searchClients: (searchTerm: string, additionalFilters?: Omit<ClientFilters, 'search'>) => Promise<void>;
   calculateStats: () => Promise<void>;
   clearError: () => void;
 }
@@ -86,6 +110,18 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
+
+  const handleError = useCallback((err: any, message: string) => {
+    console.error(message, err);
+    const errorMessage = err.message || message;
+    setError(errorMessage);
+    toast.error(message);
+    ActivityLogger.log('error', message, 'system', 'error', { error: errorMessage });
+  }, []);
+
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
 
   // Memoized computed values
   const hasNextPage = useMemo(() => currentPage < totalPages, [currentPage, totalPages]);
@@ -110,58 +146,73 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     return clients.filter(client => client.email);
   }, [clients]);
 
-  const searchClients = useCallback((query: string) => {
-    const searchTerm = query.toLowerCase();
-    return clients.filter(client => 
-      client.name.toLowerCase().includes(searchTerm) ||
-      client.email?.toLowerCase().includes(searchTerm) ||
-      client.whatsapp?.includes(query) ||
-      client.cidade?.toLowerCase().includes(searchTerm)
-    );
-  }, [clients]);
-
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
-  // Error handler
-  const handleError = useCallback((err: any, message: string) => {
-    const errorMessage = err?.message || 'Erro desconhecido';
-    setError(errorMessage);
-    toast.error(message);
-    console.error(message, err);
-    ActivityLogger.log('error', message, 'system', 'error', { error: errorMessage });
-  }, []);
-
-  // Calculate statistics
   const calculateStats = useCallback(async () => {
     try {
-      const { data: allClients } = await supabase
-        .from('clients')
-        .select('id, created_at, whatsapp, email, updated_at')
-        .is('deleted_at', null);
-
-      if (!allClients) return;
-
+      // Calcular estatísticas diretamente da tabela clients
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
-      const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 7);
 
-      const newStats: ClientStats = {
-        total: allClients.length,
-        thisMonth: allClients.filter(c => new Date(c.created_at) >= startOfMonth).length,
-        thisWeek: allClients.filter(c => new Date(c.created_at) >= startOfWeek).length,
-        withWhatsApp: allClients.filter(c => c.whatsapp).length,
-        withEmail: allClients.filter(c => c.email).length,
-        recentlyAdded: allClients.filter(c => new Date(c.created_at) >= last7Days).length,
-        activeClients: allClients.filter(c => new Date(c.updated_at) >= last30Days).length
-      };
+      // Total de clientes (não deletados)
+      const { count: total } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null);
 
-      setStats(newStats);
+      // Clientes criados este mês
+      const { count: thisMonth } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .gte('created_at', startOfMonth.toISOString());
+
+      // Clientes criados esta semana
+      const { count: thisWeek } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .gte('created_at', startOfWeek.toISOString());
+
+      // Clientes com WhatsApp
+      const { count: withWhatsApp } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .not('whatsapp', 'is', null)
+        .neq('whatsapp', '');
+
+      // Clientes com email
+      const { count: withEmail } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .not('email', 'is', null)
+        .neq('email', '');
+
+      // Clientes adicionados nos últimos 7 dias
+      const { count: recentlyAdded } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .gte('created_at', sevenDaysAgo.toISOString());
+
+      // Clientes ativos (não deletados) - mesmo que total
+      const activeClients = total;
+
+      setStats({
+        total: total || 0,
+        thisMonth: thisMonth || 0,
+        thisWeek: thisWeek || 0,
+        withWhatsApp: withWhatsApp || 0,
+        withEmail: withEmail || 0,
+        recentlyAdded: recentlyAdded || 0,
+        activeClients: activeClients || 0
+      });
     } catch (err: any) {
-      console.error('Erro ao calcular estatísticas:', err);
+      handleError(err, 'Erro ao calcular estatísticas');
     }
   }, []);
 
@@ -184,7 +235,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       // Apply filters
       if (filters?.search) {
-        query = query.or(`name.ilike.%${filters.search}%,whatsapp.ilike.%${filters.search}%,email.ilike.%${filters.search}%,cidade.ilike.%${filters.search}%`);
+        query = query.or(`name.ilike.%${filters.search}%,apelido.ilike.%${filters.search}%,whatsapp.ilike.%${filters.search}%,email.ilike.%${filters.search}%,cidade.ilike.%${filters.search}%`);
       }
       if (filters?.date_from) {
         query = query.gte('created_at', filters.date_from);
@@ -225,7 +276,16 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [handleError, calculateStats]);
+  }, []);
+
+  // Search clients with filters
+  const searchClients = useCallback(async (searchTerm: string, additionalFilters?: Omit<ClientFilters, 'search'>) => {
+    const filters: ClientFilters = {
+      search: searchTerm,
+      ...additionalFilters
+    };
+    await fetchClients(filters);
+  }, [fetchClients]);
 
   // Fetch deleted clients
   const fetchDeletedClients = useCallback(async () => {
@@ -246,7 +306,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [handleError]);
+  }, []);
 
   // Create client
   const createClient = useCallback(async (clientData: Omit<Client, 'id' | 'created_at' | 'updated_at'>): Promise<Client> => {
@@ -278,7 +338,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [handleError, calculateStats]);
+  }, [calculateStats]);
 
   // Update client
   const updateClient = useCallback(async (id: string, clientData: Partial<Client>): Promise<Client> => {
@@ -314,7 +374,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [handleError, calculateStats]);
+  }, [calculateStats]);
 
   // Soft delete client
   const deleteClient = useCallback(async (id: string): Promise<void> => {
@@ -349,7 +409,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [handleError, calculateStats]);
+  }, [calculateStats]);
 
   // Restore client from trash
   const restoreClient = useCallback(async (id: string): Promise<void> => {
@@ -384,7 +444,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [handleError, calculateStats]);
+  }, [calculateStats]);
 
   // Permanently delete client
   const permanentDeleteClient = useCallback(async (id: string): Promise<void> => {
@@ -412,7 +472,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [handleError, calculateStats]);
+  }, [calculateStats]);
 
   // Add client interaction
   const addInteraction = useCallback(async (interaction: Omit<ClientInteraction, 'id' | 'created_at' | 'updated_at'>): Promise<ClientInteraction> => {
@@ -441,7 +501,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [handleError]);
+  }, []);
 
   // Get client interactions
   const getClientInteractions = useCallback(async (clientId: string): Promise<ClientInteraction[]> => {
@@ -458,7 +518,96 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       handleError(err, 'Erro ao carregar interações do cliente');
       return [];
     }
-  }, [handleError]);
+  }, []);
+
+  // Fetch client events
+  const fetchClientEvents = useCallback(async (clientId: string): Promise<ClientEvent[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('client_events')
+        .select(`
+          *,
+          event:events(
+            id,
+            title,
+            description,
+            event_date,
+            event_time,
+            location,
+            status
+          )
+        `)
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (err: any) {
+      handleError(err, 'Erro ao carregar eventos do cliente');
+      return [];
+    }
+  }, []);
+
+  // Link client to event
+  const linkClientToEvent = useCallback(async (
+    clientId: string, 
+    eventId: string, 
+    relationshipType: string, 
+    notes?: string
+  ): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error } = await supabase
+        .from('client_events')
+        .insert([{
+          client_id: clientId,
+          event_id: eventId,
+          relationship_type: relationshipType,
+          notes: notes
+        }]);
+
+      if (error) throw error;
+      
+      toast.success('Evento vinculado com sucesso!');
+      ActivityLogger.log('client_event_linked', 'Cliente vinculado ao evento', 'system', 'success', {
+        clientId,
+        eventId,
+        relationshipType
+      });
+    } catch (err: any) {
+      handleError(err, 'Erro ao vincular cliente ao evento');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Unlink client from event
+  const unlinkClientFromEvent = useCallback(async (clientEventId: string): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error } = await supabase
+        .from('client_events')
+        .delete()
+        .eq('id', clientEventId);
+
+      if (error) throw error;
+      
+      toast.success('Evento desvinculado com sucesso!');
+      ActivityLogger.log('client_event_unlinked', 'Cliente desvinculado do evento', 'system', 'success', {
+        clientEventId
+      });
+    } catch (err: any) {
+      handleError(err, 'Erro ao desvincular cliente do evento');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // Refetch function for UseAsyncState compatibility
   const refetch = useCallback(async () => {
@@ -494,6 +643,11 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     // Interactions
     addInteraction,
     getClientInteractions,
+    
+    // Client-Event relationships
+    fetchClientEvents,
+    linkClientToEvent,
+    unlinkClientFromEvent,
     
     // Utility functions
     getClientById,

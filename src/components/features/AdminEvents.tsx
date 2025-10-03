@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X } from 'lucide-react';
-import { useSupabaseEvents, Event } from '../../shared/hooks/hooks/useSupabaseEvents';
+import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
+import { Event } from '../../shared/types/types/event';
 import { toast } from 'sonner';
 import Loading from '../ui/Loading';
 
@@ -215,9 +216,11 @@ const AdminEvents: React.FC = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
+      case 'active': return 'Ativo';
       case 'published': return 'Publicado';
       case 'draft': return 'Rascunho';
       case 'cancelled': return 'Cancelado';
+      case 'completed': return 'Finalizado';
       default: return status;
     }
   };
@@ -319,30 +322,32 @@ const AdminEvents: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+        <div className="flex flex-col gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
               Gerenciamento de Eventos
             </h1>
-            <p className="text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600">
               Organize e gerencie todos os eventos da Better Now
             </p>
           </div>
-          <div className="mt-4 sm:mt-0 flex gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <button 
               onClick={() => setViewMode('event-types')}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
             >
               <Tag className="h-4 w-4" />
-              Tipos de Eventos
+              <span className="hidden sm:inline">Tipos de Eventos</span>
+              <span className="sm:hidden">Tipos</span>
             </button>
             <button 
               onClick={() => {
                 setSelectedEvent(null);
                 setViewMode('form');
               }}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+              className="bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
             >
               <Plus className="h-4 w-4" />
               Novo Evento
@@ -680,38 +685,40 @@ const AdminEvents: React.FC = () => {
       </div>
 
       {/* Modais de Confirmação */}
-      <ConfirmModal
-        isOpen={isDeleteModalOpen}
-        onClose={cancelDeleteEvent}
-        onConfirm={confirmDeleteEvent}
-        title="Mover para Lixeira"
-        message="Tem certeza que deseja mover este evento para a lixeira? Você poderá restaurá-lo posteriormente."
-        confirmText="Mover para Lixeira"
-        cancelText="Cancelar"
-        type="danger"
-      />
-
-      <ConfirmModal
-        isOpen={isRestoreModalOpen}
-        onClose={cancelRestoreEvent}
-        onConfirm={confirmRestoreEvent}
-        title="Restaurar Evento"
-        message="Tem certeza que deseja restaurar este evento?"
-        confirmText="Restaurar"
-        cancelText="Cancelar"
-        type="info"
-      />
-
-      <ConfirmModal
-        isOpen={isPermanentDeleteModalOpen}
-        onClose={cancelPermanentDeleteEvent}
-        onConfirm={confirmPermanentDeleteEvent}
-        title="Excluir Permanentemente"
-        message="Tem certeza que deseja excluir este evento permanentemente? Esta ação não pode ser desfeita."
-        confirmText="Excluir Permanentemente"
-        cancelText="Cancelar"
-        type="danger"
-      />
+      <Suspense fallback={null}>
+        <ConfirmModal
+          isOpen={isDeleteModalOpen}
+          onClose={cancelDeleteEvent}
+          onConfirm={confirmDeleteEvent}
+          title="Mover para Lixeira"
+          message="Tem certeza que deseja mover este evento para a lixeira? Você poderá restaurá-lo posteriormente."
+          confirmText="Mover para Lixeira"
+          cancelText="Cancelar"
+          type="danger"
+        />
+      
+        <ConfirmModal
+          isOpen={isRestoreModalOpen}
+          onClose={cancelRestoreEvent}
+          onConfirm={confirmRestoreEvent}
+          title="Restaurar Evento"
+          message="Tem certeza que deseja restaurar este evento?"
+          confirmText="Restaurar"
+          cancelText="Cancelar"
+          type="info"
+        />
+      
+        <ConfirmModal
+          isOpen={isPermanentDeleteModalOpen}
+          onClose={cancelPermanentDeleteEvent}
+          onConfirm={confirmPermanentDeleteEvent}
+          title="Excluir Permanentemente"
+          message="Tem certeza que deseja excluir este evento permanentemente? Esta ação não pode ser desfeita."
+          confirmText="Excluir Permanentemente"
+          cancelText="Cancelar"
+          type="danger"
+        />
+      </Suspense>
     </div>
   );
 };

@@ -36,7 +36,7 @@ export const useClientInteractions = (clientId?: string) => {
 
       setInteractions(data || []);
       
-      ActivityLogger.log('client_interactions_loaded', 'Interações do cliente carregadas', {
+      ActivityLogger.log('client_interactions_loaded', 'Interações do cliente carregadas', 'system', 'info', {
         clientId: id,
         count: data?.length || 0
       });
@@ -44,7 +44,7 @@ export const useClientInteractions = (clientId?: string) => {
     } catch (err: any) {
       const errorMessage = err.message || 'Erro ao carregar interações';
       setError(errorMessage);
-      ActivityLogger.log('client_interactions_load_error', 'Erro ao carregar interações', { error: err.message });
+      ActivityLogger.log('client_interactions_load_error', 'Erro ao carregar interações', 'system', 'error', { error: err.message });
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,7 @@ export const useClientInteractions = (clientId?: string) => {
       }
       
       toast.success('Interação adicionada com sucesso!');
-      ActivityLogger.log('client_interaction_added', 'Nova interação adicionada', {
+      ActivityLogger.log('client_interaction_added', 'Nova interação adicionada', 'system', 'success', {
         clientId: targetClientId,
         type: interactionData.type,
         interactionId: data.id
@@ -89,7 +89,7 @@ export const useClientInteractions = (clientId?: string) => {
     } catch (err: any) {
       const errorMessage = err.message || 'Erro ao adicionar interação';
       toast.error(errorMessage);
-      ActivityLogger.log('client_interaction_add_error', 'Erro ao adicionar interação', { error: err.message });
+      ActivityLogger.log('client_interaction_add_error', 'Erro ao adicionar interação', 'system', 'error', { error: err.message });
       return { success: false, error: errorMessage };
     }
   };
@@ -113,16 +113,16 @@ export const useClientInteractions = (clientId?: string) => {
       ));
       
       toast.success('Interação atualizada com sucesso!');
-      ActivityLogger.log('client_interaction_updated', 'Interação atualizada', {
+      ActivityLogger.log('client_interaction_updated', 'Interação atualizada', 'system', 'success', {
         interactionId,
-        updates
+        clientId
       });
 
       return { success: true, data };
     } catch (err: any) {
       const errorMessage = err.message || 'Erro ao atualizar interação';
       toast.error(errorMessage);
-      ActivityLogger.log('client_interaction_update_error', 'Erro ao atualizar interação', { error: err.message });
+      ActivityLogger.log('client_interaction_update_error', 'Erro ao atualizar interação', 'system', 'error', { error: err.message });
       return { success: false, error: errorMessage };
     }
   };
@@ -142,13 +142,13 @@ export const useClientInteractions = (clientId?: string) => {
       setInteractions(prev => prev.filter(interaction => interaction.id !== interactionId));
       
       toast.success('Interação excluída com sucesso!');
-      ActivityLogger.log('client_interaction_deleted', 'Interação excluída', { interactionId });
+      ActivityLogger.log('client_interaction_deleted', 'Interação excluída', 'system', 'success', { interactionId });
 
       return { success: true };
     } catch (err: any) {
       const errorMessage = err.message || 'Erro ao excluir interação';
       toast.error(errorMessage);
-      ActivityLogger.log('client_interaction_delete_error', 'Erro ao excluir interação', { error: err.message });
+      ActivityLogger.log('client_interaction_delete_error', 'Erro ao excluir interação', 'system', 'error', { error: err.message });
       return { success: false, error: errorMessage };
     }
   };

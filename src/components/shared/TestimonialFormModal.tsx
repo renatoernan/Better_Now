@@ -40,7 +40,14 @@ const TestimonialFormModal: React.FC<TestimonialFormModalProps> = ({ isOpen, onC
   const onSubmit = async (data: TestimonialFormData) => {
     try {
       setIsSubmitting(true);
-      await createTestimonial(data);
+      // Map TestimonialFormData to LocalTestimonialFormData
+      const localData = {
+        name: data.client_name,
+        whatsapp: data.client_email, // Using email as placeholder for whatsapp
+        event_type: data.event_type,
+        testimonial_text: data.comment
+      };
+      await createTestimonial(localData);
       reset();
       toast.success('Depoimento enviado!', {
         description: 'Obrigado por compartilhar sua experiência. Seu depoimento será analisado em breve.',

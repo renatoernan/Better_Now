@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../../services/lib/supabase';
 import { ActivityLogger } from './activityLogger';
 import { cacheSystem } from './cacheSystem';
 import { retrySystem } from './retrySystem';
@@ -169,14 +169,18 @@ class DataMigration {
 
       // Inserir registro na tabela
       const { error } = await retrySystem.executeWithRetry(
-        () => supabase.from('carousel_images').insert({
-          filename: localImage.filename,
-          title: localImage.title || '',
-          active: localImage.active !== false,
-          deleted: localImage.deleted || false,
-          order_position: localImage.order || 0,
-          file_url: localImage.file_url || localImage.src
-        }),
+        async () => {
+          const result = await supabase.from('carousel_images').insert({
+            filename: localImage.filename || `image_${Date.now()}`,
+            title: localImage.title || '',
+            active: localImage.active !== false,
+            deleted: localImage.deleted || false,
+            order_position: localImage.order || 0,
+            file_url: localImage.file_url || localImage.src
+          });
+          return result;
+        },
+        'migrate_image',
         { maxAttempts: 3 }
       );
 
@@ -306,17 +310,21 @@ class DataMigration {
       for (const contact of localContacts) {
         try {
           const { error } = await retrySystem.executeWithRetry(
-            () => supabase.from('contact_forms').insert({
-              name: contact.name,
-              email: contact.email,
-              phone: contact.phone || '',
-              event_type: contact.eventType || 'outros',
-              guests: contact.guests || 0,
-              event_date: contact.eventDate || null,
-              message: contact.message || '',
-              status: contact.status || 'new',
-              created_at: contact.createdAt || new Date().toISOString()
-            }),
+            async () => {
+              const result = await supabase.from('contact_forms').insert({
+                name: contact.name,
+                email: contact.email,
+                phone: contact.phone || '',
+                event_type: contact.eventType || 'outros',
+                guests: contact.guests || 0,
+                event_date: contact.eventDate || null,
+                message: contact.message || '',
+                status: contact.status || 'new',
+                created_at: contact.createdAt || new Date().toISOString()
+              });
+              return result;
+            },
+            'migrate_contact',
             { maxAttempts: 3 }
           );
 

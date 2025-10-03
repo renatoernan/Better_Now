@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../services/lib/supabase';
-import { EventType, EventTypeFormData, ApiResponse, PaginatedResponse } from '../types';
+import { EventType, EventTypeFormData, ApiResponse, PaginatedResponse } from '../../types';
 import { toast } from 'sonner';
 
 export const useSupabaseEventTypes = () => {
@@ -151,14 +151,16 @@ export const useSupabaseEventTypes = () => {
 
       return {
         data,
-        message: 'Tipo de evento criado com sucesso!'
+        message: 'Tipo de evento criado com sucesso!',
+        success: true
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao criar tipo de evento';
       setError(errorMessage);
       toast.error(errorMessage);
       return {
-        error: errorMessage
+        error: errorMessage,
+        success: false
       };
     } finally {
       setLoading(false);
@@ -187,14 +189,16 @@ export const useSupabaseEventTypes = () => {
 
       return {
         data,
-        message: 'Tipo de evento atualizado com sucesso!'
+        message: 'Tipo de evento atualizado com sucesso!',
+        success: true
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao atualizar tipo de evento';
       setError(errorMessage);
       toast.error(errorMessage);
       return {
-        error: errorMessage
+        error: errorMessage,
+        success: false
       };
     } finally {
       setLoading(false);
@@ -220,14 +224,16 @@ export const useSupabaseEventTypes = () => {
       await fetchEventTypes(); // Atualizar lista
 
       return {
-        message: 'Tipo de evento movido para lixeira!'
+        message: 'Tipo de evento movido para lixeira!',
+        success: true
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao excluir tipo de evento';
       setError(errorMessage);
       toast.error(errorMessage);
       return {
-        error: errorMessage
+        error: errorMessage,
+        success: false
       };
     } finally {
       setLoading(false);
@@ -257,14 +263,16 @@ export const useSupabaseEventTypes = () => {
 
       return {
         data,
-        message
+        message,
+        success: true
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao alterar status do tipo de evento';
       setError(errorMessage);
       toast.error(errorMessage);
       return {
-        error: errorMessage
+        error: errorMessage,
+        success: false
       };
     } finally {
       setLoading(false);
@@ -325,14 +333,16 @@ export const useSupabaseEventTypes = () => {
 
       return {
         data,
-        message: 'Tipo de evento restaurado com sucesso!'
+        message: 'Tipo de evento restaurado com sucesso!',
+        success: true
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao restaurar tipo de evento';
       setError(errorMessage);
       toast.error(errorMessage);
       return {
-        error: errorMessage
+        error: errorMessage,
+        success: false
       };
     } finally {
       setLoading(false);
@@ -372,14 +382,16 @@ export const useSupabaseEventTypes = () => {
       toast.success('Tipo de evento excluído permanentemente!');
 
       return {
-        message: 'Tipo de evento excluído permanentemente!'
+        message: 'Tipo de evento excluído permanentemente!',
+        success: true
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao excluir permanentemente tipo de evento';
       setError(errorMessage);
       toast.error(errorMessage);
       return {
-        error: errorMessage
+        error: errorMessage,
+        success: false
       };
     } finally {
       setLoading(false);

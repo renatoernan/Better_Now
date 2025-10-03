@@ -56,7 +56,7 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(
         {dismissible && onDismiss && (
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             className="absolute right-2 top-2 h-6 w-6"
             onClick={onDismiss}
             aria-label="Fechar alerta"

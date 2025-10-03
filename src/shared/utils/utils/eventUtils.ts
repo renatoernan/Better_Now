@@ -1,4 +1,4 @@
-import { PriceBatch, BatchStatus } from '../types/event';
+import { PriceBatch } from '../../types/types/core';
 
 /**
  * Formatar data considerando UTC-3 (Brasil)
@@ -60,11 +60,11 @@ export const isExpired = (deadline: string): boolean => {
 /**
  * Verificar o status do lote baseado nas datas de início e fim considerando UTC-3
  */
-export const getBatchStatus = (batch: PriceBatch): BatchStatus => {
+export const getBatchStatus = (batch: PriceBatch): 'active' | 'expired' | 'upcoming' => {
   const now = new Date();
   const startDate = batch.start_date ? new Date(batch.start_date) : null;
-  // Verificar tanto 'deadline' quanto 'end_date'
-  const endDate = batch.deadline ? new Date(batch.deadline) : (batch.end_date ? new Date(batch.end_date) : null);
+  // Verificar apenas 'end_date'
+  const endDate = batch.end_date ? new Date(batch.end_date) : null;
 
   if (endDate) {
     // Ajustar para UTC-3 (horário do Brasil)
@@ -93,7 +93,7 @@ export const getBatchStatus = (batch: PriceBatch): BatchStatus => {
  */
 export const formatBatchPeriod = (batch: PriceBatch): string | null => {
   const startDate = batch.start_date ? new Date(batch.start_date) : null;
-  const endDate = batch.deadline ? new Date(batch.deadline) : (batch.end_date ? new Date(batch.end_date) : null);
+  const endDate = batch.end_date ? new Date(batch.end_date) : null;
   const status = getBatchStatus(batch);
   
   // Para lotes ativos, mostrar apenas a data de vencimento

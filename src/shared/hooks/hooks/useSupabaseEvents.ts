@@ -12,6 +12,9 @@ import type {
   PaginatedResponse 
 } from '../../types';
 
+// Re-export Event type for external use
+export type { Event } from '../../types';
+
 // Event photo interface
 interface EventPhoto {
   id: string;
@@ -36,7 +39,7 @@ interface UseSupabaseEventsReturn extends UseAsyncState<Event[]> {
   // Actions
   fetchEvents: (filters?: EventFilters, pagination?: PaginationParams) => Promise<void>;
   fetchDeletedEvents: () => Promise<void>;
-  createEvent: (eventData: Omit<Event, 'id' | 'created_at' | 'updated_at' | 'current_participants'>) => Promise<Event>;
+  createEvent: (eventData: Omit<Event, 'id' | 'created_at' | 'updated_at' | 'current_guests'>) => Promise<Event>;
   updateEvent: (id: string, eventData: Partial<Event>) => Promise<Event>;
   deleteEvent: (id: string) => Promise<void>;
   restoreEvent: (id: string) => Promise<void>;
@@ -200,7 +203,7 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
         .from('events')
         .insert([{
           ...eventData,
-          current_participants: 0,
+          current_guests: 0,
         }])
         .select('*, event_types!event_type_id(*)')
         .single();

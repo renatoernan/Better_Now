@@ -35,13 +35,13 @@ export class CacheService {
 
     const entry: CacheEntry<T> = {
       key,
-      value: this.config.enableCompression ? this.compress(value) : value,
+      value: this.config.enableCompression ? this.compress(value) as T : value,
       expiresAt,
       createdAt: Date.now(),
       accessCount: 0,
       lastAccessed: Date.now(),
       size: this.calculateSize(value),
-      compressed: this.config.enableCompression
+      compressed: this.config.enableCompression || false
     };
 
     this.cache.set(key, entry);
@@ -68,7 +68,7 @@ export class CacheService {
     entry.lastAccessed = Date.now();
 
     // Descomprime se necessário
-    return entry.compressed ? this.decompress(entry.value) : entry.value;
+    return entry.compressed ? this.decompress(entry.value as string) : entry.value;
   }
 
   /**
@@ -185,7 +185,7 @@ export class CacheService {
       if (timeLeft > 0) {
         entry.accessCount++;
         entry.lastAccessed = Date.now();
-        return entry.compressed ? this.decompress(entry.value) : entry.value;
+        return entry.compressed ? this.decompress(entry.value as string) : entry.value;
       }
     }
 

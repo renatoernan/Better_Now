@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../supabase';
+import { supabase } from '../../services/lib/supabase';
 import { ActivityLogger } from '../../utils/utils/activityLogger';
-import { cacheSystem } from '../utils/cacheSystem';
+import { cacheService } from '../../services/cache/cacheService';
 
 interface PaginationOptions {
   pageSize?: number;
@@ -94,7 +94,7 @@ export function usePagination<T = any>(
   const checkCache = (page: number): T[] | null => {
     if (!cacheKey) return null;
 
-    const cached = cacheSystem.get<PaginationCache>(getCacheKey);
+    const cached = cacheService.get<PaginationCache>(getCacheKey);
     if (!cached) return null;
 
     // Verificar se os filtros/busca/ordenação mudaram
@@ -136,7 +136,7 @@ export function usePagination<T = any>(
       sortOrder
     };
 
-    cacheSystem.set(getCacheKey, cacheData, cacheTTL);
+    cacheService.set(getCacheKey, cacheData, cacheTTL);
   };
 
   /**
@@ -281,7 +281,7 @@ export function usePagination<T = any>(
   const refresh = () => {
     // Limpar cache
     if (cacheKey) {
-      cacheSystem.delete(getCacheKey);
+      cacheService.delete(getCacheKey);
     }
     loadData(currentPage, false);
   };
@@ -300,7 +300,7 @@ export function usePagination<T = any>(
     
     // Limpar cache
     if (cacheKey) {
-      cacheSystem.delete(getCacheKey);
+      cacheService.delete(getCacheKey);
     }
     
     setCurrentPage(newPage);
@@ -315,7 +315,7 @@ export function usePagination<T = any>(
     
     // Limpar cache
     if (cacheKey) {
-      cacheSystem.delete(getCacheKey);
+      cacheService.delete(getCacheKey);
     }
   };
 
@@ -328,7 +328,7 @@ export function usePagination<T = any>(
     
     // Limpar cache
     if (cacheKey) {
-      cacheSystem.delete(getCacheKey);
+      cacheService.delete(getCacheKey);
     }
   };
 
@@ -342,7 +342,7 @@ export function usePagination<T = any>(
     
     // Limpar cache
     if (cacheKey) {
-      cacheSystem.delete(getCacheKey);
+      cacheService.delete(getCacheKey);
     }
   };
 

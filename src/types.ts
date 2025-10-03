@@ -12,6 +12,11 @@ export interface EventType {
   deleted_at?: string | null;
 }
 
+export interface ServiceItem {
+  title: string;
+  description: string;
+}
+
 export interface PriceBatch {
   id?: string;
   name: string;

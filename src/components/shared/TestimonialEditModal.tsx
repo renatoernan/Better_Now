@@ -4,12 +4,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { testimonialSchema, eventTypeOptions, statusOptions } from '../../shared/types/schemas/testimonialSchema';
 import { useSupabaseTestimonials } from '../../shared/hooks/hooks/useSupabaseTestimonials';
-import type { TestimonialFormData, Testimonial } from '../../shared/types/schemas/testimonialSchema';
+import type { TestimonialFormData } from '../../shared/types/schemas/testimonialSchema';
+import type { LocalTestimonial } from '../../shared/hooks/hooks/useSupabaseTestimonials';
 
 interface TestimonialEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  testimonial: Testimonial | null;
+  testimonial: LocalTestimonial | null;
   onSave?: () => void;
 }
 
@@ -24,7 +25,7 @@ const TestimonialEditModal: React.FC<TestimonialEditModalProps> = ({ isOpen, onC
     reset,
     watch,
     setValue
-  } = useForm<TestimonialFormData>({
+  } = useForm({
     resolver: zodResolver(testimonialSchema),
     defaultValues: {
       name: '',

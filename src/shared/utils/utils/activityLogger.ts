@@ -63,6 +63,10 @@ class ActivityLogger {
     return logs;
   }
 
+  static getRecentActivities(limit: number = 50): ActivityLog[] {
+    return this.getLogs({ limit });
+  }
+
   static getLogStats(): {
     total: number;
     byCategory: Record<string, number>;

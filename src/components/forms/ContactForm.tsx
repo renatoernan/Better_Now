@@ -19,6 +19,9 @@ const ContactForm: React.FC = () => {
         register,
         handleSubmit,
         reset,
+        watch,
+        setValue,
+        trigger,
         formState: { errors, isValid }
     } = useForm<ContactFormData>({
         resolver: zodResolver(contactFormDataSchema),
@@ -261,7 +264,9 @@ const ContactForm: React.FC = () => {
                         {/* Telefone */}
                         <div>
                             <PhoneInput
-                                {...register('phone')}
+                                value={watch('phone')}
+                                onChange={(value) => setValue('phone', value)}
+                                onBlur={() => trigger('phone')}
                                 placeholder={translations.contactForm.phone}
                                 error={!!errors.phone}
                                 className="w-full"

@@ -55,7 +55,7 @@ export const eventSchema = z.object({
   location: z.string().min(1, 'Local é obrigatório').max(300, 'Local muito longo'),
   location_link: z.string().url('Link inválido').optional().or(z.literal('')),
   capacity: z.number().int().min(1, 'Capacidade deve ser pelo menos 1'),
-  current_participants: z.number().int().min(0, 'Participantes atuais deve ser positivo'),
+  current_guests: z.number().int().min(0, 'Participantes atuais deve ser positivo'),
   images: z.array(z.string().url('URL de imagem inválida')),
   videos: z.array(z.string().url('URL de vídeo inválida')).optional(),
   event_type_id: z.string().uuid(),
@@ -152,7 +152,7 @@ export const contactFormSchema = z.object({
 // Form data schemas (for creation/update)
 export const eventFormDataSchema = eventSchema.omit({
   id: true,
-  current_participants: true,
+  current_guests: true,
 }).extend({
   price_batches: z.array(priceBatchSchema.omit({
     id: true,
@@ -260,6 +260,10 @@ export const clientFiltersSchema = z.object({
   is_active: z.boolean().optional(),
   city: z.string().optional(),
   state: z.string().length(2).optional(),
+  date_from: z.string().optional(),
+  date_to: z.string().optional(),
+  has_whatsapp: z.boolean().optional(),
+  has_email: z.boolean().optional(),
 });
 
 // Pagination schemas

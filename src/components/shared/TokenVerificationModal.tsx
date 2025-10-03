@@ -27,7 +27,7 @@ const TokenVerificationModal: React.FC<TokenVerificationModalProps> = ({
   const TOKEN_EXPIRATION_TIME = 59; // Tempo de expiração do token em segundos
   const [token, setToken] = useState(['', '', '', '', '', '']);
   const [timeRemaining, setTimeRemaining] = useState(initialTimeRemaining);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRefs = useRef<HTMLInputElement[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -179,7 +179,9 @@ const TokenVerificationModal: React.FC<TokenVerificationModalProps> = ({
             {token.map((digit, index) => (
               <input
                 key={index}
-                ref={(el) => (inputRefs.current[index] = el)}
+                ref={(el) => {
+                  if (el) inputRefs.current[index] = el;
+                }}
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"

@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../../services/lib/supabase';
 import { toast } from 'sonner';
-import { useAuth } from '../contexts/AuthContext';
-import { contactsCache } from '../utils/cacheSystem';
+import { useAuth } from '../../contexts/contexts/AuthContext';
+import { cacheService } from '../../services/cache/cacheService';
 import { ActivityLogger } from '../../utils/utils/activityLogger';
 
 interface ContactFormData {
@@ -59,8 +59,8 @@ export const useRealtimeNotifications = () => {
           const newContact = payload.new as ContactFormData;
           
           // Invalidar cache de contatos
-          contactsCache.invalidate('contacts-list');
-          contactsCache.invalidate('contacts-stats');
+          cacheService.delete('contacts-list');
+        cacheService.delete('contacts-stats');
           
           // Mostrar notificação
           toast.info('Novo Contato Recebido!', {
@@ -98,8 +98,8 @@ export const useRealtimeNotifications = () => {
           
           // Invalidar cache apenas se o status mudou
           if (updatedContact.status !== oldContact.status) {
-            contactsCache.invalidate('contacts-list');
-            contactsCache.invalidate('contacts-stats');
+            cacheService.delete('contacts-list');
+        cacheService.delete('contacts-stats');
           }
         }
       )
@@ -114,7 +114,7 @@ export const useRealtimeNotifications = () => {
           const newImage = payload.new as CarouselImageData;
           
           // Invalidar cache de imagens
-          contactsCache.invalidate('carousel-images');
+          cacheService.delete('carousel-images');
           
           // Mostrar notificação
           toast.success('Nova Imagem Adicionada!', {
@@ -143,7 +143,7 @@ export const useRealtimeNotifications = () => {
           const oldImage = payload.old as CarouselImageData;
           
           // Invalidar cache de imagens
-          contactsCache.invalidate('carousel-images');
+          cacheService.delete('carousel-images');
           
           // Notificar sobre mudanças importantes
           if (updatedImage.active !== oldImage.active) {
