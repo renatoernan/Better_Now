@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ImageIcon, AlertCircle } from 'lucide-react';
 import { cacheSystem } from '../../utils/cacheSystem';
-import { ActivityLogger } from '../../utils/activityLogger';
+import { ActivityLogger } from '../../shared/utils/utils/activityLogger';
 
 interface LazyImageProps {
   src: string;
@@ -47,7 +47,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   const [isInView, setIsInView] = useState(priority || loading === 'eager');
   const imgRef = useRef<HTMLImageElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const activityLogger = new ActivityLogger();
+
 
   // Gerar chave de cache baseada na URL e qualidade
   const cacheKey = `${src}_${quality}`;
@@ -119,7 +119,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
         
         onLoad?.();
         
-        activityLogger.logImage(
+        ActivityLogger.logImage(
           'image_loaded',
           `Imagem carregada: ${alt}`,
           'info',
@@ -138,7 +138,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
         
         onError?.(error);
         
-        activityLogger.logImage(
+        ActivityLogger.logImage(
           'image_load_error',
           `Erro ao carregar imagem: ${alt}`,
           'error',

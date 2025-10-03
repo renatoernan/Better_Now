@@ -1,5 +1,5 @@
 import React from 'react';
-import { EventDescriptionProps, ScheduleItem } from '../../types/event';
+import { EventDescriptionProps, ScheduleItem } from '../../shared/types';
 
 const EventDescription: React.FC<EventDescriptionProps> = ({ 
   basicDescription, 

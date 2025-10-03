@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Trash2, Eye, EyeOff, Calendar, RotateCcw, X } from 'lucide-react';
-import { useSupabaseEventTypes } from '../hooks/useSupabaseEventTypes';
-import { EventType, EventTypeFormData } from '../types';
+import { Plus, Search, Edit, Trash2, Eye, EyeOff, Calendar, RotateCcw, X, AlertCircle } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useSupabaseEventTypes } from '../shared/hooks/hooks/useSupabaseEventTypes';
+import { EventType } from '../types';
+import { eventTypeFormDataSchema, type EventTypeFormData } from '../shared/types/schemas/validationSchemas';
 import { toast } from 'sonner';
 
 interface EventTypeModalProps {
@@ -12,14 +15,24 @@ interface EventTypeModalProps {
 }
 
 const EventTypeModal: React.FC<EventTypeModalProps> = ({ isOpen, onClose, eventType, onSave }) => {
-  const [formData, setFormData] = useState<EventTypeFormData>({
-    name: '',
-    description: '',
-    color: '#3B82F6',
-    icon: 'Calendar',
-    active: true
-  });
   const [loading, setLoading] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+    watch
+  } = useForm<EventTypeFormData>({
+    resolver: zodResolver(eventTypeFormDataSchema),
+    defaultValues: {
+      name: '',
+      description: '',
+      color: '#3B82F6',
+      icon: 'Calendar',
+      active: true
+    }
+  });
 
   const iconOptions = [
     { value: 'Calendar', label: 'Calendário' },
@@ -36,7 +49,7 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({ isOpen, onClose, eventT
 
   useEffect(() => {
     if (eventType) {
-      setFormData({
+      reset({
         name: eventType.name,
         description: eventType.description || '',
         color: eventType.color,
@@ -44,7 +57,7 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({ isOpen, onClose, eventT
         active: eventType.active
       });
     } else {
-      setFormData({
+      reset({
         name: '',
         description: '',
         color: '#3B82F6',
@@ -52,18 +65,12 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({ isOpen, onClose, eventT
         active: true
       });
     }
-  }, [eventType, isOpen]);
+  }, [eventType, isOpen, reset]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) {
-      toast.error('Nome é obrigatório');
-      return;
-    }
-
+  const onSubmit = async (data: EventTypeFormData) => {
     setLoading(true);
     try {
-      await onSave(formData);
+      await onSave(data);
       onClose();
     } catch (error) {
       console.error('Erro ao salvar tipo de evento:', error);
@@ -81,55 +88,75 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({ isOpen, onClose, eventT
           {eventType ? 'Editar Tipo de Evento' : 'Novo Tipo de Evento'}
         </h2>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Nome *</label>
             <input
+              {...register('name')}
               type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.name ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Nome do tipo de evento"
-              required
             />
+            {errors.name && (
+              <div className="flex items-center mt-1 text-red-600 text-sm">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {errors.name.message}
+              </div>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Descrição</label>
             <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              {...register('description')}
+              className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.description ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Descrição do tipo de evento"
               rows={3}
             />
+            {errors.description && (
+              <div className="flex items-center mt-1 text-red-600 text-sm">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {errors.description.message}
+              </div>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Cor</label>
             <div className="flex items-center space-x-2">
               <input
+                {...register('color')}
                 type="color"
-                value={formData.color}
-                onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                 className="w-12 h-10 border rounded-md cursor-pointer"
               />
               <input
+                {...register('color')}
                 type="text"
-                value={formData.color}
-                onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                className="flex-1 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={`flex-1 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.color ? 'border-red-500' : 'border-gray-300'
+                }`}
                 placeholder="#3B82F6"
               />
             </div>
+            {errors.color && (
+              <div className="flex items-center mt-1 text-red-600 text-sm">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {errors.color.message}
+              </div>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Ícone</label>
             <select
-              value={formData.icon}
-              onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-              className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              {...register('icon')}
+              className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.icon ? 'border-red-500' : 'border-gray-300'
+              }`}
             >
               {iconOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -137,14 +164,19 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({ isOpen, onClose, eventT
                 </option>
               ))}
             </select>
+            {errors.icon && (
+              <div className="flex items-center mt-1 text-red-600 text-sm">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {errors.icon.message}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center">
             <input
+              {...register('active')}
               type="checkbox"
               id="active"
-              checked={formData.active}
-              onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
               className="mr-2"
             />
             <label htmlFor="active" className="text-sm font-medium">

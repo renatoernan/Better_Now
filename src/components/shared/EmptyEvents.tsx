@@ -1,34 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import Header from '../public/Header';
-import Footer from '../public/Footer';
+import Header from '../layout/Header';
+import Footer from '../layout/Footer';
 import { Calendar, Bell, Heart, Sparkles, Users, MapPin, Clock, Mail, Phone } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { useSupabaseEvents } from '../../hooks/useSupabaseEvents';
+import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 
 const EmptyEvents: React.FC = () => {
   const navigate = useNavigate();
-  const { fetchEvents, events, loading } = useSupabaseEvents();
+  // Removido useSupabaseEvents para evitar chamadas duplicadas e toast de erro
+  // O componente PublicEvents já gerencia o carregamento dos eventos
   const [activeEvents, setActiveEvents] = useState<any[]>([]);
-
-  useEffect(() => {
-    const loadActiveEvents = async () => {
-      try {
-        await fetchEvents({ status: 'active' });
-      } catch (error) {
-        console.error('Erro ao carregar eventos ativos:', error);
-      }
-    };
-    
-    loadActiveEvents();
-  }, []);
-
-  useEffect(() => {
-    if (events) {
-      const filteredEvents = events.filter(event => event.status === 'active');
-      setActiveEvents(filteredEvents);
-    }
-  }, [events]);
 
   // Função para formatar data
   const formatDate = (dateString: string) => {
@@ -119,32 +101,10 @@ const EmptyEvents: React.FC = () => {
       <Header />
       
       <main className="container mx-auto px-4 py-16">
-        {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-          </div>
-        ) : activeEvents.length > 0 ? (
-          <>
-            {/* Título da seção de eventos */}
-            <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">
-                Eventos Disponíveis 🎉
-              </h1>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                Descubra experiências incríveis e participe dos nossos eventos!
-              </p>
-            </div>
-
-            {/* Grid de eventos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-              {activeEvents.map((event, index) => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Main Content */}
+        {/* Seção de eventos ativos removida para evitar duplicação */}
+        {/* O componente PublicEvents já gerencia a exibição dos eventos */}
+        <>
+          {/* Main Content */}
             <section className="pt-32 pb-16 min-h-screen flex items-center">
               <div className="container mx-auto px-6">
                 <div className="max-w-4xl mx-auto text-center">
@@ -267,8 +227,7 @@ const EmptyEvents: React.FC = () => {
               </div>
             </section>
           </>
-        )}
-      </main>
+        </main>
 
       <Footer />
     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Send, Eye, Trash2, Users, Calendar, Mail, MessageSquare, CheckCircle, AlertCircle, Clock } from 'lucide-react';
-import { useSupabaseEvents, EventNotification } from '../../hooks/useSupabaseEvents';
-import { useSupabaseClients } from '../../hooks/useSupabaseClients';
+import { useSupabaseEvents, EventNotification } from '../../shared/hooks/hooks/useSupabaseEvents';
+import { useSupabaseClients } from '../../shared/hooks/hooks/useSupabaseClients';
 import { toast } from 'sonner';
 
 interface NotificationSystemProps {

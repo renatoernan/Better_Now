@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { Testimonial as SupabaseTestimonial } from '../../hooks/useSupabaseTestimonials';
+import type { Testimonial as SupabaseTestimonial } from '../../shared/hooks/hooks/useSupabaseTestimonials';
 
 interface TestimonialCarouselProps {
   testimonials: SupabaseTestimonial[];
@@ -154,18 +154,18 @@ const TestimonialCarousel: React.FC<TestimonialCarouselProps> = ({
           {/* Botões de navegação */}
           <button
             onClick={prevSlide}
-            className="absolute left-0 sm:-left-4 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 sm:p-3 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-10 touch-manipulation"
+            className="absolute left-0 sm:-left-4 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 sm:p-3 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-10 touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Depoimento anterior"
           >
-            <ChevronLeft className="w-4 h-4 sm:w-6 sm:h-6 text-gray-600" />
+            <ChevronLeft className="w-4 h-4 sm:w-6 sm:h-6 text-gray-600" aria-hidden="true" />
           </button>
 
           <button
             onClick={nextSlide}
-            className="absolute right-0 sm:-right-4 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 sm:p-3 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-10 touch-manipulation"
+            className="absolute right-0 sm:-right-4 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 sm:p-3 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-10 touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Próximo depoimento"
           >
-            <ChevronRight className="w-4 h-4 sm:w-6 sm:h-6 text-gray-600" />
+            <ChevronRight className="w-4 h-4 sm:w-6 sm:h-6 text-gray-600" aria-hidden="true" />
           </button>
 
           {/* Indicadores de posição */}
@@ -195,7 +195,8 @@ const TestimonialCarousel: React.FC<TestimonialCarouselProps> = ({
           <div className="flex justify-center mt-3 sm:mt-4">
             <button
               onClick={() => setIsAutoPlaying(!isAutoPlaying)}
-              className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200 px-3 py-1 rounded-full hover:bg-gray-100 touch-manipulation"
+              className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200 px-3 py-1 rounded-full hover:bg-gray-100 touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label={isAutoPlaying ? 'Pausar rotação automática dos depoimentos' : 'Ativar rotação automática dos depoimentos'}
             >
               {isAutoPlaying ? 'Pausar rotação automática' : 'Ativar rotação automática'}
             </button>

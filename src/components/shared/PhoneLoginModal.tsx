@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Phone } from 'lucide-react';
+import { PhoneInput } from '../ui/PhoneInput';
 
 interface PhoneLoginModalProps {
   isOpen: boolean;
@@ -17,35 +18,30 @@ const PhoneLoginModal: React.FC<PhoneLoginModalProps> = ({
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
 
-  const formatPhone = (value: string) => {
-    // Remove todos os caracteres não numéricos
-    const numbers = value.replace(/\D/g, '');
-    
-    // Aplica a máscara (XX) XXXXX-XXXX
-    if (numbers.length <= 11) {
-      return numbers.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-    }
-    return numbers.slice(0, 11).replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-  };
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhone(e.target.value);
-    setPhone(formatted);
+  const handlePhoneChange = (value: string) => {
+    setPhone(value);
     setError('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Remove formatação para validação
+    // Remove formatação para validação - agora suporta formato internacional
     const cleanPhone = phone.replace(/\D/g, '');
     
-    if (cleanPhone.length !== 11) {
+    // Validação para formato internacional (mínimo 10 dígitos, máximo 15)
+    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
       setError('Por favor, insira um número de telefone válido');
       return;
     }
     
-    onSubmit(cleanPhone);
+    // Se for brasileiro (+55), deve ter 13 dígitos no total (55 + 11 dígitos)
+    if (phone.startsWith('+55') && cleanPhone.length !== 13) {
+      setError('Para números brasileiros, insira o DDD e o número completo');
+      return;
+    }
+    
+    onSubmit(phone); // Envia o número no formato internacional
   };
 
   const handleClose = () => {
@@ -79,21 +75,14 @@ const PhoneLoginModal: React.FC<PhoneLoginModalProps> = ({
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
               Número de Telefone
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Phone className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                type="tel"
-                id="phone"
-                value={phone}
-                onChange={handlePhoneChange}
-                placeholder="(11) 99999-9999"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={loading}
-                required
-              />
-            </div>
+            <PhoneInput
+              value={phone}
+              onChange={handlePhoneChange}
+              placeholder="Ex: (11) 99999-9999"
+              defaultCountry="+55"
+              disabled={loading}
+              className="w-full"
+            />
             {error && (
               <p className="mt-1 text-sm text-red-600">{error}</p>
             )}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Phone, MessageSquare } from 'lucide-react';
+import { PhoneInput } from '../ui/PhoneInput';
 
 interface ClientRegistrationModalProps {
   isOpen: boolean;
@@ -25,28 +26,16 @@ const ClientRegistrationModal: React.FC<ClientRegistrationModalProps> = ({
   // Pré-preencher telefone quando modal abrir
   useEffect(() => {
     if (isOpen && prefilledPhone) {
-      const formattedPhone = formatPhone(prefilledPhone);
-      setFormData(prev => ({ ...prev, telefone: formattedPhone }));
+      // Se já tem código do país, usa como está, senão adiciona +55
+      const phoneWithCountryCode = prefilledPhone.startsWith('+') 
+        ? prefilledPhone 
+        : `+55${prefilledPhone}`;
+      setFormData(prev => ({ ...prev, telefone: phoneWithCountryCode }));
     }
   }, [isOpen, prefilledPhone]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  const formatPhone = (value: string) => {
-    // Remove todos os caracteres não numéricos
-    const numbers = value.replace(/\D/g, '');
-    
-    // Aplica a máscara (XX) XXXXX-XXXX
-    if (numbers.length <= 11) {
-      return numbers.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-    }
-    return numbers.slice(0, 11).replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-  };
-
   const handleInputChange = (field: string, value: string) => {
-    if (field === 'telefone') {
-      value = formatPhone(value);
-    }
-    
     setFormData(prev => ({ ...prev, [field]: value }));
     
     // Remove erro do campo quando usuário começa a digitar
@@ -62,11 +51,14 @@ const ClientRegistrationModal: React.FC<ClientRegistrationModalProps> = ({
       newErrors.nome = 'Nome é obrigatório';
     }
     
-    const cleanPhone = formData.telefone.replace(/\D/g, '');
-    if (!cleanPhone) {
+    if (!formData.telefone.trim()) {
       newErrors.telefone = 'Telefone é obrigatório';
-    } else if (cleanPhone.length !== 11) {
-      newErrors.telefone = 'Telefone deve ter 11 dígitos';
+    } else {
+      // Validação básica para formato internacional
+      const cleanPhone = formData.telefone.replace(/\D/g, '');
+      if (cleanPhone.length < 10) {
+        newErrors.telefone = 'Telefone deve ter pelo menos 10 dígitos';
+      }
     }
     
     if (!formData.comoSoube.trim()) {
@@ -84,12 +76,9 @@ const ClientRegistrationModal: React.FC<ClientRegistrationModalProps> = ({
       return;
     }
     
-    // Remove formatação do telefone antes de enviar
-    const cleanPhone = formData.telefone.replace(/\D/g, '');
-    
     onSubmit({
       nome: formData.nome.trim(),
-      telefone: cleanPhone,
+      telefone: formData.telefone.trim(), // Mantém o formato internacional
       comoSoube: formData.comoSoube.trim()
     });
   };
@@ -153,24 +142,14 @@ const ClientRegistrationModal: React.FC<ClientRegistrationModalProps> = ({
             <label htmlFor="telefone" className="block text-sm font-medium text-gray-700 mb-2">
               Número de Telefone *
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Phone className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                type="tel"
-                id="telefone"
-                value={formData.telefone}
-                onChange={(e) => handleInputChange('telefone', e.target.value)}
-                placeholder="(11) 99999-9999"
-                className={`block w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.telefone ? 'border-red-300' : 'border-gray-300'
-                } ${prefilledPhone ? 'bg-gray-100' : ''}`}
-                disabled={loading || !!prefilledPhone}
-                readOnly={!!prefilledPhone}
-                required
-              />
-            </div>
+            <PhoneInput
+              value={formData.telefone}
+              onChange={(value) => handleInputChange('telefone', value)}
+              placeholder="(11) 99999-9999"
+              error={!!errors.telefone}
+              disabled={loading || !!prefilledPhone}
+              name="telefone"
+            />
             {errors.telefone && (
               <p className="mt-1 text-sm text-red-600">{errors.telefone}</p>
             )}

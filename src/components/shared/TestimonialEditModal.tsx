@@ -2,17 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { testimonialSchema, eventTypeOptions, statusOptions } from '../../schemas/testimonialSchema';
-import { useSupabaseTestimonials } from '../../hooks/useSupabaseTestimonials';
-import type { TestimonialFormData, Testimonial } from '../../schemas/testimonialSchema';
+import { testimonialSchema, eventTypeOptions, statusOptions } from '../../shared/types/schemas/testimonialSchema';
+import { useSupabaseTestimonials } from '../../shared/hooks/hooks/useSupabaseTestimonials';
+import type { TestimonialFormData, Testimonial } from '../../shared/types/schemas/testimonialSchema';
 
 interface TestimonialEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   testimonial: Testimonial | null;
+  onSave?: () => void;
 }
 
-const TestimonialEditModal: React.FC<TestimonialEditModalProps> = ({ isOpen, onClose, testimonial }) => {
+const TestimonialEditModal: React.FC<TestimonialEditModalProps> = ({ isOpen, onClose, testimonial, onSave }) => {
   const { updateTestimonial, loading } = useSupabaseTestimonials();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,6 +55,7 @@ const TestimonialEditModal: React.FC<TestimonialEditModalProps> = ({ isOpen, onC
     try {
       setIsSubmitting(true);
       await updateTestimonial(testimonial.id, data);
+      onSave?.(); // Chama o callback para re-renderizar a lista
       onClose();
     } catch (error) {
       console.error('Erro ao atualizar depoimento:', error);

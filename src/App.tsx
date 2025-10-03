@@ -1,30 +1,49 @@
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
-import Header from './components/public/Header';
-import Hero from './components/public/Hero';
-import Services from './components/public/Services';
-import About from './components/public/About';
-import Testimonials from './components/public/Testimonials';
-import ContactForm from './components/public/ContactForm';
-import Footer from './components/public/Footer';
-import AdminLogin from './components/admin/AdminLogin';
-import AdminLayout from './components/admin/AdminLayout';
-import AdminDashboard from './components/admin/AdminDashboard';
-import AdminClients from './components/admin/AdminClients';
-import AdminEvents from './components/admin/AdminEvents';
-import AdminTestimonials from './components/admin/AdminTestimonials';
-import AdminSettings from './components/admin/AdminSettings';
-import AdminSolicitations from './pages/admin/AdminSolicitations';
-import ProtectedRoute from './components/shared/ProtectedRoute';
-import WhatsAppButton from './components/public/WhatsAppButton';
-import PublicEvents from './components/public/PublicEvents';
-import EventDetails from './components/shared/EventDetails';
 
-import { LanguageProvider } from './contexts/LanguageContext';
-import { AuthProvider } from './contexts/AuthContext';
-import { SettingsProvider } from './contexts/SettingsContext';
+// Layout Components (mantidos como imports diretos por serem críticos)
+import Header from './components/layout/Header';
+import Footer from './components/layout/Footer';
+import AdminLayout from './components/layout/AdminLayout';
+
+// Loading Component
+import Loading from './components/ui/Loading';
+
+// Lazy Loading Components
+const Hero = React.lazy(() => import('./components/features/Hero'));
+const Services = React.lazy(() => import('./components/features/Services'));
+const About = React.lazy(() => import('./components/features/About'));
+const Testimonials = React.lazy(() => import('./components/features/Testimonials'));
+const ContactForm = React.lazy(() => import('./components/forms/ContactForm'));
+const WhatsAppButton = React.lazy(() => import('./components/ui/WhatsAppButton'));
+const PublicEvents = React.lazy(() => import('./components/features/PublicEvents'));
+const EventDetails = React.lazy(() => import('./components/features/EventDetails'));
+
+// Admin Components (Lazy Loading)
+const AdminLogin = React.lazy(() => import('./components/forms/AdminLogin'));
+const AdminDashboard = React.lazy(() => import('./components/features/AdminDashboard'));
+const AdminClients = React.lazy(() => import('./components/features/AdminClients'));
+const AdminEvents = React.lazy(() => import('./components/features/AdminEvents'));
+const AdminTestimonials = React.lazy(() => import('./components/features/AdminTestimonials'));
+const AdminSettings = React.lazy(() => import('./components/features/AdminSettings'));
+const AdminSolicitations = React.lazy(() => import('./components/features/AdminSolicitations'));
+
+// Shared Components
+const ProtectedRoute = React.lazy(() => import('./components/shared/ProtectedRoute'));
+
+// Contexts
+import { LanguageProvider } from './shared/contexts/contexts/LanguageContext';
+import { AuthProvider } from './shared/contexts/contexts/AuthContext';
+import { SettingsProvider } from './shared/contexts/contexts/SettingsContext';
+
+// Loading Fallback Component
+const LoadingFallback: React.FC<{ message?: string }> = ({ message = 'Carregando...' }) => (
+  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <Loading variant="pulse" size="lg" message={message} />
+  </div>
+);
 
 // Componente da página principal
 const HomePage: React.FC = () => {
@@ -32,11 +51,13 @@ const HomePage: React.FC = () => {
     <div className="bg-gray-50 text-gray-800 antialiased">
       <Header />
       <main>
-        <Hero />
-        <Services />
-        <About />
-        <Testimonials />
-        <ContactForm />
+        <Suspense fallback={<LoadingFallback message="Carregando página inicial..." />}>
+          <Hero />
+          <Services />
+          <About />
+          <Testimonials />
+          <ContactForm />
+        </Suspense>
       </main>
       <Footer />
     </div>
@@ -48,29 +69,108 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <Routes>
         {/* Rota principal */}
-        <Route path="/" element={<HomePage />} />
+        <Route 
+          path="/" 
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando página inicial..." />}>
+              <HomePage />
+            </Suspense>
+          } 
+        />
         
         {/* Rota pública de eventos */}
-        <Route path="/eventos" element={<PublicEvents />} />
-        <Route path="/eventos/:id" element={<EventDetails />} />
+        <Route 
+          path="/eventos" 
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando eventos..." />}>
+              <PublicEvents />
+            </Suspense>
+          } 
+        />
+        <Route 
+          path="/eventos/:id" 
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando detalhes do evento..." />}>
+              <EventDetails />
+            </Suspense>
+          } 
+        />
         
         {/* Rotas administrativas */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route 
+          path="/admin/login" 
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando login..." />}>
+              <AdminLogin />
+            </Suspense>
+          } 
+        />
         <Route 
           path="/admin" 
           element={
-            <ProtectedRoute>
-              <AdminLayout />
-            </ProtectedRoute>
+            <Suspense fallback={<LoadingFallback message="Carregando área administrativa..." />}>
+              <ProtectedRoute>
+                <AdminLayout />
+              </ProtectedRoute>
+            </Suspense>
           }
         >
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="clients" element={<AdminClients />} />
-          <Route path="events" element={<AdminEvents />} />
-          <Route path="solicitations" element={<AdminSolicitations />} />
-          <Route path="testimonials" element={<AdminTestimonials />} />
-          <Route path="settings" element={<AdminSettings />} />
-          <Route path="" element={<AdminDashboard />} />
+          <Route 
+            path="dashboard" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando dashboard..." />}>
+                <AdminDashboard />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="clients" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando clientes..." />}>
+                <AdminClients />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="events" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando eventos..." />}>
+                <AdminEvents />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="solicitations" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando solicitações..." />}>
+                <AdminSolicitations />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="testimonials" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando depoimentos..." />}>
+                <AdminTestimonials />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="settings" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando configurações..." />}>
+                <AdminSettings />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando dashboard..." />}>
+                <AdminDashboard />
+              </Suspense>
+            } 
+          />
         </Route>
       </Routes>
       <Toaster 
@@ -79,7 +179,9 @@ const AppContent: React.FC = () => {
         closeButton
         duration={4000}
       />
-      <WhatsAppButton />
+      <Suspense fallback={null}>
+        <WhatsAppButton />
+      </Suspense>
     </div>
   );
 };

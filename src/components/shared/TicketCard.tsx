@@ -1,7 +1,7 @@
 import React from 'react';
 import { DollarSign, ShoppingCart, Minus, Plus } from 'lucide-react';
-import { TicketCardProps } from '../../types/event';
-import { formatPrice, getBatchStatus, formatBatchPeriod } from '../../utils/eventUtils';
+import { TicketCardProps } from '../../shared/types';
+import { formatPrice, getBatchStatus, formatBatchPeriod } from '../../shared/utils/utils/eventUtils';
 
 const TicketCard: React.FC<TicketCardProps> = ({
   priceBatches,

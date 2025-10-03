@@ -1,6 +1,6 @@
 import React from 'react';
 import { Share2 } from 'lucide-react';
-import { EventImageProps } from '../../types/event';
+import { EventImageProps } from '../../shared/types';
 
 const EventImage: React.FC<EventImageProps> = ({ imageUrl, title, onShare }) => {
   if (!imageUrl) return null;

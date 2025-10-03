@@ -1,8 +1,8 @@
 import React from 'react';
 import { Calendar, Clock, MapPin, Users } from 'lucide-react';
-import { EventInfoProps } from '../../types/event';
-import { formatDate, formatTime, formatTimeFromString } from '../../utils/eventUtils';
-import { MarkdownText } from '../../utils/markdownUtils.tsx';
+import { EventInfoProps } from '../../shared/types';
+import { formatDate, formatTime, formatTimeFromString } from '../../shared/utils/utils/eventUtils';
+import { MarkdownText } from '../../shared/utils/utils/markdownUtils';
 
 const EventInfo: React.FC<EventInfoProps> = ({ 
   title, 

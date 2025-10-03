@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { X, Send, Loader2 } from 'lucide-react';
+import { X, Send, Loader2, AlertCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { testimonialSchema, eventTypeOptions } from '../../schemas/testimonialSchema';
-import { useSupabaseTestimonials } from '../../hooks/useSupabaseTestimonials';
-import type { TestimonialFormData } from '../../schemas/testimonialSchema';
+import { testimonialFormDataSchema, type TestimonialFormData } from '../../shared/types/schemas/validationSchemas';
+import { useSupabaseTestimonials } from '../../shared/hooks/hooks/useSupabaseTestimonials';
+import { toast } from 'sonner';
 
 interface TestimonialFormModalProps {
   isOpen: boolean;
@@ -18,30 +18,41 @@ const TestimonialFormModal: React.FC<TestimonialFormModalProps> = ({ isOpen, onC
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isValid },
     reset,
     watch
   } = useForm<TestimonialFormData>({
-    resolver: zodResolver(testimonialSchema),
+    resolver: zodResolver(testimonialFormDataSchema),
+    mode: 'onChange',
     defaultValues: {
-      name: '',
-      whatsapp: '',
-      event_type: '',
-      testimonial_text: ''
+      client_name: '',
+      client_email: '',
+      event_name: '',
+      rating: 5,
+      comment: '',
+      event_type: ''
     }
   });
 
-  const testimonialText = watch('testimonial_text');
-  const remainingChars = 1000 - (testimonialText?.length || 0);
+  const comment = watch('comment');
+  const remainingChars = 1000 - (comment?.length || 0);
 
   const onSubmit = async (data: TestimonialFormData) => {
     try {
       setIsSubmitting(true);
       await createTestimonial(data);
       reset();
+      toast.success('Depoimento enviado!', {
+        description: 'Obrigado por compartilhar sua experiência. Seu depoimento será analisado em breve.',
+        duration: 6000
+      });
       onClose();
     } catch (error) {
       console.error('Erro ao enviar depoimento:', error);
+      toast.error('Erro ao enviar depoimento', {
+        description: 'Ocorreu um erro ao processar seu depoimento. Tente novamente.',
+        duration: 8000
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -77,41 +88,70 @@ const TestimonialFormModal: React.FC<TestimonialFormModalProps> = ({ isOpen, onC
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {/* Nome */}
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="client_name" className="block text-sm font-medium text-gray-700 mb-2">
               Seu Nome *
             </label>
             <input
-              {...register('name')}
+              {...register('client_name')}
               type="text"
-              id="name"
+              id="client_name"
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                errors.name ? 'border-red-500' : 'border-gray-300'
+                errors.client_name ? 'border-red-500 bg-red-50' : 'border-gray-300'
               }`}
               placeholder="Digite seu nome completo"
               disabled={isSubmitting}
             />
-            {errors.name && (
-              <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+            {errors.client_name && (
+              <div className="flex items-center gap-1 mt-1 text-red-600">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">{errors.client_name.message}</span>
+              </div>
             )}
           </div>
 
-          {/* WhatsApp */}
+          {/* Email */}
           <div>
-            <label htmlFor="whatsapp" className="block text-sm font-medium text-gray-700 mb-2">
-              WhatsApp *
+            <label htmlFor="client_email" className="block text-sm font-medium text-gray-700 mb-2">
+              Seu Email *
             </label>
             <input
-              {...register('whatsapp')}
-              type="tel"
-              id="whatsapp"
+              {...register('client_email')}
+              type="email"
+              id="client_email"
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                errors.whatsapp ? 'border-red-500' : 'border-gray-300'
+                errors.client_email ? 'border-red-500 bg-red-50' : 'border-gray-300'
               }`}
-              placeholder="(11) 99999-9999"
+              placeholder="seu@email.com"
               disabled={isSubmitting}
             />
-            {errors.whatsapp && (
-              <p className="mt-1 text-sm text-red-600">{errors.whatsapp.message}</p>
+            {errors.client_email && (
+              <div className="flex items-center gap-1 mt-1 text-red-600">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">{errors.client_email.message}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Nome do Evento */}
+          <div>
+            <label htmlFor="event_name" className="block text-sm font-medium text-gray-700 mb-2">
+              Nome do Evento *
+            </label>
+            <input
+              {...register('event_name')}
+              type="text"
+              id="event_name"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                errors.event_name ? 'border-red-500 bg-red-50' : 'border-gray-300'
+              }`}
+              placeholder="Nome do evento que você participou"
+              disabled={isSubmitting}
+            />
+            {errors.event_name && (
+              <div className="flex items-center gap-1 mt-1 text-red-600">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">{errors.event_name.message}</span>
+              </div>
             )}
           </div>
 
@@ -124,40 +164,75 @@ const TestimonialFormModal: React.FC<TestimonialFormModalProps> = ({ isOpen, onC
               {...register('event_type')}
               id="event_type"
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                errors.event_type ? 'border-red-500' : 'border-gray-300'
+                errors.event_type ? 'border-red-500 bg-red-50' : 'border-gray-300'
               }`}
               disabled={isSubmitting}
             >
               <option value="">Selecione o tipo de evento</option>
-              {eventTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+              <option value="Casamento">Casamento</option>
+              <option value="Aniversário">Aniversário</option>
+              <option value="Formatura">Formatura</option>
+              <option value="Corporativo">Corporativo</option>
+              <option value="Infantil">Infantil</option>
+              <option value="Debutante">Debutante</option>
+              <option value="Outro">Outro</option>
             </select>
             {errors.event_type && (
-              <p className="mt-1 text-sm text-red-600">{errors.event_type.message}</p>
+              <div className="flex items-center gap-1 mt-1 text-red-600">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">{errors.event_type.message}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Avaliação */}
+          <div>
+            <label htmlFor="rating" className="block text-sm font-medium text-gray-700 mb-2">
+              Avaliação *
+            </label>
+            <select
+              {...register('rating', { valueAsNumber: true })}
+              id="rating"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                errors.rating ? 'border-red-500 bg-red-50' : 'border-gray-300'
+              }`}
+              disabled={isSubmitting}
+            >
+              <option value={5}>⭐⭐⭐⭐⭐ - Excelente</option>
+              <option value={4}>⭐⭐⭐⭐ - Muito Bom</option>
+              <option value={3}>⭐⭐⭐ - Bom</option>
+              <option value={2}>⭐⭐ - Regular</option>
+              <option value={1}>⭐ - Ruim</option>
+            </select>
+            {errors.rating && (
+              <div className="flex items-center gap-1 mt-1 text-red-600">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">{errors.rating.message}</span>
+              </div>
             )}
           </div>
 
           {/* Depoimento */}
           <div>
-            <label htmlFor="testimonial_text" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-2">
               Seu Depoimento *
             </label>
             <textarea
-              {...register('testimonial_text')}
-              id="testimonial_text"
+              {...register('comment')}
+              id="comment"
               rows={6}
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none ${
-                errors.testimonial_text ? 'border-red-500' : 'border-gray-300'
+                errors.comment ? 'border-red-500 bg-red-50' : 'border-gray-300'
               }`}
               placeholder="Conte-nos sobre sua experiência conosco. Como foi o evento? O que mais gostou? Recomendaria nossos serviços?"
               disabled={isSubmitting}
             />
             <div className="flex justify-between items-center mt-1">
-              {errors.testimonial_text && (
-                <p className="text-sm text-red-600">{errors.testimonial_text.message}</p>
+              {errors.comment && (
+                <div className="flex items-center gap-1 text-red-600">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">{errors.comment.message}</span>
+                </div>
               )}
               <p className={`text-sm ml-auto ${
                 remainingChars < 100 ? 'text-orange-600' : 
@@ -188,8 +263,12 @@ const TestimonialFormModal: React.FC<TestimonialFormModalProps> = ({ isOpen, onC
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              disabled={isSubmitting || !isValid}
+              className={`flex-1 px-6 py-3 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                isSubmitting || !isValid
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              } text-white`}
             >
               {isSubmitting ? (
                 <>
