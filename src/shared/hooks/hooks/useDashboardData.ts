@@ -51,26 +51,26 @@ export const useDashboardData = () => {
     try {
       // Buscar total de clientes
       const { count: clientsCount } = await supabase
-        .from('clients')
+        .from('app_clients')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null);
 
       // Buscar eventos ativos (não deletados e futuros)
       const { count: eventsCount } = await supabase
-        .from('events')
+        .from('app_events')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
         .gte('event_date', new Date().toISOString().split('T')[0]);
 
       // Buscar total de depoimentos
       const { count: testimonialsCount } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null);
 
       // Buscar total de contatos
       const { count: contactsCount } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .select('*', { count: 'exact', head: true });
 
       setStats({
@@ -89,7 +89,7 @@ export const useDashboardData = () => {
     try {
       // Últimos 5 eventos criados
       const { data: recentEvents } = await supabase
-        .from('events')
+        .from('app_events')
         .select('id, title, event_date, created_at')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
@@ -97,14 +97,14 @@ export const useDashboardData = () => {
 
       // Últimos 5 contatos recebidos
       const { data: recentContacts } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .select('id, name, email, created_at')
         .order('created_at', { ascending: false })
         .limit(5);
 
       // Últimos 5 depoimentos
       const { data: recentTestimonials } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .select('id, name, event_type, created_at')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
@@ -128,7 +128,7 @@ export const useDashboardData = () => {
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       
       const { data: eventsData } = await supabase
-        .from('events')
+        .from('app_events')
         .select('event_date, created_at')
         .is('deleted_at', null)
         .gte('created_at', sixMonthsAgo.toISOString());
@@ -148,7 +148,7 @@ export const useDashboardData = () => {
       const today = now.toISOString().split('T')[0];
       
       const { data: allEvents } = await supabase
-        .from('events')
+        .from('app_events')
         .select('event_date')
         .is('deleted_at', null);
 

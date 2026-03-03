@@ -108,7 +108,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
     ActivityLogger.log('error', message, 'system', 'error', { error: errorMessage });
   }, []);
 
-  // Fetch all testimonials (for admin)
+  // Fetch all app_testimonials(for admin)
   const fetchAllTestimonials = useCallback(async (pagination?: PaginationParams) => {
     try {
       setLoading(true);
@@ -119,7 +119,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       const offset = (page - 1) * limit;
 
       const { data, error, count } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .select('*', { count: 'exact' })
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
@@ -143,7 +143,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
     }
   }, [handleError]);
 
-  // Fetch approved testimonials (for public page)
+  // Fetch approved app_testimonials(for public page)
   const fetchApprovedTestimonials = useCallback(async (pagination?: PaginationParams) => {
     try {
       setLoading(true);
@@ -154,7 +154,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       const offset = (page - 1) * limit;
 
       const { data, error, count } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .select('*', { count: 'exact' })
         .eq('status', 'approved')
         .is('deleted_at', null)
@@ -190,7 +190,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       const offset = (page - 1) * limit;
 
       const { data, error, count } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .select('*', { count: 'exact' })
         .eq('status', 'pending')
         .is('deleted_at', null)
@@ -221,7 +221,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .select('*')
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false });
@@ -242,7 +242,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .insert([
           {
             ...testimonialData,
@@ -279,7 +279,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .update({
           ...testimonialData,
           updated_at: new Date().toISOString()
@@ -318,7 +318,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       const { data: { user } } = await supabase.auth.getUser();
       
       const { data, error } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .update({
           status: 'approved',
           is_featured: isFeatured,
@@ -357,7 +357,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       const { data: { user } } = await supabase.auth.getUser();
       
       const { data, error } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .update({
           status: 'rejected',
           rejection_reason: reason,
@@ -393,7 +393,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .update({ 
           deleted_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -427,7 +427,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .update({ 
           deleted_at: null,
           updated_at: new Date().toISOString()
@@ -465,7 +465,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       setError(null);
 
       const { error } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .delete()
         .eq('id', id);
 
@@ -494,7 +494,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       if (!testimonial) throw new Error('Depoimento não encontrado');
 
       const { data, error } = await supabase
-        .from('testimonials')
+        .from('app_testimonials')
         .update({
           is_featured: !testimonial.is_featured,
           updated_at: new Date().toISOString()

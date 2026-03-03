@@ -139,7 +139,7 @@ export class BackupSystem {
       // Backup dos contatos
       if (defaultOptions.includeContacts) {
         const { data: contacts } = await supabase
-          .from('contact_forms')
+          .from('app_contact_forms')
           .select('*')
           .order('created_at', { ascending: false });
         
@@ -150,7 +150,7 @@ export class BackupSystem {
       // Backup das imagens
       if (defaultOptions.includeImages) {
         const { data: images } = await supabase
-          .from('carousel_images')
+          .from('app_carousel_images')
           .select('*')
           .order('order_position', { ascending: true });
         

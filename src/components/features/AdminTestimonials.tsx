@@ -20,7 +20,7 @@ import {
 import { useSupabaseTestimonials } from '../../shared/hooks/hooks/useSupabaseTestimonials';
 import { useLanguage } from '../../shared/contexts/contexts/LanguageContext';
 import Loading from '../ui/Loading';
-import type { Testimonial } from '../../shared/hooks/hooks/useSupabaseTestimonials';
+import type { LocalTestimonial } from '../../shared/hooks/hooks/useSupabaseTestimonials';
 
 // Lazy load modals
 const TestimonialEditModal = React.lazy(() => import('../shared/TestimonialEditModal'));
@@ -43,10 +43,10 @@ const AdminTestimonials: React.FC = () => {
   } = useSupabaseTestimonials();
 
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected' | 'all' | 'trash'>('pending');
-  const [selectedTestimonial, setSelectedTestimonial] = useState<Testimonial | null>(null);
+  const [selectedTestimonial, setSelectedTestimonial] = useState<LocalTestimonial | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [testimonialToEdit, setTestimonialToEdit] = useState<Testimonial | null>(null);
+  const [testimonialToEdit, setTestimonialToEdit] = useState<LocalTestimonial | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     type: 'soft_delete' | 'restore' | 'hard_delete';
@@ -102,12 +102,12 @@ const AdminTestimonials: React.FC = () => {
     });
   };
 
-  const handleViewDetails = (testimonial: Testimonial) => {
+  const handleViewDetails = (testimonial: LocalTestimonial) => {
     setSelectedTestimonial(testimonial);
     setShowModal(true);
   };
 
-  const handleEditTestimonial = (testimonial: Testimonial) => {
+  const handleEditTestimonial = (testimonial: LocalTestimonial) => {
     setTestimonialToEdit(testimonial);
     setIsEditModalOpen(true);
   };
@@ -343,7 +343,7 @@ const AdminTestimonials: React.FC = () => {
                           
                           {testimonial.status === 'approved' && (
                             <button
-                              onClick={() => toggleFeatured(testimonial.id, !testimonial.is_featured)}
+                              onClick={() => toggleFeatured(testimonial.id)}
                               className={`p-2 rounded-lg transition-colors ${
                                 testimonial.is_featured
                                   ? 'text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50'
@@ -393,7 +393,7 @@ const AdminTestimonials: React.FC = () => {
 
       {/* Modal de edição */}
       {isEditModalOpen && testimonialToEdit && (
-        <Suspense fallback={<Loading message="Carregando modal de edição..." />}>
+        <Suspense fallback={<Loading text="Carregando modal de edição..." />}>
           <TestimonialEditModal
             testimonial={testimonialToEdit}
             isOpen={isEditModalOpen}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Users, Plus, Search, Filter, Edit, Trash2, History, Download, Phone, Mail, MapPin, Calendar, X, Save, FileText, ChevronDown, Eye, Link, Unlink, RotateCcw, RefreshCw, AlertCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -60,6 +60,7 @@ const AdminClients: React.FC = () => {
   const [eventNotes, setEventNotes] = useState('');
   const [newInteraction, setNewInteraction] = useState('');
   const [activeTab, setActiveTab] = useState<'active' | 'trash'>('active');
+  const [clientEvents, setClientEvents] = useState<any[]>([]);
   
   // Estados para o modal de confirmação
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -103,7 +104,7 @@ const AdminClients: React.FC = () => {
   const watchedCep = watch('cep');
 
   // Função para buscar dados do CEP via ViaCEP
-  const fetchAddressByCep = async (cep: string) => {
+  const fetchAddressByCep = useCallback(async (cep: string) => {
     if (cep.length !== 8) return;
     
     setLoadingCep(true);
@@ -127,14 +128,14 @@ const AdminClients: React.FC = () => {
     } finally {
       setLoadingCep(false);
     }
-  };
+  }, [setValue]);
 
   // Effect para buscar CEP quando alterado
   useEffect(() => {
     if (watchedCep && watchedCep.length === 8) {
       fetchAddressByCep(watchedCep);
     }
-  }, [watchedCep]);
+  }, [watchedCep, fetchAddressByCep]);
 
   const [filters, setFilters] = useState({
     dateFrom: '',
@@ -143,10 +144,24 @@ const AdminClients: React.FC = () => {
     hasWhatsapp: ''
   });
 
+  // Função para carregar clientes excluídos
+  const loadTrashClients = useCallback(async () => {
+    try {
+      await fetchDeletedClients();
+    } catch (error) {
+      console.error('Erro ao carregar clientes excluídos:', error);
+    }
+  }, [fetchDeletedClients]);
+
   useEffect(() => {
     const performSearch = async () => {
       if (searchTerm || Object.values(filters).some(f => f)) {
-        await searchClients(searchTerm, filters);
+        await searchClients(searchTerm, {
+          date_from: filters.dateFrom || undefined,
+          date_to: filters.dateTo || undefined,
+          has_email: filters.hasEmail === '' ? undefined : filters.hasEmail === 'true',
+          has_whatsapp: filters.hasWhatsapp === '' ? undefined : filters.hasWhatsapp === 'true'
+        });
       } else {
         // Se não há termo de busca nem filtros, carregar todos os clientes
         await fetchClients();
@@ -160,7 +175,7 @@ const AdminClients: React.FC = () => {
     if (activeTab === 'trash') {
       loadTrashClients();
     }
-  }, [activeTab]);
+  }, [activeTab, loadTrashClients]);
 
   // Carregar clientes inicialmente
   useEffect(() => {
@@ -186,7 +201,7 @@ const AdminClients: React.FC = () => {
       if (editingClient) {
         await updateClient(editingClient.id, data);
       } else {
-        await addClient(data);
+        await addClient({ ...data, is_active: true });
       }
       
       setShowModal(false);
@@ -302,14 +317,6 @@ const AdminClients: React.FC = () => {
     );
   };
 
-  const loadTrashClients = async () => {
-    try {
-      await fetchDeletedClients();
-    } catch (error) {
-      console.error('Erro ao carregar clientes excluídos:', error);
-    }
-  };
-
   const handleShowHistory = async (client: Client) => {
     setSelectedClient(client);
     await getClientInteractions(client.id);
@@ -320,11 +327,10 @@ const AdminClients: React.FC = () => {
     if (!selectedClient || !newInteraction.trim()) return;
     
     try {
-      await addInteraction({
-        client_id: selectedClient.id,
+      await addInteraction(selectedClient.id, {
         type: 'note',
         description: newInteraction,
-        date: new Date().toISOString()
+        interaction_date: new Date().toISOString()
       });
       setNewInteraction('');
     } catch (error) {
@@ -335,7 +341,8 @@ const AdminClients: React.FC = () => {
   const handleShowEvents = async (client: Client) => {
     setSelectedClient(client);
     setShowEventsModal(true);
-    await fetchClientEvents(client.id);
+    const events = await fetchClientEvents(client.id);
+    setClientEvents(events);
   };
 
   const handleLinkEvent = async () => {
@@ -348,7 +355,8 @@ const AdminClients: React.FC = () => {
       setEventNotes('');
       setRelationshipType('participant');
       // Refresh client events
-      await fetchClientEvents(selectedClient.id);
+      const events = await fetchClientEvents(selectedClient.id);
+      setClientEvents(events);
     } catch (error) {
       console.error('Error linking client to event:', error);
     }
@@ -358,7 +366,8 @@ const AdminClients: React.FC = () => {
     try {
       await unlinkClientFromEvent(clientEventId);
       if (selectedClient) {
-        await fetchClientEvents(selectedClient.id);
+        const events = await fetchClientEvents(selectedClient.id);
+        setClientEvents(events);
       }
     } catch (error) {
       console.error('Error unlinking client from event:', error);
@@ -474,8 +483,9 @@ const AdminClients: React.FC = () => {
         case 'filtered':
           const filteredClients = clients.filter(client => {
             const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                (client.phone && client.phone.includes(searchTerm)) ||
-                                (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()));
+                                (client.whatsapp && client.whatsapp.includes(searchTerm)) ||
+                                (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                                (client.apelido && client.apelido.toLowerCase().includes(searchTerm.toLowerCase()));
             
             const matchesDateFrom = !filters.dateFrom || 
                                   new Date(client.created_at) >= new Date(filters.dateFrom);
@@ -977,7 +987,7 @@ const AdminClients: React.FC = () => {
                         setValue('whatsapp', value);
                       }}
                       placeholder="Ex: (11) 99999-9999"
-                      defaultCountry="+55"
+
                       disabled={loading}
                       className="w-full"
                     />
@@ -1270,7 +1280,7 @@ const AdminClients: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-gray-900">{interaction.description}</div>
                         <div className="text-xs text-gray-500 mt-1">
-                          {new Date(interaction.date).toLocaleString('pt-BR')}
+                          {new Date(interaction.created_at).toLocaleString('pt-BR')}
                         </div>
                       </div>
                     </div>

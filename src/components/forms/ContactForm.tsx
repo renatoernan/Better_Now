@@ -51,7 +51,7 @@ const ContactForm: React.FC = () => {
 
             // Inserir dados no Supabase
             const { data: insertData, error } = await supabase
-                .from('contact_forms')
+                .from('app_contact_forms')
                 .insert([
                     {
                         name: data.name,

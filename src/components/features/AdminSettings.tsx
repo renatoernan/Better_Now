@@ -60,7 +60,7 @@ const AdminSettings: React.FC = () => {
   };
 
   // Função para obter valores padrão baseado na categoria
-  const getDefaultValues = (category: SettingsCategory) => {
+  const getDefaultValues = (category: SettingsCategory): any => {
     if (!settings) return {};
     
     switch (category) {
@@ -105,7 +105,7 @@ const AdminSettings: React.FC = () => {
     mode: 'onChange',
   });
 
-  const { register, handleSubmit, formState: { errors, isDirty }, reset, watch } = form;
+  const { register, handleSubmit, formState: { errors, isDirty }, reset, watch, setValue } = form;
 
   // Resetar form quando categoria ou settings mudarem
   React.useEffect(() => {
@@ -280,7 +280,7 @@ const AdminSettings: React.FC = () => {
                  {errors.site_title && (
                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                      <AlertCircle className="h-4 w-4" />
-                     <span>{errors.site_title.message}</span>
+                     <span>{String(errors.site_title?.message || '')}</span>
                    </div>
                  )}
                 <p className="text-sm text-gray-500 mt-1">
@@ -312,7 +312,7 @@ const AdminSettings: React.FC = () => {
                    {errors.contact_email && (
                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                        <AlertCircle className="h-4 w-4" />
-                       <span>{errors.contact_email.message}</span>
+                       <span>{String(errors.contact_email?.message || '')}</span>
                      </div>
                    )}
                 </div>
@@ -322,7 +322,8 @@ const AdminSettings: React.FC = () => {
                     Telefone
                   </label>
                   <PhoneInput
-                     {...register('phone')}
+                     value={watch('phone') || ''}
+                     onChange={(value) => setValue('phone', value)}
                      placeholder="+55 11 99999-9999"
                      error={!!errors.phone}
                      name="phone"
@@ -330,7 +331,7 @@ const AdminSettings: React.FC = () => {
                    {errors.phone && (
                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                        <AlertCircle className="h-4 w-4" />
-                       <span>{errors.phone.message}</span>
+                       <span>{String(errors.phone?.message || '')}</span>
                      </div>
                    )}
                 </div>
@@ -352,7 +353,7 @@ const AdminSettings: React.FC = () => {
                    {errors.address && (
                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                        <AlertCircle className="h-4 w-4" />
-                       <span>{errors.address.message}</span>
+                       <span>{String(errors.address?.message || '')}</span>
                      </div>
                    )}
                 </div>
@@ -374,7 +375,7 @@ const AdminSettings: React.FC = () => {
                    {errors.social_instagram && (
                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                        <AlertCircle className="h-4 w-4" />
-                       <span>{errors.social_instagram.message}</span>
+                       <span>{String(errors.social_instagram?.message || '')}</span>
                      </div>
                    )}
                 </div>
@@ -396,7 +397,7 @@ const AdminSettings: React.FC = () => {
                    {errors.social_whatsapp && (
                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                        <AlertCircle className="h-4 w-4" />
-                       <span>{errors.social_whatsapp.message}</span>
+                       <span>{String(errors.social_whatsapp?.message || '')}</span>
                      </div>
                    )}
                 </div>
@@ -425,7 +426,7 @@ const AdminSettings: React.FC = () => {
                 {errors.business_hours_weekdays && (
                   <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                     <AlertCircle className="h-4 w-4" />
-                    <span>{errors.business_hours_weekdays.message}</span>
+                    <span>{String(errors.business_hours_weekdays?.message || '')}</span>
                   </div>
                 )}
               </div>
@@ -447,7 +448,7 @@ const AdminSettings: React.FC = () => {
                 {errors.business_hours_weekend && (
                   <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                     <AlertCircle className="h-4 w-4" />
-                    <span>{errors.business_hours_weekend.message}</span>
+                    <span>{String(errors.business_hours_weekend?.message || '')}</span>
                   </div>
                 )}
               </div>
@@ -469,7 +470,7 @@ const AdminSettings: React.FC = () => {
                 {errors.business_hours_closed_days && (
                   <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                     <AlertCircle className="h-4 w-4" />
-                    <span>{errors.business_hours_closed_days.message}</span>
+                    <span>{String(errors.business_hours_closed_days?.message || '')}</span>
                   </div>
                 )}
               </div>
@@ -495,7 +496,7 @@ const AdminSettings: React.FC = () => {
                   {errors.carousel_autoplay && (
                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                       <AlertCircle className="h-4 w-4" />
-                      <span>{errors.carousel_autoplay.message}</span>
+                      <span>{String(errors.carousel_autoplay?.message || '')}</span>
                     </div>
                   )}
                 </div>
@@ -519,7 +520,7 @@ const AdminSettings: React.FC = () => {
                   {errors.carousel_interval && (
                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                       <AlertCircle className="h-4 w-4" />
-                      <span>{errors.carousel_interval.message}</span>
+                      <span>{String(errors.carousel_interval?.message || '')}</span>
                     </div>
                   )}
                   <p className="text-sm text-gray-500 mt-1">
@@ -546,7 +547,7 @@ const AdminSettings: React.FC = () => {
                   {errors.testimonial_carousel_interval && (
                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                       <AlertCircle className="h-4 w-4" />
-                      <span>{errors.testimonial_carousel_interval.message}</span>
+                      <span>{String(errors.testimonial_carousel_interval?.message || '')}</span>
                     </div>
                   )}
                   <p className="text-sm text-gray-500 mt-1">
@@ -576,7 +577,7 @@ const AdminSettings: React.FC = () => {
                     onChange={async (e) => {
                       const files = Array.from(e.target.files || []);
                       for (const file of files) {
-                        await addImage(file, file.name.split('.')[0], '');
+                        await addImage(file, file.name.split('.')[0]);
                       }
                       e.target.value = '';
                     }}
@@ -731,7 +732,7 @@ const AdminSettings: React.FC = () => {
                   {errors.max_file_size && (
                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                       <AlertCircle className="h-4 w-4" />
-                      <span>{errors.max_file_size.message}</span>
+                      <span>{String(errors.max_file_size?.message || '')}</span>
                     </div>
                   )}
                   <p className="text-sm text-gray-500 mt-1">
@@ -757,7 +758,7 @@ const AdminSettings: React.FC = () => {
                   {errors.backup_retention_days && (
                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                       <AlertCircle className="h-4 w-4" />
-                      <span>{errors.backup_retention_days.message}</span>
+                      <span>{String(errors.backup_retention_days?.message || '')}</span>
                     </div>
                   )}
                   <p className="text-sm text-gray-500 mt-1">
@@ -782,7 +783,7 @@ const AdminSettings: React.FC = () => {
                   {errors.notification_email && (
                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                       <AlertCircle className="h-4 w-4" />
-                      <span>{errors.notification_email.message}</span>
+                      <span>{String(errors.notification_email?.message || '')}</span>
                     </div>
                   )}
                   <p className="text-sm text-gray-500 mt-1">
@@ -807,7 +808,7 @@ const AdminSettings: React.FC = () => {
                   {errors.allowed_file_types && (
                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
                       <AlertCircle className="h-4 w-4" />
-                      <span>{errors.allowed_file_types.message}</span>
+                      <span>{String(errors.allowed_file_types?.message || '')}</span>
                     </div>
                   )}
                   <p className="text-sm text-gray-500 mt-1">

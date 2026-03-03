@@ -44,7 +44,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
-  const controlsTimeoutRef = React.useRef<NodeJS.Timeout>();
+  const controlsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const currentMedia = mediaItems[currentIndex];
   
   useEffect(() => {

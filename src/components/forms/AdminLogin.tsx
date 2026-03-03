@@ -31,7 +31,7 @@ const AdminLogin: React.FC = () => {
 
   // Se já estiver autenticado, redirecionar para o painel
   if (isAuthenticated) {
-    return <Navigate to="/admin/panel" replace />;
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,9 +70,9 @@ const AdminLogin: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-xl p-8">
           {/* Logo */}
           <div className="text-center mb-8">
-            <img 
-              src="/images/logo_better_now.png" 
-              alt="Better Now - Logotipo da empresa" 
+            <img
+              src="/images/logo_better_now.png"
+              alt="Better Now - Logotipo da empresa"
               className="mx-auto h-32 w-auto mb-4"
             />
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
@@ -87,7 +87,7 @@ const AdminLogin: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-6" role="form" aria-labelledby="login-title">
             <h2 id="login-title" className="sr-only">Formulário de Login Administrativo</h2>
             {error && (
-              <div 
+              <div
                 className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm"
                 role="alert"
                 aria-live="polite"
@@ -162,7 +162,7 @@ const AdminLogin: React.FC = () => {
             {/* Botão Provisório para Acesso Admin */}
             <button
               type="button"
-              onClick={() => navigate('/admin/panel?temp=true')}
+              onClick={() => navigate('/admin/dashboard?temp=true')}
               className="w-full mt-3 bg-transparent border-2 border-orange-500 text-orange-600 hover:bg-orange-50 font-semibold py-3 px-4 rounded-lg transition-colors focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:outline-none flex items-center justify-center gap-2"
               aria-label="Acesso provisório ao painel administrativo - apenas para desenvolvimento"
             >

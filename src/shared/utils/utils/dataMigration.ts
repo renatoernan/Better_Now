@@ -108,7 +108,7 @@ class DataMigration {
 
       // Verificar quais imagens já existem no Supabase
       const { data: existingImages } = await supabase
-        .from('carousel_images')
+        .from('app_carousel_images')
         .select('filename');
 
       const existingFilenames = new Set(
@@ -170,7 +170,7 @@ class DataMigration {
       // Inserir registro na tabela
       const { error } = await retrySystem.executeWithRetry(
         async () => {
-          const result = await supabase.from('carousel_images').insert({
+          const result = await supabase.from('app_carousel_images').insert({
             filename: localImage.filename || `image_${Date.now()}`,
             title: localImage.title || '',
             active: localImage.active !== false,
@@ -311,7 +311,7 @@ class DataMigration {
         try {
           const { error } = await retrySystem.executeWithRetry(
             async () => {
-              const result = await supabase.from('contact_forms').insert({
+              const result = await supabase.from('app_contact_forms').insert({
                 name: contact.name,
                 email: contact.email,
                 phone: contact.phone || '',

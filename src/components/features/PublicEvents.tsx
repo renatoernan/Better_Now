@@ -125,15 +125,11 @@ const getLowestPrice = (priceBatches: PriceBatchesData): number | null => {
 /**
  * Formata o preço de exibição do evento
  */
-const formatEventPrice = (priceBatches: PriceBatchesData, fallbackPrice?: number): string => {
+const formatEventPrice = (priceBatches: PriceBatchesData): string => {
   const lowestPrice = getLowestPrice(priceBatches);
   
   if (lowestPrice) {
     return `A partir de ${formatPrice(lowestPrice)}`;
-  }
-  
-  if (fallbackPrice) {
-    return formatPrice(fallbackPrice);
   }
   
   return 'Consulte valores';
@@ -167,7 +163,7 @@ const PublicEvents: React.FC = () => {
 
   // Se estamos visualizando um evento específico
   if (id && selectedEvent) {
-    return <EventDetails event={selectedEvent} />;
+    return <EventDetails />;
   }
 
   // Se estamos visualizando um evento específico mas ainda carregando
@@ -257,7 +253,7 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
     imageUrl: event.image_url,
     description: event.description,
     priceBatches: event.price_batches,
-    fallbackPrice: event.price
+
   });
 
   const handleCardClick = useCallback(() => {
@@ -383,11 +379,10 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
         {/* Price Section - Aligned to bottom */}
         <div className="mt-auto">
           {(() => {
-            const formattedPrice = formatEventPrice(event.price_batches, event.price);
+            const formattedPrice = formatEventPrice(event.price_batches);
             console.log('💰 Renderizando seção de preços:', {
               eventId: event.id,
               rawPriceBatches: event.price_batches,
-              fallbackPrice: event.price,
               formattedPrice: formattedPrice
             });
             return null;
@@ -401,7 +396,7 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
             </div>
             <div className="text-center">
               <span className="text-lg sm:text-2xl font-bold text-blue-600 block">
-                {formatEventPrice(event.price_batches, event.price)}
+                {formatEventPrice(event.price_batches)}
               </span>
             </div>
             <button 

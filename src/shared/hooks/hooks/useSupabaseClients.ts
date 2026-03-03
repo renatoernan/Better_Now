@@ -158,27 +158,27 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       // Total de clientes (não deletados)
       const { count: total } = await supabase
-        .from('clients')
+        .from('app_clients')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null);
 
       // Clientes criados este mês
       const { count: thisMonth } = await supabase
-        .from('clients')
+        .from('app_clients')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
         .gte('created_at', startOfMonth.toISOString());
 
       // Clientes criados esta semana
       const { count: thisWeek } = await supabase
-        .from('clients')
+        .from('app_clients')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
         .gte('created_at', startOfWeek.toISOString());
 
       // Clientes com WhatsApp
       const { count: withWhatsApp } = await supabase
-        .from('clients')
+        .from('app_clients')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
         .not('whatsapp', 'is', null)
@@ -186,7 +186,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       // Clientes com email
       const { count: withEmail } = await supabase
-        .from('clients')
+        .from('app_clients')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
         .not('email', 'is', null)
@@ -194,7 +194,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       // Clientes adicionados nos últimos 7 dias
       const { count: recentlyAdded } = await supabase
-        .from('clients')
+        .from('app_clients')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
         .gte('created_at', sevenDaysAgo.toISOString());
@@ -227,7 +227,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       const offset = (page - 1) * limit;
 
       let query = supabase
-        .from('clients')
+        .from('app_clients')
         .select('*', { count: 'exact' })
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
@@ -294,7 +294,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('clients')
+        .from('app_clients')
         .select('*')
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false });
@@ -315,7 +315,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('clients')
+        .from('app_clients')
         .insert([clientData])
         .select()
         .single();
@@ -347,7 +347,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('clients')
+        .from('app_clients')
         .update({
           ...clientData,
           updated_at: new Date().toISOString(),
@@ -383,7 +383,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('clients')
+        .from('app_clients')
         .update({ 
           deleted_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -418,7 +418,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('clients')
+        .from('app_clients')
         .update({ 
           deleted_at: null,
           updated_at: new Date().toISOString(),
@@ -453,7 +453,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { error } = await supabase
-        .from('clients')
+        .from('app_clients')
         .delete()
         .eq('id', id);
 

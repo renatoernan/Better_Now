@@ -125,7 +125,7 @@ const Footer: React.FC = () => {
                   className="h-8 sm:h-12 w-auto object-contain group-hover:scale-105 transition-transform duration-300"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
-                    e.currentTarget.nextElementSibling.style.display = 'inline';
+                    (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'inline';
                   }}
                 />
                 <span className="text-xs sm:text-sm text-blue-300 hover:text-blue-200 transition-colors font-medium" style={{display: 'none'}}>CESIRE</span>

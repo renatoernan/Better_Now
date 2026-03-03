@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (data.user) {
         // Check if user is admin
         const { data: adminData, error: adminError } = await supabase
-          .from('admin_users')
+          .from('app_admin_users')
           .select('*')
           .eq('id', data.user.id)
           .single();
@@ -67,7 +67,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         // Update last login
         await supabase
-          .from('admin_users')
+          .from('app_admin_users')
           .update({ last_login: new Date().toISOString() })
           .eq('id', data.user.id);
 
@@ -119,7 +119,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (session?.user) {
           // Check if user is admin
           const { data: adminData, error: adminError } = await supabase
-            .from('admin_users')
+            .from('app_admin_users')
             .select('*')
             .eq('id', session.user.id)
             .single();
@@ -153,7 +153,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else if (event === 'SIGNED_IN' && session?.user) {
           // Check if user is admin
           const { data: adminData, error: adminError } = await supabase
-            .from('admin_users')
+            .from('app_admin_users')
             .select('*')
             .eq('id', session.user.id)
             .single();

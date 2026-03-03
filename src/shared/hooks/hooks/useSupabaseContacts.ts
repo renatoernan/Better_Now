@@ -37,7 +37,7 @@ export const useSupabaseContacts = () => {
       ActivityLogger.logContact('supabase_fetch_start', 'Iniciando busca de contatos', 'info');
       
       let query = supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .select('*')
         .order('created_at', { ascending: false });
       
@@ -105,7 +105,7 @@ export const useSupabaseContacts = () => {
       });
       
       const { error } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .update({ status })
         .eq('id', id);
 
@@ -163,7 +163,7 @@ export const useSupabaseContacts = () => {
       });
       
       const { error } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
 
@@ -212,7 +212,7 @@ export const useSupabaseContacts = () => {
       });
       
       const { error } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .update({ deleted_at: null })
         .eq('id', id);
 
@@ -262,7 +262,7 @@ export const useSupabaseContacts = () => {
       });
       
       const { error } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .delete()
         .eq('id', id);
 

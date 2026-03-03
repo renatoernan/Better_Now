@@ -19,7 +19,7 @@ export const usePublicEvents = () => {
       console.log('📅 Data de hoje:', today);
 
       const { data, error } = await supabase
-        .from('events')
+        .from('app_events')
         .select('*')
         .eq('status', 'active')
         .gte('event_date', today)
@@ -48,7 +48,7 @@ export const usePublicEvents = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('events')
+        .from('app_events')
         .select('*')
         .eq('id', id)
         .eq('status', 'active')
@@ -78,7 +78,7 @@ export const usePublicEvents = () => {
       const today = new Date().toISOString().split('T')[0];
 
       const { data, error } = await supabase
-        .from('events')
+        .from('app_events')
         .select('*')
         .eq('status', 'active')
         .gte('event_date', today)
@@ -105,7 +105,7 @@ export const usePublicEvents = () => {
       const today = new Date().toISOString().split('T')[0];
 
       const { data, error } = await supabase
-        .from('events')
+        .from('app_events')
         .select('*')
         .eq('status', 'active')
         .eq('category', category)
@@ -129,7 +129,7 @@ export const usePublicEvents = () => {
     console.log('🔧 Testando conexão Supabase:', supabase);
     
     // Teste simples de conexão
-    supabase.from('events').select('count').then(result => {
+    supabase.from('app_events').select('count').then(result => {
       console.log('🔧 Teste de conexão Supabase:', result);
     });
     

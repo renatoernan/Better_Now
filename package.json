@@ -6,13 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:prod": "NODE_ENV=production tsc -b && vite build --mode production",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --collectCoverageFrom='src/**/*.{ts,tsx}' --coverageReporters='text' --coverageReporters='lcov' --coverageReporters='html'",
-    "test:ci": "jest --ci --coverage --watchAll=false --collectCoverageFrom='src/**/*.{ts,tsx}' --coverageReporters='text' --coverageReporters='lcov'"
+    "test:ci": "jest --ci --coverage --watchAll=false --collectCoverageFrom='src/**/*.{ts,tsx}' --coverageReporters='text' --coverageReporters='lcov'",
+    "vercel-build": "npm run build:prod",
+    "postbuild": "echo 'Build completed successfully'"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

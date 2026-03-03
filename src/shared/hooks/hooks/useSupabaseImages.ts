@@ -13,7 +13,7 @@ export const useSupabaseImages = () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('carousel_images')
+        .from('app_carousel_images')
         .select('*')
         .order('order_position', { ascending: true });
 
@@ -58,7 +58,7 @@ export const useSupabaseImages = () => {
 
       // Inserir registro na tabela
       const { error } = await supabase
-        .from('carousel_images')
+        .from('app_carousel_images')
         .insert([
           {
             filename: file.name,
@@ -110,7 +110,7 @@ export const useSupabaseImages = () => {
       setError(null);
       
       const { error } = await supabase
-        .from('carousel_images')
+        .from('app_carousel_images')
         .update(updates)
         .eq('id', id);
 
@@ -201,7 +201,7 @@ export const useSupabaseImages = () => {
 
       // Deletar registro da tabela
       const { error } = await supabase
-        .from('carousel_images')
+        .from('app_carousel_images')
         .delete()
         .eq('id', id);
 
@@ -243,7 +243,7 @@ export const useSupabaseImages = () => {
       // Atualizar ordem no banco
       const updates = imageIds.map((id, index) => 
         supabase
-          .from('carousel_images')
+          .from('app_carousel_images')
           .update({ order_position: index })
           .eq('id', id)
       );

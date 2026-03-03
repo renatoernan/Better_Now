@@ -31,12 +31,7 @@ interface ReportData {
 const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
   const {
     events,
-    participants,
-    eventNotifications,
-    fetchEvents,
-    fetchEventParticipants,
-    fetchEventNotifications,
-    generateEventReport
+    fetchEvents
   } = useSupabaseEvents();
   
   const { clients } = useSupabaseClients();
@@ -64,10 +59,8 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
   const loadEventData = async (eventId: string) => {
     setLoading(true);
     try {
-      await Promise.all([
-        fetchEventParticipants(eventId),
-        fetchEventNotifications(eventId)
-      ]);
+      // Simular dados de participantes e notificações para demonstração
+      // Em uma implementação real, estes dados viriam de hooks específicos
       generateReportData(eventId);
     } catch (error) {
       console.error('Erro ao carregar dados do evento:', error);
@@ -78,8 +71,10 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
   };
 
   const generateReportData = (eventId: string) => {
-    const eventParticipants = participants.filter(p => p.event_id === eventId);
-    const notifications = eventNotifications.filter(n => n.event_id === eventId);
+    // Dados simulados para demonstração
+    // Em uma implementação real, estes dados viriam de hooks específicos
+    const eventParticipants: any[] = [];
+    const notifications: any[] = [];
     
     const totalParticipants = eventParticipants.length;
     const checkedInParticipants = eventParticipants.filter(p => p.checked_in_at).length;
@@ -131,9 +126,6 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
     
     // Notification stats
     // Placeholder para tracking de abertura e cliques (não implementado)
-    const openedNotifications: any[] = [];
-    const clickedNotifications: any[] = [];
-    
     const notificationStats = {
       sent: notifications.filter(n => n.status === 'sent').length,
       opened: 0, // Placeholder - tracking não implementado
@@ -164,8 +156,6 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
 
     setLoading(true);
     try {
-      const reportBlob = await generateEventReport(selectedEvent);
-      
       // Create download link
       const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);

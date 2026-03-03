@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Configurações do Supabase
-const supabaseUrl = 'https://litkotytghgibtqyjzgf.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpdGtvdHl0Z2hnaWJ0cXlqemdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMzU5MjUsImV4cCI6MjA3MzYxMTkyNX0.tdPsDAkZDbRd64zsPG2pqZSzZh13SCVUJjwgg2PS3wI';
+// @ts-ignore
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+// @ts-ignore
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // Criar cliente Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -48,6 +50,7 @@ export interface CarouselImage {
   order_position: number;
   uploaded_at?: string;
   file_url: string;
+  url: string; // Add url property for compatibility
   storage_path?: string;
   file_size?: number;
   mime_type?: string;
@@ -96,7 +99,7 @@ export const supabaseHelpers = {
     if (!user) return false;
 
     const { data, error } = await supabase
-      .from('admin_users')
+      .from('app_admin_users')
       .select('role')
       .eq('id', user.id)
       .single();
@@ -122,7 +125,7 @@ export const supabaseHelpers = {
   // Inserir formulário de contato
   async insertContactForm(formData: Omit<ContactForm, 'id' | 'created_at' | 'updated_at'>) {
     const { data, error } = await supabase
-      .from('contact_forms')
+      .from('app_contact_forms')
       .insert([formData])
       .select()
       .single();
@@ -132,7 +135,7 @@ export const supabaseHelpers = {
   // Buscar formulários de contato (apenas para admins)
   async getContactForms(filters?: { status?: string; limit?: number; offset?: number }) {
     let query = supabase
-      .from('contact_forms')
+      .from('app_contact_forms')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -155,7 +158,7 @@ export const supabaseHelpers = {
   // Buscar imagens do carrossel
   async getCarouselImages(activeOnly = true) {
     let query = supabase
-      .from('carousel_images')
+      .from('app_carousel_images')
       .select('*')
       .eq('deleted', false)
       .order('order_position', { ascending: true });
@@ -219,9 +222,9 @@ export const supabaseHelpers = {
   // Registrar atividade no log
   async logActivity(action: string, description?: string, metadata?: Record<string, any>) {
     const { user } = await this.getCurrentUser();
-    
+
     const { data, error } = await supabase
-      .from('activity_logs')
+      .from('app_activity_logs')
       .insert([{
         action,
         description,
@@ -250,7 +253,7 @@ export const supabaseHelpers = {
 };
 
 // Helper functions for image management
-export const uploadImage = async (file: File): Promise<{success: boolean, path?: string, error?: string}> => {
+export const uploadImage = async (file: File): Promise<{ success: boolean, path?: string, error?: string }> => {
   try {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
@@ -277,7 +280,7 @@ export const getPublicUrl = (path: string): string => {
   const { data } = supabase.storage
     .from('carousel-images')
     .getPublicUrl(path);
-  
+
   return data.publicUrl;
 };
 

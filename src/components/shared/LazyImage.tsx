@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ImageIcon, AlertCircle } from 'lucide-react';
-import { cacheSystem } from '../../utils/cacheSystem';
+import { cacheSystem } from '../../shared/utils/utils/cacheSystem';
 import { ActivityLogger } from '../../shared/utils/utils/activityLogger';
 
 interface LazyImageProps {

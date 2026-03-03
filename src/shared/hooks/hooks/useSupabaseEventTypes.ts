@@ -15,7 +15,7 @@ export const useSupabaseEventTypes = () => {
       setError(null);
 
       let query = supabase
-        .from('event_types')
+        .from('app_event_types')
         .select('*')
         .is('deleted_at', null)
         .order('name', { ascending: true });
@@ -54,7 +54,7 @@ export const useSupabaseEventTypes = () => {
       setError(null);
 
       let query = supabase
-        .from('event_types')
+        .from('app_event_types')
         .select('*', { count: 'exact' })
         .is('deleted_at', null)
         .order('name', { ascending: true });
@@ -109,7 +109,7 @@ export const useSupabaseEventTypes = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('event_types')
+        .from('app_event_types')
         .select('*')
         .eq('id', id)
         .is('deleted_at', null)
@@ -137,7 +137,7 @@ export const useSupabaseEventTypes = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('event_types')
+        .from('app_event_types')
         .insert([eventTypeData])
         .select()
         .single();
@@ -174,7 +174,7 @@ export const useSupabaseEventTypes = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('event_types')
+        .from('app_event_types')
         .update(eventTypeData)
         .eq('id', id)
         .select()
@@ -212,7 +212,7 @@ export const useSupabaseEventTypes = () => {
       setError(null);
 
       const { error } = await supabase
-        .from('event_types')
+        .from('app_event_types')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
 
@@ -247,7 +247,7 @@ export const useSupabaseEventTypes = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('event_types')
+        .from('app_event_types')
         .update({ active })
         .eq('id', id)
         .select()
@@ -291,7 +291,7 @@ export const useSupabaseEventTypes = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('event_types')
+        .from('app_event_types')
         .select('*')
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false });
@@ -318,7 +318,7 @@ export const useSupabaseEventTypes = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('event_types')
+        .from('app_event_types')
         .update({ deleted_at: null })
         .eq('id', id)
         .select()
@@ -357,7 +357,7 @@ export const useSupabaseEventTypes = () => {
 
       // Verificar se há eventos usando este tipo
       const { data: eventsUsingType, error: checkError } = await supabase
-        .from('events')
+        .from('app_events')
         .select('id')
         .eq('event_type', id)
         .limit(1);
@@ -371,7 +371,7 @@ export const useSupabaseEventTypes = () => {
       }
 
       const { error } = await supabase
-        .from('event_types')
+        .from('app_event_types')
         .delete()
         .eq('id', id);
 

@@ -129,7 +129,7 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       // Try to get from cache first
       const cachedResult = await cacheService.memoize(cacheKey, async () => {
         let query = supabase
-          .from('events')
+          .from('app_events')
           .select('*, event_types!event_type_id(*)', { count: 'exact' })
           .is('deleted_at', null)
           .order('event_date', { ascending: true })
@@ -179,7 +179,7 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('events')
+        .from('app_events')
         .select('*, event_types!event_type_id(*)')
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false });
@@ -200,7 +200,7 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('events')
+        .from('app_events')
         .insert([{
           ...eventData,
           current_guests: 0,
@@ -234,7 +234,7 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('events')
+        .from('app_events')
         .update({
           ...eventData,
           updated_at: new Date().toISOString(),
@@ -270,7 +270,7 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('events')
+        .from('app_events')
         .update({ 
           deleted_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -299,7 +299,7 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('events')
+        .from('app_events')
         .update({ 
           deleted_at: null,
           updated_at: new Date().toISOString(),
@@ -328,7 +328,7 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setError(null);
 
       const { error } = await supabase
-        .from('events')
+        .from('app_events')
         .delete()
         .eq('id', id);
 

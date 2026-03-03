@@ -5,7 +5,7 @@ import { useLanguage } from '../../shared/contexts/contexts/LanguageContext';
 import { useAppSettings } from '../../shared/hooks/hooks/useAppSettings';
 import TestimonialFormModal from '../shared/TestimonialFormModal';
 import TestimonialCarousel from '../public/TestimonialCarousel';
-import type { Testimonial as SupabaseTestimonial } from '../../shared/hooks/hooks/useSupabaseTestimonials';
+import type { LocalTestimonial as SupabaseTestimonial } from '../../shared/hooks/hooks/useSupabaseTestimonials';
 
 const QuoteIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg 

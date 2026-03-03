@@ -8,7 +8,7 @@ import EventDescription from '../shared/EventDescription';
 import TicketCard from '../shared/TicketCard';
 import { usePublicEvents } from '../../shared/hooks/hooks/usePublicEvents';
 import { ArrowLeft } from 'lucide-react';
-import { Event as EventType, PriceBatch, ScheduleItem } from '../../types/event';
+import { Event as EventType, PriceBatch, ScheduleItem } from '../../shared/types/types/event';
 import { processPriceBatches, getBatchStatus, formatPrice } from '../../shared/utils/utils/eventUtils';
 import PhoneLoginModal from '../shared/PhoneLoginModal';
 import TokenVerificationModal from '../shared/TokenVerificationModal';
@@ -85,7 +85,7 @@ const EventDetails: React.FC = () => {
   const checkClientExists = async (phone: string): Promise<{exists: boolean, name?: string, validated?: boolean}> => {
     try {
       const { data, error } = await supabase
-        .from('clients')
+        .from('app_clients')
         .select('id, name, validated')
         .eq('whatsapp', phone)
         .single();
@@ -214,7 +214,7 @@ const EventDetails: React.FC = () => {
       // Atualizar cliente como validado
       try {
         const { error: updateError } = await supabase
-          .from('clients')
+          .from('app_clients')
           .update({ validated: true })
           .eq('whatsapp', currentPhone);
         
@@ -312,7 +312,7 @@ const EventDetails: React.FC = () => {
       
       // Cliente não existe - inserir na tabela clients
       const { error: supabaseError } = await supabase
-        .from('clients')
+        .from('app_clients')
         .insert({
           name: data.nome,
           whatsapp: data.telefone,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { Testimonial as SupabaseTestimonial } from '../../shared/hooks/hooks/useSupabaseTestimonials';
+import type { LocalTestimonial as SupabaseTestimonial } from '../../shared/hooks/hooks/useSupabaseTestimonials';
 
 interface TestimonialCarouselProps {
   testimonials: SupabaseTestimonial[];

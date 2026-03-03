@@ -1,7 +1,94 @@
+# Dependencies
 node_modules
-build
+.pnpm-store
+
+# Development files
+.env.local
+.env.development
+.env.test
+
+# Build artifacts
 dist
+build
+coverage
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Test files
+test
+__tests__
+*.test.js
+*.test.ts
+*.test.tsx
+*.spec.js
+*.spec.ts
+*.spec.tsx
+jest.config.js
+
+# Documentation
+docs
+*.md
+!README.md
+
+# Database files
+database
+*.sql
+*.db
+*.sqlite
+
+# Temporary files
+.tmp
+.temp
+tmp
+temp
+
+# Git files
 .git
-.trae
-.log
-.figma
+.gitignore
+
+# TypeScript build info
+*.tsbuildinfo
+
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettiercache
+
+# Supabase local development
+supabase/.temp
+supabase/functions/_utils
+
+# Vercel
+.vercel
+
+# Local environment variables
+.env*.local

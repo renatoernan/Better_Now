@@ -30,6 +30,14 @@ const AdminTestimonials = React.lazy(() => import('./components/features/AdminTe
 const AdminSettings = React.lazy(() => import('./components/features/AdminSettings'));
 const AdminSolicitations = React.lazy(() => import('./components/features/AdminSolicitations'));
 
+// Supplier Components (Lazy Loading)
+const AdminSuppliers = React.lazy(() => import('./components/features/AdminSuppliers'));
+const AdminSupplierRegistration = React.lazy(() => import('./components/features/AdminSupplierRegistration'));
+const AdminSupplierList = React.lazy(() => import('./components/features/AdminSupplierList'));
+const AdminSupplierProfile = React.lazy(() => import('./components/features/AdminSupplierProfile'));
+const AdminSupplierCategories = React.lazy(() => import('./components/features/AdminSupplierCategories'));
+const AdminSupplierDocuments = React.lazy(() => import('./components/features/AdminSupplierDocuments'));
+
 // Shared Components
 const ProtectedRoute = React.lazy(() => import('./components/shared/ProtectedRoute'));
 
@@ -41,7 +49,7 @@ import { SettingsProvider } from './shared/contexts/contexts/SettingsContext';
 // Loading Fallback Component
 const LoadingFallback: React.FC<{ message?: string }> = ({ message = 'Carregando...' }) => (
   <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <Loading variant="pulse" size="lg" message={message} />
+    <Loading variant="pulse" size="lg" text={message} />
   </div>
 );
 
@@ -160,6 +168,55 @@ const AppContent: React.FC = () => {
             element={
               <Suspense fallback={<LoadingFallback message="Carregando configurações..." />}>
                 <AdminSettings />
+              </Suspense>
+            } 
+          />
+          {/* Rotas de Fornecedores */}
+          <Route 
+            path="fornecedores" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando fornecedores..." />}>
+                <AdminSuppliers />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="fornecedores/cadastro" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando cadastro de fornecedor..." />}>
+                <AdminSupplierRegistration />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="fornecedores/lista" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando lista de fornecedores..." />}>
+                <AdminSupplierList />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="fornecedores/:id" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando perfil do fornecedor..." />}>
+                <AdminSupplierProfile />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="fornecedores/categorias" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando categorias..." />}>
+                <AdminSupplierCategories />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="fornecedores/documentos" 
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando documentos..." />}>
+                <AdminSupplierDocuments />
               </Suspense>
             } 
           />

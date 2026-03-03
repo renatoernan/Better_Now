@@ -79,7 +79,6 @@ const PhoneLoginModal: React.FC<PhoneLoginModalProps> = ({
               value={phone}
               onChange={handlePhoneChange}
               placeholder="Ex: (11) 99999-9999"
-              defaultCountry="+55"
               disabled={loading}
               className="w-full"
             />

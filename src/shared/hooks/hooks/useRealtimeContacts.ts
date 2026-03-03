@@ -158,7 +158,7 @@ export const useRealtimeContacts = (): UseRealtimeContactsReturn => {
   const markAsRead = async (contactId: number) => {
     try {
       const { error } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .update({ status: 'read' })
         .eq('id', contactId);
 
@@ -202,14 +202,14 @@ export const useRealtimeStats = () => {
 
       // Get total contacts
       const { count: totalCount, error: totalError } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .select('*', { count: 'exact', head: true });
 
       if (totalError) throw totalError;
 
       // Get today's contacts
       const { count: todayCount, error: todayError } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', startOfDay.toISOString());
 
@@ -217,7 +217,7 @@ export const useRealtimeStats = () => {
 
       // Get this week's contacts
       const { count: weekCount, error: weekError } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', startOfWeek.toISOString());
 
@@ -225,7 +225,7 @@ export const useRealtimeStats = () => {
 
       // Get this month's contacts
       const { count: monthCount, error: monthError } = await supabase
-        .from('contact_forms')
+        .from('app_contact_forms')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', startOfMonth.toISOString());
 

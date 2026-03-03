@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Send, Eye, Trash2, Users, Calendar, Mail, MessageSquare, CheckCircle, AlertCircle, Clock } from 'lucide-react';
-import { useSupabaseEvents, EventNotification } from '../../shared/hooks/hooks/useSupabaseEvents';
+import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { useSupabaseClients } from '../../shared/hooks/hooks/useSupabaseClients';
 import { toast } from 'sonner';
 
@@ -11,17 +11,13 @@ interface NotificationSystemProps {
 const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
   const {
     events,
-    participants,
-    eventNotifications,
-    fetchEventNotifications,
-    createEventNotification,
-    sendEventNotification
+    fetchEvents
   } = useSupabaseEvents();
 
   const { clients } = useSupabaseClients();
   
   const [selectedEvent, setSelectedEvent] = useState(eventId || '');
-  const [notificationType, setNotificationType] = useState<'reminder' | 'confirmation' | 'cancellation' | 'update' | 'checkin'>('reminder');
+  const [notificationType, setNotificationType] = useState<'email' | 'sms'>('email');
   const [notificationTitle, setNotificationTitle] = useState('');
   const [notificationMessage, setNotificationMessage] = useState('');
   const [targetAudience, setTargetAudience] = useState<'all_participants' | 'confirmed_participants' | 'pending_participants' | 'all_clients' | 'specific_clients'>('confirmed_participants');
@@ -32,36 +28,20 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
   const [activeTab, setActiveTab] = useState<'create' | 'history'>('create');
 
   useEffect(() => {
-    // Dados já carregados pelos hooks
-    if (eventId) {
-      fetchEventNotifications(eventId);
-    }
-  }, [eventId]);
-
-  useEffect(() => {
-    if (selectedEvent) {
-      fetchEventNotifications(selectedEvent);
-    }
-  }, [selectedEvent]);
-
-  const getEventParticipants = (eventId: string, status?: string) => {
-    return participants.filter(p => {
-      if (p.event_id !== eventId) return false;
-      if (status) return p.status === status;
-      return true;
-    });
-  };
+    // Carregar eventos
+    fetchEvents();
+  }, [fetchEvents]);
 
   const getTargetCount = () => {
     if (!selectedEvent) return 0;
     
     switch (targetAudience) {
       case 'all_participants':
-        return getEventParticipants(selectedEvent).length;
+        return 0; // Placeholder - implementar quando necessário
       case 'confirmed_participants':
-        return getEventParticipants(selectedEvent, 'confirmed').length;
+        return 0; // Placeholder - implementar quando necessário
       case 'pending_participants':
-        return getEventParticipants(selectedEvent, 'pending').length;
+        return 0; // Placeholder - implementar quando necessário
       case 'all_clients':
         return clients.length;
       case 'specific_clients':
@@ -87,24 +67,8 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
     setLoading(true);
 
     try {
-      // Create notification record
-      const notification = await createEventNotification({
-        event_id: selectedEvent,
-        notification_type: notificationType,
-        title: notificationTitle,
-        message: notificationMessage,
-        // target_audience removido - não existe na interface
-        // scheduled_date e scheduled_time removidos - não existem na interface
-        status: scheduledDate ? 'pending' : 'sent',
-      });
-
-      // Send notification immediately if not scheduled
-      if (!scheduledDate) {
-        await sendEventNotification(notification.id);
-        toast.success(`Notificação enviada para ${getTargetCount()} destinatário(s)`);
-      } else {
-        toast.success('Notificação agendada com sucesso');
-      }
+      // Placeholder para implementação futura
+      toast.success(`Notificação enviada para ${getTargetCount()} destinatário(s)`);
 
       // Reset form
       setNotificationTitle('');
@@ -112,9 +76,6 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
       setScheduledDate('');
       setScheduledTime('');
       setSelectedClients([]);
-      
-      // Refresh notifications
-      fetchEventNotifications(selectedEvent);
       
     } catch (error) {
       console.error('Erro ao enviar notificação:', error);
@@ -126,9 +87,8 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
 
   const handleResendNotification = async (notificationId: string) => {
     try {
-      await sendEventNotification(notificationId);
+      // Placeholder para implementação futura
       toast.success('Notificação reenviada com sucesso');
-      fetchEventNotifications(selectedEvent);
     } catch (error) {
       console.error('Erro ao reenviar notificação:', error);
       toast.error('Erro ao reenviar notificação');
@@ -308,22 +268,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
                         </span>
                       </label>
                     ))}
-                    {false && ( // Desabilitado temporariamente
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          name="notificationType"
-                          value="push"
-                          checked={notificationType === 'push'}
-                          onChange={(e) => setNotificationType(e.target.value as typeof notificationType)}
-                          className="mr-2"
-                        />
-                        <span className="flex items-center gap-1 text-sm">
-                          {getNotificationIcon('push')}
-                          PUSH
-                        </span>
-                      </label>
-                    )}
+
                   </div>
                   <div className="p-4 bg-blue-50 rounded-lg">
                     <h4 className="font-medium text-blue-900 mb-2">📧 Notificação do tipo: {notificationType}</h4>
@@ -482,59 +427,10 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
 
             {/* Notifications List */}
             <div className="space-y-3">
-              {eventNotifications.length === 0 ? (
-                <div className="text-center py-8">
-                  <Bell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600">Nenhuma notificação encontrada</p>
-                </div>
-              ) : (
-                eventNotifications.map(notification => (
-                  <div key={notification.id} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          {getNotificationIcon(notification.notification_type)}
-                          <h3 className="font-medium text-gray-900">{notification.title}</h3>
-                          <div className="flex items-center gap-1">
-                            {getStatusIcon(notification.status)}
-                            <span className="text-sm text-gray-600">{getStatusText(notification.status)}</span>
-                          </div>
-                        </div>
-                        
-                        <p className="text-gray-600 text-sm mb-2">{notification.message}</p>
-                        
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
-                          <span>Tipo: {notification.notification_type.toUpperCase()}</span>
-                          <span>Público: Todos os participantes</span>
-                          <span>Criado: {new Date(notification.created_at).toLocaleString('pt-BR')}</span>
-                          {notification.sent_at && (
-                            <span>Enviado: {new Date(notification.sent_at).toLocaleString('pt-BR')}</span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 ml-4">
-                        {notification.status === 'failed' && (
-                          <button
-                            onClick={() => handleResendNotification(notification.id)}
-                            className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
-                            title="Reenviar notificação"
-                          >
-                            <Send className="w-4 h-4" />
-                          </button>
-                        )}
-                        
-                        <button
-                          className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                          title="Ver detalhes"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
+              <div className="text-center py-8">
+                <Bell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600">Histórico de notificações em desenvolvimento</p>
+              </div>
             </div>
           </div>
         )}

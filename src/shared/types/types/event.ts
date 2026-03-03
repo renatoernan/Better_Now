@@ -1,7 +1,7 @@
 import { PriceBatch, ScheduleItem } from './core';
 
 // Re-export PriceBatch and ScheduleItem for external use
-export { PriceBatch, ScheduleItem } from './core';
+export type { PriceBatch, ScheduleItem } from './core';
 
 export interface Event {
   id: string;
