@@ -3,11 +3,11 @@ import { Settings, Save, Globe, Bell, Shield, Database, Palette, Mail, Loader2, 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAppSettings, AppSettings } from '../../shared/hooks/hooks/useAppSettings';
-import { 
-  siteSettingsSchema, 
-  contactSettingsSchema, 
-  businessHoursSettingsSchema, 
-  carouselSettingsSchema, 
+import {
+  siteSettingsSchema,
+  contactSettingsSchema,
+  businessHoursSettingsSchema,
+  carouselSettingsSchema,
   systemSettingsSchema,
   SiteSettings,
   ContactSettings,
@@ -62,7 +62,7 @@ const AdminSettings: React.FC = () => {
   // Função para obter valores padrão baseado na categoria
   const getDefaultValues = (category: SettingsCategory): any => {
     if (!settings) return {};
-    
+
     switch (category) {
       case 'site':
         return { site_title: settings.site_title || '' };
@@ -243,11 +243,10 @@ const AdminSettings: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveCategory(tab.id as SettingsCategory)}
-                  className={`${
-                    activeCategory === tab.id
+                  className={`${activeCategory === tab.id
                       ? 'border-purple-500 text-purple-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
+                    } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
                 >
                   <Icon className="h-4 w-4" />
                   {tab.name}
@@ -262,27 +261,26 @@ const AdminSettings: React.FC = () => {
           {activeCategory === 'site' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Configurações do Site</h3>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Título do Site
                 </label>
                 <input
-                   type="text"
-                   {...register('site_title')}
-                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                     errors.site_title 
-                       ? 'border-red-300 bg-red-50' 
-                       : 'border-gray-300'
-                   }`}
-                   placeholder="Nome do seu site"
-                 />
-                 {errors.site_title && (
-                   <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                     <AlertCircle className="h-4 w-4" />
-                     <span>{String(errors.site_title?.message || '')}</span>
-                   </div>
-                 )}
+                  type="text"
+                  {...register('site_title')}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.site_title
+                      ? 'border-red-300 bg-red-50'
+                      : 'border-gray-300'
+                    }`}
+                  placeholder="Nome do seu site"
+                />
+                {errors.site_title && (
+                  <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{String(errors.site_title?.message || '')}</span>
+                  </div>
+                )}
                 <p className="text-sm text-gray-500 mt-1">
                   Este será o título principal exibido no site
                 </p>
@@ -293,28 +291,27 @@ const AdminSettings: React.FC = () => {
           {activeCategory === 'contact' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Informações de Contato</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Email de Contato
                   </label>
                   <input
-                     type="email"
-                     {...register('contact_email')}
-                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                       errors.contact_email 
-                         ? 'border-red-300 bg-red-50' 
-                         : 'border-gray-300'
-                     }`}
-                     placeholder="contato@exemplo.com"
-                   />
-                   {errors.contact_email && (
-                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                       <AlertCircle className="h-4 w-4" />
-                       <span>{String(errors.contact_email?.message || '')}</span>
-                     </div>
-                   )}
+                    type="email"
+                    {...register('contact_email')}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.contact_email
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-gray-300'
+                      }`}
+                    placeholder="contato@exemplo.com"
+                  />
+                  {errors.contact_email && (
+                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>{String(errors.contact_email?.message || '')}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -322,18 +319,18 @@ const AdminSettings: React.FC = () => {
                     Telefone
                   </label>
                   <PhoneInput
-                     value={watch('phone') || ''}
-                     onChange={(value) => setValue('phone', value)}
-                     placeholder="+55 11 99999-9999"
-                     error={!!errors.phone}
-                     name="phone"
-                   />
-                   {errors.phone && (
-                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                       <AlertCircle className="h-4 w-4" />
-                       <span>{String(errors.phone?.message || '')}</span>
-                     </div>
-                   )}
+                    value={watch('phone') || ''}
+                    onChange={(value) => setValue('phone', value)}
+                    placeholder="+55 11 99999-9999"
+                    error={!!errors.phone}
+                    name="phone"
+                  />
+                  {errors.phone && (
+                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>{String(errors.phone?.message || '')}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="md:col-span-2">
@@ -341,21 +338,20 @@ const AdminSettings: React.FC = () => {
                     Endereço
                   </label>
                   <input
-                     type="text"
-                     {...register('address')}
-                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                       errors.address 
-                         ? 'border-red-300 bg-red-50' 
-                         : 'border-gray-300'
-                     }`}
-                     placeholder="Cidade, Estado"
-                   />
-                   {errors.address && (
-                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                       <AlertCircle className="h-4 w-4" />
-                       <span>{String(errors.address?.message || '')}</span>
-                     </div>
-                   )}
+                    type="text"
+                    {...register('address')}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.address
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-gray-300'
+                      }`}
+                    placeholder="Cidade, Estado"
+                  />
+                  {errors.address && (
+                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>{String(errors.address?.message || '')}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -363,21 +359,20 @@ const AdminSettings: React.FC = () => {
                     Instagram
                   </label>
                   <input
-                     type="text"
-                     {...register('social_instagram')}
-                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                       errors.social_instagram 
-                         ? 'border-red-300 bg-red-50' 
-                         : 'border-gray-300'
-                     }`}
-                     placeholder="@usuario"
-                   />
-                   {errors.social_instagram && (
-                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                       <AlertCircle className="h-4 w-4" />
-                       <span>{String(errors.social_instagram?.message || '')}</span>
-                     </div>
-                   )}
+                    type="text"
+                    {...register('social_instagram')}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.social_instagram
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-gray-300'
+                      }`}
+                    placeholder="@usuario"
+                  />
+                  {errors.social_instagram && (
+                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>{String(errors.social_instagram?.message || '')}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -385,21 +380,20 @@ const AdminSettings: React.FC = () => {
                     WhatsApp
                   </label>
                   <input
-                     type="tel"
-                     {...register('social_whatsapp')}
-                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                       errors.social_whatsapp 
-                         ? 'border-red-300 bg-red-50' 
-                         : 'border-gray-300'
-                     }`}
-                     placeholder="+5511999999999"
-                   />
-                   {errors.social_whatsapp && (
-                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                       <AlertCircle className="h-4 w-4" />
-                       <span>{String(errors.social_whatsapp?.message || '')}</span>
-                     </div>
-                   )}
+                    type="tel"
+                    {...register('social_whatsapp')}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.social_whatsapp
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-gray-300'
+                      }`}
+                    placeholder="+5511999999999"
+                  />
+                  {errors.social_whatsapp && (
+                    <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>{String(errors.social_whatsapp?.message || '')}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -408,7 +402,7 @@ const AdminSettings: React.FC = () => {
           {activeCategory === 'business_hours' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Horários de Funcionamento</h3>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Horário de Funcionamento (Segunda a Sexta)
@@ -416,11 +410,10 @@ const AdminSettings: React.FC = () => {
                 <input
                   type="text"
                   {...register('business_hours_weekdays')}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                    errors.business_hours_weekdays 
-                      ? 'border-red-300 bg-red-50' 
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.business_hours_weekdays
+                      ? 'border-red-300 bg-red-50'
                       : 'border-gray-300'
-                  }`}
+                    }`}
                   placeholder="08:00 às 18:00"
                 />
                 {errors.business_hours_weekdays && (
@@ -438,11 +431,10 @@ const AdminSettings: React.FC = () => {
                 <input
                   type="text"
                   {...register('business_hours_weekend')}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                    errors.business_hours_weekend 
-                      ? 'border-red-300 bg-red-50' 
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.business_hours_weekend
+                      ? 'border-red-300 bg-red-50'
                       : 'border-gray-300'
-                  }`}
+                    }`}
                   placeholder="09:00 às 14:00"
                 />
                 {errors.business_hours_weekend && (
@@ -460,11 +452,10 @@ const AdminSettings: React.FC = () => {
                 <input
                   type="text"
                   {...register('business_hours_closed_days')}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                    errors.business_hours_closed_days 
-                      ? 'border-red-300 bg-red-50' 
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.business_hours_closed_days
+                      ? 'border-red-300 bg-red-50'
                       : 'border-gray-300'
-                  }`}
+                    }`}
                   placeholder="Domingos e feriados"
                 />
                 {errors.business_hours_closed_days && (
@@ -480,7 +471,7 @@ const AdminSettings: React.FC = () => {
           {activeCategory === 'carousel' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Configurações do Carrossel</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="flex items-center space-x-3">
@@ -508,11 +499,10 @@ const AdminSettings: React.FC = () => {
                   <input
                     type="number"
                     {...register('carousel_interval', { valueAsNumber: true })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                      errors.carousel_interval 
-                        ? 'border-red-300 bg-red-50' 
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.carousel_interval
+                        ? 'border-red-300 bg-red-50'
                         : 'border-gray-300'
-                    }`}
+                      }`}
                     min="1"
                     max="30"
                     step="1"
@@ -535,11 +525,10 @@ const AdminSettings: React.FC = () => {
                   <input
                     type="number"
                     {...register('testimonial_carousel_interval', { valueAsNumber: true })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                      errors.testimonial_carousel_interval 
-                        ? 'border-red-300 bg-red-50' 
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.testimonial_carousel_interval
+                        ? 'border-red-300 bg-red-50'
                         : 'border-gray-300'
-                    }`}
+                      }`}
                     min="1"
                     max="30"
                     step="1"
@@ -575,7 +564,7 @@ const AdminSettings: React.FC = () => {
                     multiple
                     className="hidden"
                     onChange={async (e) => {
-                      const files = Array.from(e.target.files || []);
+                      const files = Array.from(e.target.files || []) as File[];
                       for (const file of files) {
                         await addImage(file, file.name.split('.')[0]);
                       }
@@ -606,16 +595,15 @@ const AdminSettings: React.FC = () => {
                           <img
                             src={image.file_url}
                             alt={image.title}
-                            className={`w-full h-full object-cover transition-all duration-300 ${
-                              !image.active ? 'filter grayscale opacity-60' : ''
-                            }`}
+                            className={`w-full h-full object-cover transition-all duration-300 ${!image.active ? 'filter grayscale opacity-60' : ''
+                              }`}
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
                               target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMiA5VjEzTTEyIDE3SDE2TTE2IDlIMTJNMTIgOUg4VjEzSDEyVjlaTTggMTNWMTdIMTJWMTNIOFoiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+';
                             }}
                           />
                         </div>
-                        
+
                         <div className="p-3">
                           <h5 className="font-medium text-gray-900 text-sm truncate">{image.title}</h5>
                           <p className="text-xs text-gray-500 mt-1">
@@ -628,11 +616,10 @@ const AdminSettings: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => toggleImage(image.id)}
-                              className={`p-1 rounded-full ${
-                                image.active 
-                                  ? 'bg-green-100 text-green-600 hover:bg-green-200' 
+                              className={`p-1 rounded-full ${image.active
+                                  ? 'bg-green-100 text-green-600 hover:bg-green-200'
                                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                              }`}
+                                }`}
                               title={image.active ? 'Desativar' : 'Ativar'}
                             >
                               {image.active ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -674,7 +661,7 @@ const AdminSettings: React.FC = () => {
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          
+
                           <div className="p-3">
                             <h5 className="font-medium text-gray-700 text-sm truncate">{image.title}</h5>
                             <p className="text-xs text-gray-500 mt-1">Na lixeira</p>
@@ -712,7 +699,7 @@ const AdminSettings: React.FC = () => {
           {activeCategory === 'system' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Configurações do Sistema</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -721,11 +708,10 @@ const AdminSettings: React.FC = () => {
                   <input
                     type="number"
                     {...register('max_file_size', { valueAsNumber: true })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                      errors.max_file_size 
-                        ? 'border-red-300 bg-red-50' 
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.max_file_size
+                        ? 'border-red-300 bg-red-50'
                         : 'border-gray-300'
-                    }`}
+                      }`}
                     min="1"
                     max="100"
                   />
@@ -747,11 +733,10 @@ const AdminSettings: React.FC = () => {
                   <input
                     type="number"
                     {...register('backup_retention_days', { valueAsNumber: true })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                      errors.backup_retention_days 
-                        ? 'border-red-300 bg-red-50' 
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.backup_retention_days
+                        ? 'border-red-300 bg-red-50'
                         : 'border-gray-300'
-                    }`}
+                      }`}
                     min="1"
                     max="365"
                   />
@@ -773,11 +758,10 @@ const AdminSettings: React.FC = () => {
                   <input
                     type="email"
                     {...register('notification_email')}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                      errors.notification_email 
-                        ? 'border-red-300 bg-red-50' 
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.notification_email
+                        ? 'border-red-300 bg-red-50'
                         : 'border-gray-300'
-                    }`}
+                      }`}
                     placeholder="admin@exemplo.com"
                   />
                   {errors.notification_email && (
@@ -798,11 +782,10 @@ const AdminSettings: React.FC = () => {
                   <input
                     type="text"
                     {...register('allowed_file_types')}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                      errors.allowed_file_types 
-                        ? 'border-red-300 bg-red-50' 
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.allowed_file_types
+                        ? 'border-red-300 bg-red-50'
                         : 'border-gray-300'
-                    }`}
+                      }`}
                     placeholder="jpg,png,pdf,doc"
                   />
                   {errors.allowed_file_types && (

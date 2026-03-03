@@ -33,9 +33,9 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
     events,
     fetchEvents
   } = useSupabaseEvents();
-  
+
   const { clients } = useSupabaseClients();
-  
+
   const [selectedEvent, setSelectedEvent] = useState(eventId || '');
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -75,28 +75,28 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
     // Em uma implementação real, estes dados viriam de hooks específicos
     const eventParticipants: any[] = [];
     const notifications: any[] = [];
-    
+
     const totalParticipants = eventParticipants.length;
     const checkedInParticipants = eventParticipants.filter(p => p.checked_in_at).length;
     const confirmedParticipants = eventParticipants.filter(p => p.status === 'confirmed').length;
     const pendingParticipants = eventParticipants.filter(p => p.status === 'pending').length;
     const cancelledParticipants = eventParticipants.filter(p => p.status === 'cancelled').length;
-    
+
     const checkInRate = totalParticipants > 0 ? (checkedInParticipants / totalParticipants) * 100 : 0;
     const confirmationRate = totalParticipants > 0 ? (confirmedParticipants / totalParticipants) * 100 : 0;
-    
+
     // Gender distribution - placeholder (campo não disponível)
     const genderDistribution = {
       male: 0,
       female: 0,
       other: 0
     };
-    
+
     // Location distribution - placeholder (campo não disponível)
     const locationDistribution = {
       'Não informado': eventParticipants.length
     };
-    
+
     // Registration trend (últimos 30 dias)
     const registrationTrend: Array<{ date: string; count: number }> = [];
     const last30Days = Array.from({ length: 30 }, (_, i) => {
@@ -104,14 +104,14 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
       date.setDate(date.getDate() - (29 - i));
       return date.toISOString().split('T')[0];
     });
-    
+
     last30Days.forEach(date => {
-      const count = eventParticipants.filter(p => 
+      const count = eventParticipants.filter(p =>
         p.created_at && p.created_at.startsWith(date)
       ).length;
       registrationTrend.push({ date, count });
     });
-    
+
     // Check-in trend (por hora do dia)
     const checkInTrend: Array<{ hour: string; count: number }> = [];
     for (let hour = 0; hour < 24; hour++) {
@@ -123,7 +123,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
       }).length;
       checkInTrend.push({ hour: hourStr, count });
     }
-    
+
     // Notification stats
     // Placeholder para tracking de abertura e cliques (não implementado)
     const notificationStats = {
@@ -131,7 +131,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
       opened: 0, // Placeholder - tracking não implementado
       clicked: 0 // Placeholder - tracking não implementado
     };
-    
+
     setReportData({
       totalParticipants,
       checkedInParticipants,
@@ -161,16 +161,16 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      
+
       const event = events.find(e => e.id === selectedEvent);
       const fileName = `relatorio_${event?.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${exportFormat}`;
       link.download = fileName;
-      
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       toast.success('Relatório exportado com sucesso!');
     } catch (error) {
       console.error('Erro ao exportar relatório:', error);
@@ -191,7 +191,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
             <BarChart3 className="w-6 h-6 text-purple-600" />
             <h2 className="text-xl font-bold text-gray-900">Relatórios de Eventos</h2>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <button
               onClick={() => selectedEvent && loadEventData(selectedEvent)}
@@ -201,7 +201,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            
+
             <button
               onClick={handleExportReport}
               disabled={loading || !reportData}
@@ -233,7 +233,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
               ))}
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <FileText className="w-4 h-4 inline mr-1" />
@@ -249,7 +249,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
               <option value="analytics">Analytics</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <Download className="w-4 h-4 inline mr-1" />
@@ -265,7 +265,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
               <option value="csv">CSV</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <Filter className="w-4 h-4 inline mr-1" />
@@ -333,7 +333,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   <Users className="w-12 h-12 text-blue-400" />
                 </div>
               </div>
-              
+
               <div className="bg-green-50 p-6 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
@@ -343,7 +343,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   <TrendingUp className="w-12 h-12 text-green-400" />
                 </div>
               </div>
-              
+
               <div className="bg-yellow-50 p-6 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
@@ -353,7 +353,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   <PieChart className="w-12 h-12 text-yellow-400" />
                 </div>
               </div>
-              
+
               <div className="bg-purple-50 p-6 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
@@ -374,47 +374,47 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                     <span className="text-gray-600">Confirmados</span>
                     <div className="flex items-center gap-2">
                       <div className="w-24 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full" 
+                        <div
+                          className="bg-blue-600 h-2 rounded-full"
                           style={{ width: `${reportData.totalParticipants > 0 ? (reportData.confirmedParticipants / reportData.totalParticipants) * 100 : 0}%` }}
                         ></div>
                       </div>
                       <span className="text-sm font-medium w-12 text-right">{reportData.confirmedParticipants}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Pendentes</span>
                     <div className="flex items-center gap-2">
                       <div className="w-24 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-yellow-600 h-2 rounded-full" 
+                        <div
+                          className="bg-yellow-600 h-2 rounded-full"
                           style={{ width: `${reportData.totalParticipants > 0 ? (reportData.pendingParticipants / reportData.totalParticipants) * 100 : 0}%` }}
                         ></div>
                       </div>
                       <span className="text-sm font-medium w-12 text-right">{reportData.pendingParticipants}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Cancelados</span>
                     <div className="flex items-center gap-2">
                       <div className="w-24 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-red-600 h-2 rounded-full" 
+                        <div
+                          className="bg-red-600 h-2 rounded-full"
                           style={{ width: `${reportData.totalParticipants > 0 ? (reportData.cancelledParticipants / reportData.totalParticipants) * 100 : 0}%` }}
                         ></div>
                       </div>
                       <span className="text-sm font-medium w-12 text-right">{reportData.cancelledParticipants}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Check-in Feito</span>
                     <div className="flex items-center gap-2">
                       <div className="w-24 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-green-600 h-2 rounded-full" 
+                        <div
+                          className="bg-green-600 h-2 rounded-full"
                           style={{ width: `${reportData.totalParticipants > 0 ? (reportData.checkedInParticipants / reportData.totalParticipants) * 100 : 0}%` }}
                         ></div>
                       </div>
@@ -423,21 +423,21 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-gray-50 p-6 rounded-lg">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Distribuição Geográfica</h3>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {Object.entries(reportData.locationDistribution)
-                    .sort(([,a], [,b]) => b - a)
+                    .sort(([, a], [, b]) => Number(b) - Number(a))
                     .slice(0, 10)
                     .map(([location, count]) => (
                       <div key={location} className="flex items-center justify-between text-sm">
                         <span className="text-gray-700 truncate">{location}</span>
                         <div className="flex items-center gap-2">
                           <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                            <div 
-                              className="bg-purple-600 h-1.5 rounded-full" 
-                              style={{ width: `${reportData.totalParticipants > 0 ? (count / reportData.totalParticipants) * 100 : 0}%` }}
+                            <div
+                              className="bg-purple-600 h-1.5 rounded-full"
+                              style={{ width: `${reportData.totalParticipants > 0 ? (Number(count) / reportData.totalParticipants) * 100 : 0}%` }}
                             ></div>
                           </div>
                           <span className="font-medium w-8 text-right">{count}</span>
@@ -456,10 +456,10 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   {reportData.registrationTrend.slice(-14).map((item, index) => {
                     const maxCount = Math.max(...reportData.registrationTrend.map(i => i.count));
                     const height = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
-                    
+
                     return (
                       <div key={index} className="flex flex-col items-center flex-1">
-                        <div 
+                        <div
                           className="bg-blue-500 rounded-t w-full min-h-[2px] transition-all duration-300 hover:bg-blue-600"
                           style={{ height: `${height}%` }}
                           title={`${new Date(item.date).toLocaleDateString('pt-BR')}: ${item.count} inscrições`}
@@ -472,17 +472,17 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   })}
                 </div>
               </div>
-              
+
               <div className="bg-gray-50 p-6 rounded-lg">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Check-ins por Horário</h3>
                 <div className="h-48 flex items-end justify-between gap-1">
                   {reportData.checkInTrend.filter((_, index) => index % 2 === 0).map((item, index) => {
                     const maxCount = Math.max(...reportData.checkInTrend.map(i => i.count));
                     const height = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
-                    
+
                     return (
                       <div key={index} className="flex flex-col items-center flex-1">
-                        <div 
+                        <div
                           className="bg-green-500 rounded-t w-full min-h-[2px] transition-all duration-300 hover:bg-green-600"
                           style={{ height: `${height}%` }}
                           title={`${item.hour}: ${item.count} check-ins`}
@@ -507,14 +507,14 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   </div>
                   <p className="text-sm text-gray-600">Notificações Enviadas</p>
                 </div>
-                
+
                 <div className="text-center">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
                     <span className="text-2xl font-bold text-green-600">{reportData.notificationStats.opened}</span>
                   </div>
                   <p className="text-sm text-gray-600">Notificações Abertas</p>
                 </div>
-                
+
                 <div className="text-center">
                   <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
                     <span className="text-2xl font-bold text-purple-600">{reportData.notificationStats.clicked}</span>

@@ -557,12 +557,13 @@ const AdminSupplierRegistration: React.FC = () => {
                       <label className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={field.value.includes(category.id)}
+                          checked={field.value?.includes(category.id) || false}
                           onChange={(e) => {
+                            const currentValue = field.value || [];
                             if (e.target.checked) {
-                              field.onChange([...field.value, category.id]);
+                              field.onChange([...currentValue, category.id]);
                             } else {
-                              field.onChange(field.value.filter((id: string) => id !== category.id));
+                              field.onChange(currentValue.filter((id: string) => id !== category.id));
                             }
                           }}
                           className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"

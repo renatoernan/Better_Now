@@ -95,10 +95,10 @@ const LazyImage: React.FC<LazyImageProps> = ({
       // Verificar cache primeiro
       const cachedUrl = cacheSystem.get<string>(cacheKey);
       if (cachedUrl) {
-        setState(prev => ({ 
-          ...prev, 
-          isLoaded: true, 
-          isLoading: false 
+        setState(prev => ({
+          ...prev,
+          isLoaded: true,
+          isLoading: false
         }));
         onLoad?.();
         return;
@@ -106,19 +106,19 @@ const LazyImage: React.FC<LazyImageProps> = ({
 
       // Carregar imagem
       const img = new Image();
-      
+
       img.onload = () => {
         // Armazenar no cache
         cacheSystem.set(cacheKey, src, 30 * 60 * 1000); // 30 minutos
-        
-        setState(prev => ({ 
-          ...prev, 
-          isLoaded: true, 
-          isLoading: false 
+
+        setState(prev => ({
+          ...prev,
+          isLoaded: true,
+          isLoading: false
         }));
-        
+
         onLoad?.();
-        
+
         ActivityLogger.logImage(
           'image_loaded',
           `Imagem carregada: ${alt}`,
@@ -126,18 +126,18 @@ const LazyImage: React.FC<LazyImageProps> = ({
           { src, quality, cached: false }
         );
       };
-      
+
       img.onerror = () => {
         const error = new Error(`Falha ao carregar imagem: ${src}`);
-        setState(prev => ({ 
-          ...prev, 
-          isLoading: false, 
-          hasError: true, 
-          error 
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          hasError: true,
+          error
         }));
-        
+
         onError?.(error);
-        
+
         ActivityLogger.logImage(
           'image_load_error',
           `Erro ao carregar imagem: ${alt}`,
@@ -145,16 +145,16 @@ const LazyImage: React.FC<LazyImageProps> = ({
           { src, error: error.message }
         );
       };
-      
+
       // Aplicar otimizações baseadas na qualidade
-      img.src = optimizeImageUrl(src, quality);
-      
+      img.src = optimizeImageUrl(src, quality as 'low' | 'medium' | 'high');
+
     } catch (error: any) {
-      setState(prev => ({ 
-        ...prev, 
-        isLoading: false, 
-        hasError: true, 
-        error 
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        hasError: true,
+        error
       }));
       onError?.(error);
     }
@@ -168,11 +168,11 @@ const LazyImage: React.FC<LazyImageProps> = ({
         medium: 80,
         high: 95
       };
-      
+
       const separator = url.includes('?') ? '&' : '?';
       return `${url}${separator}quality=${qualityMap[quality]}&format=webp`;
     }
-    
+
     return url;
   };
 
@@ -190,7 +190,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   // Renderizar placeholder enquanto carrega
   if (!isInView || (!state.isLoaded && !state.hasError)) {
     return (
-      <div 
+      <div
         ref={imgRef}
         className={`bg-gray-200 animate-pulse flex items-center justify-center ${className}`}
         style={{ minHeight: '200px' }}
@@ -213,7 +213,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   // Renderizar erro
   if (state.hasError) {
     return (
-      <div 
+      <div
         className={`bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center p-4 ${className}`}
         style={{ minHeight: '200px' }}
       >
@@ -242,7 +242,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   return (
     <img
       ref={imgRef}
-      src={optimizeImageUrl(src, quality)}
+      src={optimizeImageUrl(src, quality as 'low' | 'medium' | 'high')}
       alt={alt}
       className={`transition-opacity duration-300 ${state.isLoaded ? 'opacity-100' : 'opacity-0'} ${className}`}
       sizes={sizes}
@@ -253,10 +253,10 @@ const LazyImage: React.FC<LazyImageProps> = ({
       }}
       onError={(e) => {
         const error = new Error(`Falha ao carregar imagem: ${src}`);
-        setState(prev => ({ 
-          ...prev, 
-          hasError: true, 
-          error 
+        setState(prev => ({
+          ...prev,
+          hasError: true,
+          error
         }));
         onError?.(error);
       }}

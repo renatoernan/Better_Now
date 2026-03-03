@@ -46,7 +46,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const controlsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const currentMedia = mediaItems[currentIndex];
-  
+
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -57,7 +57,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
         togglePlayPause();
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [onClose, onNext, onPrevious, currentMedia.type]);
@@ -68,7 +68,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
     setCurrentTime(0);
     setDuration(0);
     setIsLoading(false);
-    
+
     // Clear controls timeout
     if (controlsTimeoutRef.current) {
       clearTimeout(controlsTimeoutRef.current);
@@ -82,7 +82,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
         setShowControls(false);
       }, 3000);
     }
-    
+
     return () => {
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
@@ -143,9 +143,9 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
       clearTimeout(controlsTimeoutRef.current);
     }
   };
-  
+
   if (!currentMedia) return null;
-  
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
       <div className="relative w-full h-full flex items-center justify-center p-4">
@@ -156,7 +156,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
         >
           <X className="w-6 h-6" />
         </button>
-        
+
         {/* Navigation */}
         {mediaItems.length > 1 && (
           <>
@@ -168,7 +168,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            
+
             <button
               onClick={onNext}
               className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 p-3 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition-all"
@@ -179,7 +179,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
             </button>
           </>
         )}
-        
+
         {/* Media Content */}
         <div className="relative max-w-full max-h-full flex items-center justify-center">
           {currentMedia.type === 'photo' ? (
@@ -189,7 +189,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
               className="max-w-full max-h-full object-contain"
             />
           ) : (
-            <div 
+            <div
               className="relative"
               onMouseMove={handleMouseMove}
               onMouseLeave={() => setShowControls(false)}
@@ -200,7 +200,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
                 </div>
               )}
-              
+
               <video
                 ref={videoRef}
                 src={currentMedia.url}
@@ -215,25 +215,25 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
                 preload="metadata"
                 controls
               />
-              
+
               {/* Custom video controls */}
               {showControls && (
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4 z-10">
                   {/* Progress bar */}
                   <div className="mb-3">
                     <div className="w-full bg-gray-600 rounded-full h-1 cursor-pointer"
-                         onClick={(e) => {
-                           const rect = e.currentTarget.getBoundingClientRect();
-                           const percent = (e.clientX - rect.left) / rect.width;
-                           handleSeek(percent * duration);
-                         }}>
-                      <div 
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const percent = (e.clientX - rect.left) / rect.width;
+                        handleSeek(percent * duration);
+                      }}>
+                      <div
                         className="bg-blue-500 h-1 rounded-full transition-all"
                         style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
                       ></div>
                     </div>
                   </div>
-                  
+
                   {/* Control buttons */}
                   <div className="flex items-center justify-between text-white">
                     <div className="flex items-center space-x-3">
@@ -243,10 +243,10 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
                       >
                         {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
                       </button>
-                      
+
                       {/* Volume control */}
-                       <div className="flex items-center space-x-2">
-                         <Volume2 className="w-4 h-4" />
+                      <div className="flex items-center space-x-2">
+                        <Volume2 className="w-4 h-4" />
                         <input
                           type="range"
                           min="0"
@@ -258,7 +258,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
                         />
                       </div>
                     </div>
-                    
+
                     {/* Time display */}
                     <div className="text-sm">
                       {formatTime(currentTime)} / {formatTime(duration)}
@@ -266,7 +266,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
                   </div>
                 </div>
               )}
-              
+
               {/* Play button overlay */}
               {!isPlaying && !isLoading && (
                 <button
@@ -279,60 +279,60 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
             </div>
           )}
         </div>
-        
+
         {/* Info Bar */}
         <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {currentMedia.type === 'video' ? (
-                    <Video className="w-4 h-4" />
-                  ) : (
-                    <ImageIcon className="w-4 h-4" />
-                  )}
-                  {currentMedia.caption && (
-                    <p className="text-lg font-medium">{currentMedia.caption}</p>
-                  )}
-                </div>
-                <p className="text-sm text-gray-300">
-                  {new Date(currentMedia.uploaded_at).toLocaleDateString('pt-BR')} às {new Date(currentMedia.uploaded_at).toLocaleTimeString('pt-BR')}
-                  {currentMedia.uploaded_by && ` • Por ${currentMedia.uploaded_by}`}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {currentIndex + 1} de {mediaItems.length} • {currentMedia.type === 'video' ? 'Vídeo' : 'Foto'}
-                </p>
-              </div>
-            
-            <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = currentMedia.url;
-                    const extension = currentMedia.type === 'video' ? 'mp4' : 'jpg';
-                    link.download = `evento_${currentMedia.type}_${currentMedia.id}.${extension}`;
-                    link.click();
-                  }}
-                  className="p-2 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30 transition-all"
-                  title={`Baixar ${currentMedia.type === 'video' ? 'vídeo' : 'foto'}`}
-                >
-                  <Download className="w-4 h-4" />
-                </button>
-                
-                {isAdmin && onDelete && (
-                  <button
-                    onClick={() => {
-                      const mediaType = currentMedia.type === 'video' ? 'vídeo' : 'foto';
-                      if (window.confirm(`Tem certeza que deseja excluir este ${mediaType}?`)) {
-                        onDelete(currentMedia.id, currentMedia.type);
-                      }
-                    }}
-                    className="p-2 bg-red-500 bg-opacity-70 rounded-lg hover:bg-opacity-90 transition-all"
-                    title={`Excluir ${currentMedia.type === 'video' ? 'vídeo' : 'foto'}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                {currentMedia.type === 'video' ? (
+                  <Video className="w-4 h-4" />
+                ) : (
+                  <ImageIcon className="w-4 h-4" />
+                )}
+                {currentMedia.caption && (
+                  <p className="text-lg font-medium">{currentMedia.caption}</p>
                 )}
               </div>
+              <p className="text-sm text-gray-300">
+                {new Date(currentMedia.uploaded_at).toLocaleDateString('pt-BR')} às {new Date(currentMedia.uploaded_at).toLocaleTimeString('pt-BR')}
+                {currentMedia.uploaded_by && ` • Por ${currentMedia.uploaded_by}`}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {currentIndex + 1} de {mediaItems.length} • {currentMedia.type === 'video' ? 'Vídeo' : 'Foto'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = currentMedia.url;
+                  const extension = currentMedia.type === 'video' ? 'mp4' : 'jpg';
+                  link.download = `evento_${currentMedia.type}_${currentMedia.id}.${extension}`;
+                  link.click();
+                }}
+                className="p-2 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30 transition-all"
+                title={`Baixar ${currentMedia.type === 'video' ? 'vídeo' : 'foto'}`}
+              >
+                <Download className="w-4 h-4" />
+              </button>
+
+              {isAdmin && onDelete && (
+                <button
+                  onClick={() => {
+                    const mediaType = currentMedia.type === 'video' ? 'vídeo' : 'foto';
+                    if (window.confirm(`Tem certeza que deseja excluir este ${mediaType}?`)) {
+                      onDelete(currentMedia.id, currentMedia.type);
+                    }
+                  }}
+                  className="p-2 bg-red-500 bg-opacity-70 rounded-lg hover:bg-opacity-90 transition-all"
+                  title={`Excluir ${currentMedia.type === 'video' ? 'vídeo' : 'foto'}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -342,7 +342,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
 
 const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, showUpload = false }) => {
   const { eventPhotos, fetchEventPhotos, uploadEventPhoto, deleteEventPhoto } = useSupabaseEvents();
-  
+
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -406,7 +406,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from(e.target.files || []) as File[];
     const validFiles = files.filter(file => {
       if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
         toast.error(`${file.name} não é um arquivo de mídia válido`);
@@ -418,9 +418,9 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
       }
       return true;
     });
-    
+
     setUploadFiles(prev => [...prev, ...validFiles]);
-    
+
     // Initialize captions
     const newCaptions: Record<string, string> = {};
     validFiles.forEach(file => {
@@ -440,7 +440,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
       for (const file of uploadFiles) {
         await uploadEventPhoto(eventId, file, uploadCaptions[file.name] || '');
       }
-      
+
       toast.success(`${uploadFiles.length} foto(s) enviada(s) com sucesso!`);
       setShowUploadModal(false);
       setUploadFiles([]);
@@ -485,13 +485,13 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
     .filter(media => {
       if (!searchTerm) return true;
       return media.caption?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             media.uploaded_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             media.type.toLowerCase().includes(searchTerm.toLowerCase());
+        media.uploaded_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        media.type.toLowerCase().includes(searchTerm.toLowerCase());
     })
     .sort((a, b) => {
       const aValue = sortBy === 'date' ? new Date(a.uploaded_at).getTime() : (a.caption || '');
       const bValue = sortBy === 'date' ? new Date(b.uploaded_at).getTime() : (b.caption || '');
-      
+
       if (sortOrder === 'asc') {
         return aValue > bValue ? 1 : -1;
       } else {
@@ -508,12 +508,12 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
             <Camera className="w-6 h-6 text-purple-600" />
             <h2 className="text-xl font-bold text-gray-900">Galeria do Evento</h2>
             <span className="px-2 py-1 bg-gray-100 text-gray-600 text-sm rounded-full">
-              {mediaItems.length} item{mediaItems.length !== 1 ? 's' : ''} 
-              ({mediaItems.filter(m => m.type === 'photo').length} foto{mediaItems.filter(m => m.type === 'photo').length !== 1 ? 's' : ''}, 
+              {mediaItems.length} item{mediaItems.length !== 1 ? 's' : ''}
+              ({mediaItems.filter(m => m.type === 'photo').length} foto{mediaItems.filter(m => m.type === 'photo').length !== 1 ? 's' : ''},
               {mediaItems.filter(m => m.type === 'video').length} vídeo{mediaItems.filter(m => m.type === 'video').length !== 1 ? 's' : ''})
             </span>
           </div>
-          
+
           <div className="flex items-center gap-3">
             {(isAdmin || showUpload) && (
               <button
@@ -524,7 +524,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                 Adicionar Mídia
               </button>
             )}
-            
+
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setViewMode('grid')}
@@ -556,7 +556,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
-          
+
           <select
             value={`${sortBy}-${sortOrder}`}
             onChange={(e) => {
@@ -587,8 +587,8 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
               {mediaItems.length === 0 ? 'Nenhuma Mídia' : 'Nenhuma mídia encontrada'}
             </h3>
             <p className="text-gray-600 mb-4">
-              {mediaItems.length === 0 
-                ? 'Este evento ainda não possui mídia na galeria' 
+              {mediaItems.length === 0
+                ? 'Este evento ainda não possui mídia na galeria'
                 : 'Tente ajustar os filtros de busca'
               }
             </p>
@@ -602,7 +602,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
             )}
           </div>
         ) : (
-          <div className={viewMode === 'grid' 
+          <div className={viewMode === 'grid'
             ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'
             : 'space-y-4'
           }>
@@ -642,7 +642,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                     </div>
                   </div>
                 )}
-                
+
                 {/* Media type indicator */}
                 <div className="absolute top-2 right-2">
                   {media.type === 'photo' ? (
@@ -651,7 +651,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                     <Video className="w-4 h-4 text-white bg-black bg-opacity-50 rounded p-0.5" />
                   )}
                 </div>
-                
+
                 {viewMode === 'grid' ? (
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-300 flex items-center justify-center">
                     <Eye className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -670,13 +670,13 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                     </p>
                   </div>
                 )}
-                
+
                 {viewMode === 'grid' && media.caption && (
                   <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white p-2">
                     <p className="text-sm truncate">{media.caption}</p>
                   </div>
                 )}
-                
+
                 {/* Admin delete button */}
                 {isAdmin && (
                   <button
@@ -727,7 +727,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                 </button>
               </div>
             </div>
-            
+
             <div className="p-6 max-h-[60vh] overflow-y-auto">
               {/* File Input */}
               <div className="mb-6">
@@ -747,12 +747,12 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                   />
                 </label>
               </div>
-              
+
               {/* Selected Files */}
               {uploadFiles.length > 0 && (
                 <div className="space-y-4">
                   <h4 className="font-medium text-gray-900">Arquivos Selecionados ({uploadFiles.length})</h4>
-                  
+
                   {uploadFiles.map((file, index) => (
                     <div key={index} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
                       {file.type.startsWith('image/') ? (
@@ -773,13 +773,13 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                           </div>
                         </div>
                       )}
-                      
+
                       <div className="flex-1">
                         <p className="font-medium text-gray-900 mb-1">{file.name}</p>
                         <p className="text-sm text-gray-500 mb-2">
                           {(file.size / 1024 / 1024).toFixed(2)} MB
                         </p>
-                        
+
                         <input
                           type="text"
                           placeholder="Legenda (opcional)"
@@ -791,7 +791,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         />
                       </div>
-                      
+
                       <button
                         onClick={() => removeUploadFile(file.name)}
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -803,7 +803,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                 </div>
               )}
             </div>
-            
+
             <div className="p-6 border-t bg-gray-50">
               <div className="flex items-center justify-end gap-3">
                 <button
@@ -816,7 +816,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
                 >
                   Cancelar
                 </button>
-                
+
                 <button
                   onClick={handleUpload}
                   disabled={uploading || uploadFiles.length === 0}
