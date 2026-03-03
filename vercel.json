@@ -78,11 +78,6 @@
       "permanent": false
     }
   ],
-  "functions": {
-    "app/api/**/*.js": {
-      "maxDuration": 10
-    }
-  },
   "regions": [
     "gru1"
   ],
