@@ -53,7 +53,7 @@
       ]
     },
     {
-      "source": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))",
+      "source": "/(.*\\.(?:js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))",
       "headers": [
         {
           "key": "Cache-Control",
@@ -83,7 +83,9 @@
       "maxDuration": 10
     }
   },
-  "regions": ["gru1"],
+  "regions": [
+    "gru1"
+  ],
   "env": {
     "NODE_ENV": "production"
   }
