@@ -25,7 +25,7 @@ export const useClientInteractions = (clientId?: string) => {
       setError(null);
 
       const { data, error: fetchError } = await supabase
-        .from('client_interactions')
+        .from('app_client_interactions')
         .select('*')
         .eq('client_id', id)
         .order('interaction_date', { ascending: false });
@@ -35,7 +35,7 @@ export const useClientInteractions = (clientId?: string) => {
       }
 
       setInteractions(data || []);
-      
+
       ActivityLogger.log('client_interactions_loaded', 'Interações do cliente carregadas', 'system', 'info', {
         clientId: id,
         count: data?.length || 0
@@ -54,7 +54,7 @@ export const useClientInteractions = (clientId?: string) => {
   const addInteraction = async (targetClientId: string, interactionData: InteractionFormData) => {
     try {
       const { data: userData } = await supabase.auth.getUser();
-      
+
       const newInteraction = {
         client_id: targetClientId,
         type: interactionData.type,
@@ -64,7 +64,7 @@ export const useClientInteractions = (clientId?: string) => {
       };
 
       const { data, error: insertError } = await supabase
-        .from('client_interactions')
+        .from('app_client_interactions')
         .insert([newInteraction])
         .select()
         .single();
@@ -77,7 +77,7 @@ export const useClientInteractions = (clientId?: string) => {
       if (targetClientId === clientId) {
         setInteractions(prev => [data, ...prev]);
       }
-      
+
       toast.success('Interação adicionada com sucesso!');
       ActivityLogger.log('client_interaction_added', 'Nova interação adicionada', 'system', 'success', {
         clientId: targetClientId,
@@ -98,7 +98,7 @@ export const useClientInteractions = (clientId?: string) => {
   const updateInteraction = async (interactionId: string, updates: Partial<InteractionFormData>) => {
     try {
       const { data, error: updateError } = await supabase
-        .from('client_interactions')
+        .from('app_client_interactions')
         .update(updates)
         .eq('id', interactionId)
         .select()
@@ -108,10 +108,10 @@ export const useClientInteractions = (clientId?: string) => {
         throw updateError;
       }
 
-      setInteractions(prev => prev.map(interaction => 
+      setInteractions(prev => prev.map(interaction =>
         interaction.id === interactionId ? data : interaction
       ));
-      
+
       toast.success('Interação atualizada com sucesso!');
       ActivityLogger.log('client_interaction_updated', 'Interação atualizada', 'system', 'success', {
         interactionId,
@@ -131,7 +131,7 @@ export const useClientInteractions = (clientId?: string) => {
   const deleteInteraction = async (interactionId: string) => {
     try {
       const { error: deleteError } = await supabase
-        .from('client_interactions')
+        .from('app_client_interactions')
         .delete()
         .eq('id', interactionId);
 
@@ -140,7 +140,7 @@ export const useClientInteractions = (clientId?: string) => {
       }
 
       setInteractions(prev => prev.filter(interaction => interaction.id !== interactionId));
-      
+
       toast.success('Interação excluída com sucesso!');
       ActivityLogger.log('client_interaction_deleted', 'Interação excluída', 'system', 'success', { interactionId });
 
@@ -157,7 +157,7 @@ export const useClientInteractions = (clientId?: string) => {
   const getClientInteractions = async (targetClientId: string): Promise<ClientInteraction[]> => {
     try {
       const { data, error } = await supabase
-        .from('client_interactions')
+        .from('app_client_interactions')
         .select('*')
         .eq('client_id', targetClientId)
         .order('interaction_date', { ascending: false });
@@ -176,7 +176,7 @@ export const useClientInteractions = (clientId?: string) => {
   // Obter estatísticas de interações
   const getInteractionStats = (targetInteractions?: ClientInteraction[]) => {
     const data = targetInteractions || interactions;
-    
+
     const stats = {
       total: data.length,
       byType: {} as Record<string, number>,
@@ -191,7 +191,7 @@ export const useClientInteractions = (clientId?: string) => {
     data.forEach(interaction => {
       // Contar por tipo
       stats.byType[interaction.type] = (stats.byType[interaction.type] || 0) + 1;
-      
+
       // Contar por período
       const interactionDate = new Date(interaction.interaction_date);
       if (interactionDate >= startOfMonth) {
@@ -219,11 +219,11 @@ export const useClientInteractions = (clientId?: string) => {
           filter: `client_id=eq.${clientId}`
         }, (payload) => {
           console.log('Mudança em tempo real nas interações:', payload);
-          
+
           if (payload.eventType === 'INSERT') {
             setInteractions(prev => [payload.new as ClientInteraction, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
-            setInteractions(prev => prev.map(interaction => 
+            setInteractions(prev => prev.map(interaction =>
               interaction.id === payload.new.id ? payload.new as ClientInteraction : interaction
             ));
           } else if (payload.eventType === 'DELETE') {

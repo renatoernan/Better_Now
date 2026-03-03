@@ -105,7 +105,7 @@ export const useSupplierCategories = () => {
     try {
       // Verificar se a categoria está sendo usada
       const { data: relations, error: checkError } = await supabase
-        .from('supplier_category_relations')
+        .from('app_supplier_category_relations')
         .select('id')
         .eq('category_id', id)
         .limit(1);
@@ -145,7 +145,7 @@ export const useSupplierCategories = () => {
         .from('app_supplier_categories')
         .select(`
           *,
-          supplier_category_relations(
+          app_supplier_category_relations(
             supplier_id,
             app_suppliers!inner(id, deleted_at)
           )
@@ -175,7 +175,7 @@ export const useSupplierCategories = () => {
   const fetchSuppliersByCategory = useCallback(async (categoryId: string) => {
     try {
       const { data, error } = await supabase
-        .from('supplier_category_relations')
+        .from('app_supplier_category_relations')
         .select(`
           is_primary,
           app_suppliers(
@@ -189,7 +189,7 @@ export const useSupplierCategories = () => {
           )
         `)
         .eq('category_id', categoryId)
-        .eq('suppliers.deleted_at', null);
+        .eq('app_suppliers.deleted_at', null);
 
       if (error) throw error;
 

@@ -138,7 +138,7 @@ export const useSuppliers = () => {
         }));
 
         const { error: relationError } = await supabase
-          .from('supplier_category_relations')
+          .from('app_supplier_category_relations')
           .insert(categoryRelations);
 
         if (relationError) throw relationError;
@@ -176,7 +176,7 @@ export const useSuppliers = () => {
       if (categories !== undefined) {
         // Remover relações existentes
         await supabase
-          .from('supplier_category_relations')
+          .from('app_supplier_category_relations')
           .delete()
           .eq('supplier_id', id);
 
@@ -189,7 +189,7 @@ export const useSuppliers = () => {
           }));
 
           const { error: relationError } = await supabase
-            .from('supplier_category_relations')
+            .from('app_supplier_category_relations')
             .insert(categoryRelations);
 
           if (relationError) throw relationError;
@@ -271,12 +271,12 @@ export const useSuppliers = () => {
 
       // Buscar fornecedores por categoria
       const { data: categoryData, error: categoryError } = await supabase
-        .from('supplier_category_relations')
+        .from('app_supplier_category_relations')
         .select(`
           app_supplier_categories(name, color),
-          suppliers!inner(id)
+          app_suppliers!inner(id)
         `)
-        .eq('suppliers.deleted_at', null);
+        .eq('app_suppliers.deleted_at', null);
 
       if (categoryError) throw categoryError;
 

@@ -3,13 +3,13 @@ import { supabase } from '../../services/lib/supabase';
 import { toast } from 'sonner';
 import { ActivityLogger } from '../../utils/utils/activityLogger';
 import { cacheService, CACHE_KEYS, cacheUtils } from '../../services/cache';
-import type { 
-  Client, 
-  ClientFilters, 
-  PaginationParams, 
+import type {
+  Client,
+  ClientFilters,
+  PaginationParams,
   UseAsyncState,
   ApiResponse,
-  PaginatedResponse 
+  PaginatedResponse
 } from '../../types';
 
 // Client interaction interface
@@ -64,7 +64,7 @@ interface UseSupabaseClientsReturn extends UseAsyncState<Client[]> {
   totalPages: number;
   hasNextPage: boolean;
   hasPreviousPage: boolean;
-  
+
   // Actions
   fetchClients: (filters?: ClientFilters, pagination?: PaginationParams) => Promise<void>;
   fetchDeletedClients: () => Promise<void>;
@@ -73,16 +73,16 @@ interface UseSupabaseClientsReturn extends UseAsyncState<Client[]> {
   deleteClient: (id: string) => Promise<void>;
   restoreClient: (id: string) => Promise<void>;
   permanentDeleteClient: (id: string) => Promise<void>;
-  
+
   // Interactions
   addInteraction: (interaction: Omit<ClientInteraction, 'id' | 'created_at' | 'updated_at'>) => Promise<ClientInteraction>;
   getClientInteractions: (clientId: string) => Promise<ClientInteraction[]>;
-  
+
   // Client-Event relationships
   fetchClientEvents: (clientId: string) => Promise<ClientEvent[]>;
   linkClientToEvent: (clientId: string, eventId: string, relationshipType: string, notes?: string) => Promise<void>;
   unlinkClientFromEvent: (clientEventId: string) => Promise<void>;
-  
+
   // Utility functions
   getClientById: (id: string) => Client | undefined;
   getClientsByCity: (city: string) => Client[];
@@ -133,7 +133,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
   }, [clients]);
 
   const getClientsByCity = useCallback((city: string) => {
-    return clients.filter(client => 
+    return clients.filter(client =>
       client.cidade?.toLowerCase().includes(city.toLowerCase())
     );
   }, [clients]);
@@ -264,9 +264,9 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setTotalCount(count || 0);
       setCurrentPage(page);
       setTotalPages(Math.ceil((count || 0) / limit));
-      
+
       await calculateStats();
-      
+
       ActivityLogger.log('clients_loaded', 'Clientes carregados com sucesso', 'system', 'info', {
         count: data?.length || 0,
         filters
@@ -321,16 +321,16 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         .single();
 
       if (error) throw error;
-      
+
       setClients(prev => [data, ...prev]);
       await calculateStats();
-      
+
       toast.success('Cliente adicionado com sucesso!');
       ActivityLogger.log('client_added', 'Novo cliente adicionado', 'system', 'success', {
         clientId: data.id,
         name: data.name
       });
-      
+
       return data;
     } catch (err: any) {
       handleError(err, 'Erro ao adicionar cliente');
@@ -357,16 +357,16 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         .single();
 
       if (error) throw error;
-      
+
       setClients(prev => prev.map(client => client.id === id ? data : client));
       await calculateStats();
-      
+
       toast.success('Cliente atualizado com sucesso!');
       ActivityLogger.log('client_updated', 'Cliente atualizado', 'system', 'success', {
         clientId: id,
         name: data.name
       });
-      
+
       return data;
     } catch (err: any) {
       handleError(err, 'Erro ao atualizar cliente');
@@ -384,7 +384,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       const { data, error } = await supabase
         .from('app_clients')
-        .update({ 
+        .update({
           deleted_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -393,11 +393,11 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         .single();
 
       if (error) throw error;
-      
+
       setClients(prev => prev.filter(client => client.id !== id));
       setDeletedClients(prev => [data, ...prev]);
       await calculateStats();
-      
+
       toast.success('Cliente movido para a lixeira!');
       ActivityLogger.log('client_deleted', 'Cliente movido para lixeira', 'system', 'warning', {
         clientId: id,
@@ -419,7 +419,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       const { data, error } = await supabase
         .from('app_clients')
-        .update({ 
+        .update({
           deleted_at: null,
           updated_at: new Date().toISOString(),
         })
@@ -428,11 +428,11 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         .single();
 
       if (error) throw error;
-      
+
       setDeletedClients(prev => prev.filter(client => client.id !== id));
       setClients(prev => [data, ...prev]);
       await calculateStats();
-      
+
       toast.success('Cliente restaurado com sucesso!');
       ActivityLogger.log('client_restored', 'Cliente restaurado', 'system', 'success', {
         clientId: id,
@@ -458,10 +458,10 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         .eq('id', id);
 
       if (error) throw error;
-      
+
       setDeletedClients(prev => prev.filter(client => client.id !== id));
       await calculateStats();
-      
+
       toast.success('Cliente excluído permanentemente!');
       ActivityLogger.log('client_permanent_delete', 'Cliente excluído permanentemente', 'system', 'error', {
         clientId: id
@@ -481,19 +481,19 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('client_interactions')
+        .from('app_client_interactions')
         .insert([interaction])
         .select()
         .single();
 
       if (error) throw error;
-      
+
       toast.success('Interação adicionada com sucesso!');
       ActivityLogger.log('interaction_added', 'Nova interação adicionada', 'system', 'success', {
         clientId: interaction.client_id,
         type: interaction.type
       });
-      
+
       return data;
     } catch (err: any) {
       handleError(err, 'Erro ao adicionar interação');
@@ -507,7 +507,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
   const getClientInteractions = useCallback(async (clientId: string): Promise<ClientInteraction[]> => {
     try {
       const { data, error } = await supabase
-        .from('client_interactions')
+        .from('app_client_interactions')
         .select('*')
         .eq('client_id', clientId)
         .order('interaction_date', { ascending: false });
@@ -524,10 +524,10 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
   const fetchClientEvents = useCallback(async (clientId: string): Promise<ClientEvent[]> => {
     try {
       const { data, error } = await supabase
-        .from('client_events')
+        .from('app_client_events')
         .select(`
           *,
-          event:events(
+          event:app_events(
             id,
             title,
             description,
@@ -550,9 +550,9 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
   // Link client to event
   const linkClientToEvent = useCallback(async (
-    clientId: string, 
-    eventId: string, 
-    relationshipType: string, 
+    clientId: string,
+    eventId: string,
+    relationshipType: string,
     notes?: string
   ): Promise<void> => {
     try {
@@ -560,7 +560,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { error } = await supabase
-        .from('client_events')
+        .from('app_client_events')
         .insert([{
           client_id: clientId,
           event_id: eventId,
@@ -569,7 +569,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         }]);
 
       if (error) throw error;
-      
+
       toast.success('Evento vinculado com sucesso!');
       ActivityLogger.log('client_event_linked', 'Cliente vinculado ao evento', 'system', 'success', {
         clientId,
@@ -591,12 +591,12 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { error } = await supabase
-        .from('client_events')
+        .from('app_client_events')
         .delete()
         .eq('id', clientEventId);
 
       if (error) throw error;
-      
+
       toast.success('Evento desvinculado com sucesso!');
       ActivityLogger.log('client_event_unlinked', 'Cliente desvinculado do evento', 'system', 'success', {
         clientEventId
@@ -625,11 +625,11 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     totalPages,
     hasNextPage,
     hasPreviousPage,
-    
+
     // State
     loading,
     error,
-    
+
     // Actions
     fetchClients,
     fetchDeletedClients,
@@ -639,16 +639,16 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     restoreClient,
     permanentDeleteClient,
     refetch,
-    
+
     // Interactions
     addInteraction,
     getClientInteractions,
-    
+
     // Client-Event relationships
     fetchClientEvents,
     linkClientToEvent,
     unlinkClientFromEvent,
-    
+
     // Utility functions
     getClientById,
     getClientsByCity,
