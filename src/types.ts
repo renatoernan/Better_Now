@@ -5,7 +5,7 @@ export interface EventType {
   name: string;
   description?: string;
   color: string;
-  icon: string;
+  icon?: string;
   active: boolean;
   created_at: string;
   updated_at: string;

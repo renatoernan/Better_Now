@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/lib/supabase';
-import { 
-  Supplier, 
-  SupplierWithCategories, 
+import {
+  Supplier,
+  SupplierWithCategories,
   SupplierWithDetails,
-  SupplierFormData, 
+  SupplierFormData,
   SupplierSearchParams,
   SupplierStats,
   SupplierApiResponse,
@@ -36,19 +36,19 @@ export const useSuppliers = () => {
       // Aplicar filtros
       if (params?.filters) {
         const { filters } = params;
-        
+
         if (filters.status) {
           query = query.eq('status', filters.status);
         }
-        
+
         if (filters.city) {
           query = query.eq('city', filters.city);
         }
-        
+
         if (filters.state) {
           query = query.eq('state', filters.state);
         }
-        
+
         if (filters.min_rating) {
           query = query.gte('rating', filters.min_rating);
         }
@@ -326,8 +326,15 @@ export const useSuppliers = () => {
       // Agrupar por categoria
       const categoryMap = new Map();
       categoryData.forEach(item => {
-        const categoryName = item.supplier_categories.name;
-        const categoryColor = item.supplier_categories.color;
+        // Assegurar que estamos acessando os dados corretamente do retorno do Supabase
+        const categories = Array.isArray(item.app_supplier_categories)
+          ? item.app_supplier_categories[0]
+          : item.app_supplier_categories;
+
+        if (!categories) return;
+
+        const categoryName = categories.name;
+        const categoryColor = categories.color;
         if (categoryMap.has(categoryName)) {
           categoryMap.set(categoryName, {
             ...categoryMap.get(categoryName),
@@ -351,7 +358,9 @@ export const useSuppliers = () => {
         const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
         return {
-          supplier_name: doc.suppliers.name,
+          supplier_name: Array.isArray(doc.app_suppliers)
+            ? (doc.app_suppliers as any[])[0]?.name
+            : (doc.app_suppliers as any)?.name,
           document_title: doc.title,
           expiry_date: doc.expiry_date,
           days_until_expiry: daysUntilExpiry

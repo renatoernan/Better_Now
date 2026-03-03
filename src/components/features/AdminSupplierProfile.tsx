@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Edit, 
-  Star, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Globe, 
-  Building, 
+import {
+  ArrowLeft,
+  Edit,
+  Star,
+  MapPin,
+  Phone,
+  Mail,
+  Globe,
+  Building,
   CreditCard,
   FileText,
   Calendar,
@@ -36,12 +36,12 @@ type TabType = 'overview' | 'documents' | 'services' | 'evaluations' | 'history'
 const AdminSupplierProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
+
   const { fetchSupplierById, updateSupplierStatus, loading } = useSuppliers();
   const { documents, fetchDocumentsBySupplier, uploadDocument, deleteDocument } = useSupplierDocuments();
   const { services, fetchServicesBySupplier } = useSupplierServices();
   const { evaluations, fetchEvaluationsBySupplier, fetchEvaluationStats } = useSupplierEvaluations();
-  
+
   const [supplier, setSupplier] = useState<SupplierWithDetails | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [evaluationStats, setEvaluationStats] = useState<any>(null);
@@ -55,12 +55,12 @@ const AdminSupplierProfile: React.FC = () => {
 
   const loadSupplierData = async () => {
     if (!id) return;
-    
+
     try {
       const supplierData = await fetchSupplierById(id);
       if (supplierData) {
         setSupplier(supplierData);
-        
+
         // Carregar dados relacionados
         await Promise.all([
           fetchDocumentsBySupplier(id),
@@ -77,7 +77,7 @@ const AdminSupplierProfile: React.FC = () => {
 
   const loadEvaluationStats = async (supplierId: string) => {
     try {
-      const stats = await fetchEvaluationStats({ supplier_id: supplierId });
+      const stats = await fetchEvaluationStats(supplierId);
       setEvaluationStats(stats);
     } catch (error) {
       console.error('Erro ao carregar estatísticas:', error);
@@ -86,7 +86,7 @@ const AdminSupplierProfile: React.FC = () => {
 
   const handleStatusChange = async (newStatus: 'active' | 'inactive' | 'blocked') => {
     if (!supplier) return;
-    
+
     try {
       await updateSupplierStatus(supplier.id, newStatus);
       setSupplier(prev => prev ? { ...prev, status: newStatus } : null);
@@ -105,10 +105,11 @@ const AdminSupplierProfile: React.FC = () => {
       await uploadDocument({
         supplier_id: supplier.id,
         title: file.name,
-        type: 'certificate',
+        document_type: 'certificate',
+        is_required: false,
         file
       });
-      
+
       await fetchDocumentsBySupplier(supplier.id);
       toast.success('Documento enviado com sucesso!');
     } catch (error) {
@@ -196,7 +197,7 @@ const AdminSupplierProfile: React.FC = () => {
             )}
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
             {getStatusIcon(supplier.status)}
@@ -210,7 +211,7 @@ const AdminSupplierProfile: React.FC = () => {
               <option value="blocked">Bloqueado</option>
             </select>
           </div>
-          
+
           <button
             onClick={() => navigate(`/admin/fornecedores/${supplier.id}/editar`)}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -249,9 +250,9 @@ const AdminSupplierProfile: React.FC = () => {
                   {supplier.website && (
                     <div className="flex items-center text-sm">
                       <Globe className="h-4 w-4 text-gray-400 mr-2" />
-                      <a 
-                        href={supplier.website} 
-                        target="_blank" 
+                      <a
+                        href={supplier.website}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:text-blue-700"
                       >
@@ -270,9 +271,8 @@ const AdminSupplierProfile: React.FC = () => {
                     <div>
                       <div>{supplier.address}</div>
                       <div className="text-gray-500">
-                        {supplier.city}, {supplier.state} - {supplier.zip_code}
+                        {supplier.city}, {supplier.state} - {supplier.cep}
                       </div>
-                      <div className="text-gray-500">{supplier.country}</div>
                     </div>
                   </div>
                 </div>
@@ -280,20 +280,20 @@ const AdminSupplierProfile: React.FC = () => {
             </div>
 
             {/* Categories */}
-            {supplier.categories && supplier.categories.length > 0 && (
+            {supplier.supplier_category_relations && supplier.supplier_category_relations.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-sm font-medium text-gray-500 mb-3">Categorias</h3>
                 <div className="flex flex-wrap gap-2">
-                  {supplier.categories.map((category) => (
-                    <span 
-                      key={category.id}
+                  {supplier.supplier_category_relations.map((relation) => (
+                    <span
+                      key={relation.supplier_categories.id}
                       className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
                     >
-                      <div 
+                      <div
                         className="w-2 h-2 rounded-full mr-2"
-                        style={{ backgroundColor: category.color }}
+                        style={{ backgroundColor: relation.supplier_categories.color }}
                       />
-                      {category.name}
+                      {relation.supplier_categories.name}
                     </span>
                   ))}
                 </div>
@@ -328,7 +328,7 @@ const AdminSupplierProfile: React.FC = () => {
                   <span className="text-sm font-medium">{documents.length}</span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {documents.filter(d => new Date(d.expiry_date) < new Date()).length} vencido{documents.filter(d => new Date(d.expiry_date) < new Date()).length !== 1 ? 's' : ''}
+                  {documents.filter(d => d.expiry_date && new Date(d.expiry_date) < new Date()).length} vencido{documents.filter(d => d.expiry_date && new Date(d.expiry_date) < new Date()).length !== 1 ? 's' : ''}
                 </div>
               </div>
 
@@ -366,14 +366,14 @@ const AdminSupplierProfile: React.FC = () => {
                   <span>{supplier.bank_name}</span>
                 </div>
               )}
-              {supplier.bank_agency && (
+              {supplier.agency && (
                 <div className="text-sm">
-                  <span className="text-gray-500">Agência:</span> {supplier.bank_agency}
+                  <span className="text-gray-500">Agência:</span> {supplier.agency}
                 </div>
               )}
-              {supplier.bank_account && (
+              {supplier.account && (
                 <div className="text-sm">
-                  <span className="text-gray-500">Conta:</span> {supplier.bank_account}
+                  <span className="text-gray-500">Conta:</span> {supplier.account}
                 </div>
               )}
               {supplier.pix_key && (
@@ -401,16 +401,15 @@ const AdminSupplierProfile: React.FC = () => {
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
-              
+
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as TabType)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                    isActive
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${isActive
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                 >
                   <Icon className="h-4 w-4 mr-2" />
                   {tab.label}
@@ -429,7 +428,7 @@ const AdminSupplierProfile: React.FC = () => {
                     <div>
                       <p className="text-sm font-medium text-blue-900">Serviços Ativos</p>
                       <p className="text-2xl font-bold text-blue-900">
-                        {services.filter(s => s.status === 'active').length}
+                        {services.filter(s => s.status === 'in_progress' || s.status === 'scheduled').length}
                       </p>
                     </div>
                     <Users className="h-8 w-8 text-blue-600" />
@@ -473,17 +472,16 @@ const AdminSupplierProfile: React.FC = () => {
                           {new Date(service.service_date).toLocaleDateString('pt-BR')}
                         </p>
                       </div>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        service.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        service.status === 'active' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${service.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        (service.status === 'in_progress' || service.status === 'scheduled') ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
                         {service.status === 'completed' ? 'Concluído' :
-                         service.status === 'active' ? 'Ativo' : 'Cancelado'}
+                          (service.status === 'in_progress' || service.status === 'scheduled') ? 'Ativo' : 'Cancelado'}
                       </span>
                     </div>
                   ))}
-                  
+
                   {services.length === 0 && (
                     <div className="text-center py-8 text-gray-500">
                       <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -528,34 +526,32 @@ const AdminSupplierProfile: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {documents.map((document) => {
-                  const isExpired = new Date(document.expiry_date) < new Date();
-                  const isExpiringSoon = new Date(document.expiry_date) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-                  
+                  const isExpired = document.expiry_date && new Date(document.expiry_date) < new Date();
+                  const isExpiringSoon = document.expiry_date && new Date(document.expiry_date) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
                   return (
-                    <div 
-                      key={document.id} 
-                      className={`border rounded-lg p-4 ${
-                        isExpired ? 'border-red-200 bg-red-50' :
+                    <div
+                      key={document.id}
+                      className={`border rounded-lg p-4 ${isExpired ? 'border-red-200 bg-red-50' :
                         isExpiringSoon ? 'border-yellow-200 bg-yellow-50' :
-                        'border-gray-200 bg-white'
-                      }`}
+                          'border-gray-200 bg-white'
+                        }`}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center">
-                          <FileText className={`h-5 w-5 mr-2 ${
-                            isExpired ? 'text-red-500' :
+                          <FileText className={`h-5 w-5 mr-2 ${isExpired ? 'text-red-500' :
                             isExpiringSoon ? 'text-yellow-500' :
-                            'text-gray-500'
-                          }`} />
+                              'text-gray-500'
+                            }`} />
                           <div>
                             <h4 className="font-medium text-gray-900">{document.title}</h4>
-                            <p className="text-sm text-gray-500">{document.type}</p>
+                            <p className="text-sm text-gray-500">{document.document_type}</p>
                           </div>
                         </div>
-                        
+
                         <div className="flex space-x-1">
                           <button
-                            onClick={() => window.open(document.file_url, '_blank')}
+                            onClick={() => window.open(document.file_path, '_blank')}
                             className="p-1 text-gray-400 hover:text-gray-600"
                             title="Visualizar"
                           >
@@ -570,19 +566,18 @@ const AdminSupplierProfile: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                      
+
                       <div className="text-sm">
-                        <p className={`font-medium ${
-                          isExpired ? 'text-red-600' :
+                        <p className={`font-medium ${isExpired ? 'text-red-600' :
                           isExpiringSoon ? 'text-yellow-600' :
-                          'text-gray-600'
-                        }`}>
+                            'text-gray-600'
+                          }`}>
                           {isExpired ? 'Vencido' :
-                           isExpiringSoon ? 'Vence em breve' :
-                           'Válido'}
+                            isExpiringSoon ? 'Vence em breve' :
+                              'Válido'}
                         </p>
                         <p className="text-gray-500">
-                          Vencimento: {new Date(document.expiry_date).toLocaleDateString('pt-BR')}
+                          Vencimento: {document.expiry_date ? new Date(document.expiry_date).toLocaleDateString('pt-BR') : 'N/A'}
                         </p>
                       </div>
                     </div>
@@ -621,24 +616,23 @@ const AdminSupplierProfile: React.FC = () => {
                             <span className="font-medium">Data:</span> {new Date(service.service_date).toLocaleDateString('pt-BR')}
                           </div>
                           <div>
-                            <span className="font-medium">Valor:</span> R$ {service.cost?.toFixed(2) || 'N/A'}
+                            <span className="font-medium">Valor:</span> R$ {service.value?.toFixed(2) || '0.00'}
                           </div>
                           <div>
-                            <span className="font-medium">Evento:</span> {service.event_id || 'N/A'}
+                            <span className="font-medium">Evento:</span> {(service as any).app_events?.name || 'N/A'}
                           </div>
                         </div>
                         {service.notes && (
                           <p className="mt-2 text-sm text-gray-600">{service.notes}</p>
                         )}
                       </div>
-                      
-                      <span className={`ml-4 px-2 py-1 text-xs font-medium rounded-full ${
-                        service.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        service.status === 'active' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
+
+                      <span className={`ml-4 px-2 py-1 text-xs font-medium rounded-full ${service.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        (service.status === 'in_progress' || service.status === 'scheduled') ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
                         {service.status === 'completed' ? 'Concluído' :
-                         service.status === 'active' ? 'Ativo' : 'Cancelado'}
+                          (service.status === 'in_progress' || service.status === 'scheduled') ? 'Ativo' : 'Cancelado'}
                       </span>
                     </div>
                   </div>
@@ -704,14 +698,14 @@ const AdminSupplierProfile: React.FC = () => {
                           <span className="font-medium">{evaluation.overall_rating.toFixed(1)}</span>
                         </div>
                         <p className="text-sm text-gray-500">
-                          {new Date(evaluation.evaluation_date).toLocaleDateString('pt-BR')}
+                          {evaluation.created_at ? new Date(evaluation.created_at).toLocaleDateString('pt-BR') : 'N/A'}
                         </p>
                       </div>
                       <div className="text-right text-sm text-gray-500">
                         Evento: {evaluation.event_id || 'N/A'}
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3 text-sm">
                       <div>
                         <span className="text-gray-500">Qualidade:</span> {evaluation.quality_rating}
@@ -726,7 +720,7 @@ const AdminSupplierProfile: React.FC = () => {
                         <span className="text-gray-500">Custo-Benefício:</span> {evaluation.cost_benefit_rating}
                       </div>
                     </div>
-                    
+
                     {evaluation.comments && (
                       <p className="text-sm text-gray-700 bg-gray-50 rounded p-3">
                         {evaluation.comments}
@@ -749,7 +743,7 @@ const AdminSupplierProfile: React.FC = () => {
           {activeTab === 'history' && (
             <div className="space-y-6">
               <h3 className="text-lg font-medium text-gray-900">Histórico de Atividades</h3>
-              
+
               <div className="space-y-4">
                 <div className="border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center justify-between">

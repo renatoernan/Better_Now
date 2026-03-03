@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -159,16 +159,6 @@ const AdminLogin: React.FC = () => {
               )}
             </button>
 
-            {/* Botão Provisório para Acesso Admin */}
-            <button
-              type="button"
-              onClick={() => navigate('/admin/dashboard?temp=true')}
-              className="w-full mt-3 bg-transparent border-2 border-orange-500 text-orange-600 hover:bg-orange-50 font-semibold py-3 px-4 rounded-lg transition-colors focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:outline-none flex items-center justify-center gap-2"
-              aria-label="Acesso provisório ao painel administrativo - apenas para desenvolvimento"
-            >
-              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-              🚧 Acesso Provisório Admin
-            </button>
           </form>
 
           {/* Informações */}
@@ -176,14 +166,6 @@ const AdminLogin: React.FC = () => {
             <p className="text-xs text-gray-600 text-center">
               <strong>Acesso Restrito:</strong><br />
               Apenas usuários cadastrados como administradores podem acessar esta área.
-            </p>
-          </div>
-
-          {/* Aviso do Botão Provisório */}
-          <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-            <p className="text-xs text-orange-700 text-center flex items-center justify-center gap-1">
-              <AlertTriangle className="h-3 w-3" />
-              <strong>Botão Provisório:</strong> O acesso direto será removido em produção.
             </p>
           </div>
         </div>

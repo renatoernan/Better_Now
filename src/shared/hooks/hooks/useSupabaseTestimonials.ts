@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../services/lib/supabase';
 import { toast } from 'sonner';
 import { ActivityLogger } from '../../utils/utils/activityLogger';
-import type { 
-  Testimonial as BaseTestimonial, 
+import type {
+  Testimonial as BaseTestimonial,
   TestimonialFormData,
-  PaginationParams, 
+  PaginationParams,
   UseAsyncState,
   ApiResponse,
-  PaginatedResponse 
+  PaginatedResponse
 } from '../../types';
 
 export interface LocalTestimonial extends BaseTestimonial {
@@ -19,8 +19,11 @@ export interface LocalTestimonial extends BaseTestimonial {
 
 export interface LocalTestimonialFormData {
   name: string;
-  whatsapp: string;
+  email?: string;
+  whatsapp?: string;
+  event_name?: string;
   event_type: string;
+  rating?: number;
   testimonial_text: string;
 }
 
@@ -36,7 +39,7 @@ interface UseSupabaseTestimonialsReturn extends UseAsyncState<LocalTestimonial[]
   totalPages: number;
   hasNextPage: boolean;
   hasPreviousPage: boolean;
-  
+
   // Actions
   fetchAllTestimonials: (pagination?: PaginationParams) => Promise<void>;
   fetchApprovedTestimonials: (pagination?: PaginationParams) => Promise<void>;
@@ -50,7 +53,7 @@ interface UseSupabaseTestimonialsReturn extends UseAsyncState<LocalTestimonial[]
   restoreTestimonial: (id: string) => Promise<void>;
   permanentDeleteTestimonial: (id: string) => Promise<void>;
   toggleFeatured: (id: string) => Promise<void>;
-  
+
   // Utility functions
   getTestimonialById: (id: string) => LocalTestimonial | undefined;
   getTestimonialsByStatus: (status: 'pending' | 'approved' | 'rejected') => LocalTestimonial[];
@@ -72,8 +75,8 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
   // Memoized computed values
   const hasNextPage = useMemo(() => currentPage < totalPages, [currentPage, totalPages]);
   const hasPreviousPage = useMemo(() => currentPage > 1, [currentPage]);
-  const featuredTestimonials = useMemo(() => 
-    approvedTestimonials.filter(t => t.is_featured), 
+  const featuredTestimonials = useMemo(() =>
+    approvedTestimonials.filter(t => t.is_featured),
     [approvedTestimonials]
   );
 
@@ -88,7 +91,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
 
   const searchTestimonials = useCallback((query: string) => {
     const searchTerm = query.toLowerCase();
-    return testimonials.filter(testimonial => 
+    return testimonials.filter(testimonial =>
       testimonial.name.toLowerCase().includes(searchTerm) ||
       testimonial.testimonial_text.toLowerCase().includes(searchTerm) ||
       testimonial.event_type.toLowerCase().includes(searchTerm)
@@ -246,6 +249,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
         .insert([
           {
             ...testimonialData,
+            content: testimonialData.testimonial_text, // Manter compatibilidade com coluna legada
             status: 'pending'
           }
         ])
@@ -257,7 +261,6 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       setPendingTestimonials(prev => [data, ...prev]);
       setTestimonials(prev => [data, ...prev]);
 
-      toast.success('Depoimento enviado com sucesso! Aguarde a aprovação.');
       ActivityLogger.log('testimonial_created', 'Novo depoimento criado', 'system', 'success', {
         testimonialId: data.id,
         name: data.name
@@ -316,7 +319,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       setError(null);
 
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       const { data, error } = await supabase
         .from('app_testimonials')
         .update({
@@ -355,7 +358,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
       setError(null);
 
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       const { data, error } = await supabase
         .from('app_testimonials')
         .update({
@@ -394,7 +397,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
 
       const { data, error } = await supabase
         .from('app_testimonials')
-        .update({ 
+        .update({
           deleted_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
@@ -428,7 +431,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
 
       const { data, error } = await supabase
         .from('app_testimonials')
-        .update({ 
+        .update({
           deleted_at: null,
           updated_at: new Date().toISOString()
         })
@@ -440,7 +443,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
 
       setDeletedTestimonials(prev => prev.filter(t => t.id !== id));
       setTestimonials(prev => [data, ...prev]);
-      
+
       if (data.status === 'approved') {
         setApprovedTestimonials(prev => [data, ...prev]);
       } else if (data.status === 'pending') {
@@ -538,11 +541,11 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
     totalPages,
     hasNextPage,
     hasPreviousPage,
-    
+
     // State
     loading,
     error,
-    
+
     // Actions
     fetchAllTestimonials,
     fetchApprovedTestimonials,
@@ -557,7 +560,7 @@ export const useSupabaseTestimonials = (): UseSupabaseTestimonialsReturn => {
     permanentDeleteTestimonial,
     toggleFeatured,
     refetch,
-    
+
     // Utility functions
     getTestimonialById,
     getTestimonialsByStatus,

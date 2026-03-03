@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { 
-  ArrowLeft, 
-  ArrowRight, 
-  Check, 
-  Building, 
-  User, 
-  FileText, 
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Building,
+  User,
+  FileText,
   MapPin,
   Phone,
   Mail,
@@ -31,29 +31,29 @@ const supplierSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   trade_name: z.string().optional(),
   document_number: z.string().min(11, 'Documento deve ter pelo menos 11 caracteres'),
-  document_type: z.enum(['cpf', 'cnpj']),
-  
+  document_type: z.enum(['CPF', 'CNPJ']),
+
   // Contato
   email: z.string().email('Email inválido'),
   phone: z.string().min(10, 'Telefone deve ter pelo menos 10 dígitos'),
   website: z.string().url('URL inválida').optional().or(z.literal('')),
-  
+
   // Endereço
   address: z.string().min(5, 'Endereço deve ter pelo menos 5 caracteres'),
   city: z.string().min(2, 'Cidade deve ter pelo menos 2 caracteres'),
-  state: z.string().min(2, 'Estado deve ter pelo menos 2 caracteres'),
+  state: z.string().length(2, 'Estado deve ter 2 caracteres'),
   zip_code: z.string().min(8, 'CEP deve ter 8 dígitos'),
-  country: z.string().default('Brasil'),
-  
+  country: z.string().optional(),
+
   // Dados bancários
   bank_name: z.string().optional(),
   bank_agency: z.string().optional(),
   bank_account: z.string().optional(),
   pix_key: z.string().optional(),
-  
+
   // Observações
   notes: z.string().optional(),
-  
+
   // Categorias
   categories: z.array(z.string()).min(1, 'Selecione pelo menos uma categoria')
 });
@@ -73,7 +73,7 @@ const AdminSupplierRegistration: React.FC = () => {
   const navigate = useNavigate();
   const { createSupplier, loading } = useSuppliers();
   const { categories, fetchCategories } = useSupplierCategories();
-  
+
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -84,11 +84,11 @@ const AdminSupplierRegistration: React.FC = () => {
     setValue,
     trigger,
     formState: { errors, isValid }
-  } = useForm<FormData>({
+  } = useForm<any>({
     resolver: zodResolver(supplierSchema),
     mode: 'onChange',
     defaultValues: {
-      document_type: 'cnpj',
+      document_type: 'CNPJ',
       country: 'Brasil',
       categories: []
     }
@@ -98,7 +98,7 @@ const AdminSupplierRegistration: React.FC = () => {
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [fetchCategories]);
 
   // Buscar endereço por CEP
   const fetchAddressByCEP = async (cep: string) => {
@@ -106,7 +106,7 @@ const AdminSupplierRegistration: React.FC = () => {
       try {
         const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
         const data = await response.json();
-        
+
         if (!data.erro) {
           setValue('address', data.logradouro || '');
           setValue('city', data.localidade || '');
@@ -124,7 +124,7 @@ const AdminSupplierRegistration: React.FC = () => {
   const nextStep = async () => {
     const fieldsToValidate = getFieldsForStep(currentStep);
     const isStepValid = await trigger(fieldsToValidate);
-    
+
     if (isStepValid) {
       setCurrentStep(prev => Math.min(prev + 1, steps.length));
     }
@@ -151,11 +151,13 @@ const AdminSupplierRegistration: React.FC = () => {
     }
   };
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: any) => {
     setIsSubmitting(true);
     try {
-      const supplierData: SupplierFormData = {
-        ...data,
+      const { zip_code, ...formData } = data;
+      const supplierData: any = {
+        ...formData,
+        cep: zip_code,
         status: 'active'
       };
 
@@ -187,15 +189,14 @@ const AdminSupplierRegistration: React.FC = () => {
                     <input
                       {...field}
                       type="text"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.name ? 'border-red-300' : 'border-gray-300'
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.name ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       placeholder="Nome completo ou razão social"
                     />
                   )}
                 />
                 {errors.name && (
-                  <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+                  <p className="mt-1 text-sm text-red-600">{(errors.name as any)?.message}</p>
                 )}
               </div>
 
@@ -231,8 +232,8 @@ const AdminSupplierRegistration: React.FC = () => {
                       {...field}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="cnpj">CNPJ</option>
-                      <option value="cpf">CPF</option>
+                      <option value="CNPJ">CNPJ</option>
+                      <option value="CPF">CPF</option>
                     </select>
                   )}
                 />
@@ -240,7 +241,7 @@ const AdminSupplierRegistration: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {watchedValues.document_type === 'cnpj' ? 'CNPJ' : 'CPF'} *
+                  {watchedValues.document_type === 'CNPJ' ? 'CNPJ' : 'CPF'} *
                 </label>
                 <Controller
                   name="document_number"
@@ -249,15 +250,14 @@ const AdminSupplierRegistration: React.FC = () => {
                     <input
                       {...field}
                       type="text"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.document_number ? 'border-red-300' : 'border-gray-300'
-                      }`}
-                      placeholder={watchedValues.document_type === 'cnpj' ? '00.000.000/0000-00' : '000.000.000-00'}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.document_number ? 'border-red-300' : 'border-gray-300'
+                        }`}
+                      placeholder={watchedValues.document_type === 'CNPJ' ? '00.000.000/0000-00' : '000.000.000-00'}
                     />
                   )}
                 />
                 {errors.document_number && (
-                  <p className="mt-1 text-sm text-red-600">{errors.document_number.message}</p>
+                  <p className="mt-1 text-sm text-red-600">{(errors.document_number as any)?.message}</p>
                 )}
               </div>
             </div>
@@ -279,15 +279,14 @@ const AdminSupplierRegistration: React.FC = () => {
                     <input
                       {...field}
                       type="email"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.email ? 'border-red-300' : 'border-gray-300'
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.email ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       placeholder="email@exemplo.com"
                     />
                   )}
                 />
                 {errors.email && (
-                  <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                  <p className="mt-1 text-sm text-red-600">{(errors.email as any)?.message}</p>
                 )}
               </div>
 
@@ -302,15 +301,14 @@ const AdminSupplierRegistration: React.FC = () => {
                     <input
                       {...field}
                       type="tel"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.phone ? 'border-red-300' : 'border-gray-300'
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.phone ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       placeholder="(11) 99999-9999"
                     />
                   )}
                 />
                 {errors.phone && (
-                  <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
+                  <p className="mt-1 text-sm text-red-600">{(errors.phone as any)?.message}</p>
                 )}
               </div>
             </div>
@@ -326,15 +324,14 @@ const AdminSupplierRegistration: React.FC = () => {
                   <input
                     {...field}
                     type="url"
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.website ? 'border-red-300' : 'border-gray-300'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.website ? 'border-red-300' : 'border-gray-300'
+                      }`}
                     placeholder="https://www.exemplo.com"
                   />
                 )}
               />
               {errors.website && (
-                <p className="mt-1 text-sm text-red-600">{errors.website.message}</p>
+                <p className="mt-1 text-sm text-red-600">{(errors.website as any)?.message}</p>
               )}
             </div>
           </div>
@@ -355,9 +352,8 @@ const AdminSupplierRegistration: React.FC = () => {
                     <input
                       {...field}
                       type="text"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.zip_code ? 'border-red-300' : 'border-gray-300'
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.zip_code ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       placeholder="00000-000"
                       onBlur={(e) => {
                         field.onBlur();
@@ -370,7 +366,7 @@ const AdminSupplierRegistration: React.FC = () => {
                   )}
                 />
                 {errors.zip_code && (
-                  <p className="mt-1 text-sm text-red-600">{errors.zip_code.message}</p>
+                  <p className="mt-1 text-sm text-red-600">{(errors.zip_code as any)?.message}</p>
                 )}
               </div>
 
@@ -385,15 +381,14 @@ const AdminSupplierRegistration: React.FC = () => {
                     <input
                       {...field}
                       type="text"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.address ? 'border-red-300' : 'border-gray-300'
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.address ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       placeholder="Rua, número, complemento"
                     />
                   )}
                 />
                 {errors.address && (
-                  <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>
+                  <p className="mt-1 text-sm text-red-600">{(errors.address as any)?.message}</p>
                 )}
               </div>
             </div>
@@ -410,21 +405,20 @@ const AdminSupplierRegistration: React.FC = () => {
                     <input
                       {...field}
                       type="text"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.city ? 'border-red-300' : 'border-gray-300'
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.city ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       placeholder="Cidade"
                     />
                   )}
                 />
                 {errors.city && (
-                  <p className="mt-1 text-sm text-red-600">{errors.city.message}</p>
+                  <p className="mt-1 text-sm text-red-600">{(errors.city as any)?.message}</p>
                 )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Estado *
+                  Estado (UF) *
                 </label>
                 <Controller
                   name="state"
@@ -433,15 +427,14 @@ const AdminSupplierRegistration: React.FC = () => {
                     <input
                       {...field}
                       type="text"
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.state ? 'border-red-300' : 'border-gray-300'
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.state ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       placeholder="SP"
                     />
                   )}
                 />
                 {errors.state && (
-                  <p className="mt-1 text-sm text-red-600">{errors.state.message}</p>
+                  <p className="mt-1 text-sm text-red-600">{(errors.state as any)?.message}</p>
                 )}
               </div>
 
@@ -569,13 +562,13 @@ const AdminSupplierRegistration: React.FC = () => {
                             if (e.target.checked) {
                               field.onChange([...field.value, category.id]);
                             } else {
-                              field.onChange(field.value.filter(id => id !== category.id));
+                              field.onChange(field.value.filter((id: string) => id !== category.id));
                             }
                           }}
                           className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
                         <div className="flex items-center">
-                          <div 
+                          <div
                             className="w-3 h-3 rounded-full mr-2"
                             style={{ backgroundColor: category.color }}
                           />
@@ -587,7 +580,7 @@ const AdminSupplierRegistration: React.FC = () => {
                 ))}
               </div>
               {errors.categories && (
-                <p className="mt-2 text-sm text-red-600">{errors.categories.message}</p>
+                <p className="mt-2 text-sm text-red-600">{(errors.categories as any).message}</p>
               )}
             </div>
 
@@ -616,7 +609,7 @@ const AdminSupplierRegistration: React.FC = () => {
           <div className="space-y-6">
             <div className="bg-gray-50 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Revisão dos Dados</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h4 className="font-medium text-gray-900 mb-2">Dados Básicos</h4>
@@ -652,14 +645,14 @@ const AdminSupplierRegistration: React.FC = () => {
                 <div>
                   <h4 className="font-medium text-gray-900 mb-2">Categorias</h4>
                   <div className="flex flex-wrap gap-2">
-                    {watchedValues.categories.map(categoryId => {
+                    {watchedValues.categories.map((categoryId: string) => {
                       const category = categories.find(c => c.id === categoryId);
                       return category ? (
-                        <span 
+                        <span
                           key={categoryId}
                           className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                         >
-                          <div 
+                          <div
                             className="w-2 h-2 rounded-full mr-1"
                             style={{ backgroundColor: category.color }}
                           />
@@ -704,35 +697,32 @@ const AdminSupplierRegistration: React.FC = () => {
             const Icon = step.icon;
             const isActive = currentStep === step.id;
             const isCompleted = currentStep > step.id;
-            
+
             return (
               <div key={step.id} className="flex items-center">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                  isCompleted 
-                    ? 'bg-green-500 border-green-500 text-white' 
-                    : isActive 
-                    ? 'bg-blue-500 border-blue-500 text-white' 
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${isCompleted
+                  ? 'bg-green-500 border-green-500 text-white'
+                  : isActive
+                    ? 'bg-blue-500 border-blue-500 text-white'
                     : 'bg-white border-gray-300 text-gray-400'
-                }`}>
+                  }`}>
                   {isCompleted ? (
                     <Check className="h-5 w-5" />
                   ) : (
                     <Icon className="h-5 w-5" />
                   )}
                 </div>
-                
+
                 <div className="ml-3 hidden sm:block">
-                  <p className={`text-sm font-medium ${
-                    isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-500'
-                  }`}>
+                  <p className={`text-sm font-medium ${isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-500'
+                    }`}>
                     {step.title}
                   </p>
                 </div>
-                
+
                 {index < steps.length - 1 && (
-                  <div className={`hidden sm:block w-12 h-0.5 ml-4 ${
-                    isCompleted ? 'bg-green-500' : 'bg-gray-300'
-                  }`} />
+                  <div className={`hidden sm:block w-12 h-0.5 ml-4 ${isCompleted ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
                 )}
               </div>
             );
@@ -744,7 +734,7 @@ const AdminSupplierRegistration: React.FC = () => {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <form onSubmit={handleSubmit(onSubmit)}>
           {renderStepContent()}
-          
+
           {/* Navigation Buttons */}
           <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
             <button
@@ -756,7 +746,7 @@ const AdminSupplierRegistration: React.FC = () => {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Anterior
             </button>
-            
+
             {currentStep < steps.length ? (
               <button
                 type="button"
@@ -769,7 +759,7 @@ const AdminSupplierRegistration: React.FC = () => {
             ) : (
               <button
                 type="submit"
-                disabled={!isValid || isSubmitting}
+                disabled={isSubmitting}
                 className="flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (

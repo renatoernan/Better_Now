@@ -6,7 +6,7 @@ import viteImagemin from 'vite-plugin-imagemin';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  
+
   return {
     plugins: [
       react(),
@@ -23,9 +23,9 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
-    define: {
+    /* define: {
       'process.env': env
-    },
+    }, */
     build: {
       rollupOptions: {
         output: {
@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
             'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
             'ui-vendor': ['lucide-react', 'sonner', 'framer-motion'],
             'supabase-vendor': ['@supabase/supabase-js'],
-            
+
             // Feature chunks
             'admin-features': [
               './src/components/features/AdminDashboard',

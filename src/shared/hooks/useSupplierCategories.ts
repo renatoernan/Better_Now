@@ -4,6 +4,7 @@ import { SupplierCategory, CategoryFormData } from '../types/suppliers';
 
 export const useSupplierCategories = () => {
   const [categories, setCategories] = useState<SupplierCategory[]>([]);
+  const [categoriesWithCounts, setCategoriesWithCounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,7 +136,7 @@ export const useSupplierCategories = () => {
   }, [fetchCategories]);
 
   // Buscar categorias com contagem de fornecedores
-  const fetchCategoriesWithCount = useCallback(async () => {
+  const fetchCategoriesWithCounts = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -146,7 +147,7 @@ export const useSupplierCategories = () => {
           *,
           supplier_category_relations(
             supplier_id,
-            suppliers!inner(id, deleted_at)
+            app_suppliers!inner(id, deleted_at)
           )
         `)
         .order('name', { ascending: true });
@@ -154,14 +155,15 @@ export const useSupplierCategories = () => {
       if (fetchError) throw fetchError;
 
       // Processar dados para incluir contagem (apenas fornecedores não deletados)
-      const categoriesWithCount = (data || []).map(category => ({
+      const dataWithCount = (data || []).map(category => ({
         ...category,
-        supplier_count: category.supplier_category_relations?.filter(
-          (relation: any) => relation.suppliers?.deleted_at === null
+        supplier_count: (category as any).supplier_category_relations?.filter(
+          (relation: any) => relation.app_suppliers?.deleted_at === null
         ).length || 0
       }));
 
-      setCategories(categoriesWithCount);
+      setCategoriesWithCounts(dataWithCount);
+      setCategories(dataWithCount);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao buscar categorias com contagem');
     } finally {
@@ -192,7 +194,7 @@ export const useSupplierCategories = () => {
       if (error) throw error;
 
       return data?.map(relation => ({
-        ...relation.suppliers,
+        ...(relation as any).app_suppliers,
         is_primary_category: relation.is_primary
       })) || [];
     } catch (err) {
@@ -215,7 +217,7 @@ export const useSupplierCategories = () => {
     createCategory,
     updateCategory,
     deleteCategory,
-    fetchCategoriesWithCount,
+    fetchCategoriesWithCounts,
     fetchSuppliersByCategory
   };
 };

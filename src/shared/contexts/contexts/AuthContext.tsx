@@ -12,7 +12,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
   loading: boolean;
 }
@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       ActivityLogger.logAuth('login_attempt', `Tentativa de login para ${email}`, 'info', { email });
-      
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email: data.user.email!,
           role: adminData.role
         };
-        
+
         setUser(userData);
         ActivityLogger.logAuth('login_success', `Login realizado com sucesso para ${email}`, 'success', { email, userId: data.user.id });
         return true;
@@ -90,8 +90,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = async () => {
-    const currentUser = user?.email || 'unknown';
+    let currentUser = user?.email || 'unknown';
+
     try {
+      // Se o usuário estiver nulo no estado mas houver uma sessão, tentar pegar o email da sessão
+      if (currentUser === 'unknown') {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.email) {
+          currentUser = session.user.email;
+        }
+      }
+
       ActivityLogger.logAuth('logout_attempt', `Tentativa de logout para ${currentUser}`, 'info', { email: currentUser });
       await supabase.auth.signOut();
       setUser(null);
@@ -107,8 +116,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const getSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
+        // Timeout de segurança: não travar a UI por mais de 10s
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Session check timeout')), 10000)
+        );
+
+        const sessionPromise = supabase.auth.getSession();
+        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+
         if (error) {
           console.error('Session error:', error);
           ActivityLogger.logAuth('session_check_error', `Erro ao verificar sessão: ${error}`, 'error', { error: error.toString() });
@@ -117,21 +132,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         if (session?.user) {
-          // Check if user is admin
-          const { data: adminData, error: adminError } = await supabase
+          // Check if user is admin (com timeout)
+          const adminPromise = supabase
             .from('app_admin_users')
             .select('*')
             .eq('id', session.user.id)
             .single();
 
-          if (!adminError && adminData) {
-            const userData: User = {
-              id: session.user.id,
-              email: session.user.email!,
-              role: adminData.role
-            };
-            setUser(userData);
-            ActivityLogger.logAuth('session_restored', `Sessão restaurada para ${session.user.email}`, 'info', { email: session.user.email, userId: session.user.id });
+          const adminTimeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Admin check timeout')), 8000)
+          );
+
+          try {
+            const { data: adminData, error: adminError } = await Promise.race([adminPromise, adminTimeoutPromise]) as any;
+
+            if (!adminError && adminData) {
+              const userData: User = {
+                id: session.user.id,
+                email: session.user.email!,
+                role: adminData.role
+              };
+              setUser(userData);
+              ActivityLogger.logAuth('session_restored', `Sessão restaurada para ${session.user.email}`, 'info', { email: session.user.email, userId: session.user.id });
+            }
+          } catch (adminTimeout) {
+            console.warn('Admin check timed out, continuing without admin status');
           }
         }
       } catch (error) {

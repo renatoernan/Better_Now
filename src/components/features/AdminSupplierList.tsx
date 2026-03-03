@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Plus, 
-  Eye, 
-  Edit, 
-  Trash2, 
-  Download, 
+import {
+  Search,
+  Filter,
+  Plus,
+  Eye,
+  Edit,
+  Trash2,
+  Download,
   RefreshCw,
   ChevronDown,
   Star,
@@ -30,21 +30,21 @@ import Loading from '../ui/Loading';
 
 const AdminSupplierList: React.FC = () => {
   const navigate = useNavigate();
-  const { 
-    suppliers, 
-    loading, 
-    error, 
-    fetchSuppliers, 
-    updateSupplierStatus, 
-    deleteSupplier 
+  const {
+    suppliers,
+    loading,
+    error,
+    fetchSuppliers,
+    updateSupplierStatus,
+    deleteSupplier
   } = useSuppliers();
   const { categories, fetchCategories } = useSupplierCategories();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<SupplierFilters>({});
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<'name' | 'created_at' | 'rating'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'created_at' | 'rating' | 'total_services'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -54,11 +54,11 @@ const AdminSupplierList: React.FC = () => {
     const loadData = async () => {
       try {
         await Promise.all([
-          fetchSuppliers({ 
+          fetchSuppliers({
             query: searchTerm,
             ...filters,
-            sortBy,
-            sortOrder,
+            sort_by: sortBy,
+            sort_order: sortOrder,
             page: currentPage,
             limit: itemsPerPage
           }),
@@ -75,11 +75,11 @@ const AdminSupplierList: React.FC = () => {
 
   const handleSearch = async () => {
     setCurrentPage(1);
-    await fetchSuppliers({ 
+    await fetchSuppliers({
       query: searchTerm,
       ...filters,
-      sortBy,
-      sortOrder,
+      sort_by: sortBy,
+      sort_order: sortOrder,
       page: 1,
       limit: itemsPerPage
     });
@@ -90,7 +90,7 @@ const AdminSupplierList: React.FC = () => {
     setCurrentPage(1);
   };
 
-  const handleSort = (field: 'name' | 'created_at' | 'rating') => {
+  const handleSort = (field: 'name' | 'created_at' | 'rating' | 'total_services') => {
     if (sortBy === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -103,11 +103,11 @@ const AdminSupplierList: React.FC = () => {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await fetchSuppliers({ 
+      await fetchSuppliers({
         query: searchTerm,
         ...filters,
-        sortBy,
-        sortOrder,
+        sort_by: sortBy,
+        sort_order: sortOrder,
         page: currentPage,
         limit: itemsPerPage
       });
@@ -142,8 +142,8 @@ const AdminSupplierList: React.FC = () => {
   };
 
   const handleSelectSupplier = (supplierId: string) => {
-    setSelectedSuppliers(prev => 
-      prev.includes(supplierId) 
+    setSelectedSuppliers(prev =>
+      prev.includes(supplierId)
         ? prev.filter(id => id !== supplierId)
         : [...prev, supplierId]
     );
@@ -232,7 +232,7 @@ const AdminSupplierList: React.FC = () => {
             {suppliers.length} fornecedor{suppliers.length !== 1 ? 'es' : ''} encontrado{suppliers.length !== 1 ? 's' : ''}
           </p>
         </div>
-        
+
         <div className="flex flex-wrap gap-2">
           <button
             onClick={handleRefresh}
@@ -242,7 +242,7 @@ const AdminSupplierList: React.FC = () => {
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Atualizar
           </button>
-          
+
           <button
             onClick={() => navigate('/admin/fornecedores/cadastro')}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -270,7 +270,7 @@ const AdminSupplierList: React.FC = () => {
               />
             </div>
           </div>
-          
+
           {/* Filter Toggle */}
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -280,7 +280,7 @@ const AdminSupplierList: React.FC = () => {
             Filtros
             <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
           </button>
-          
+
           <button
             onClick={handleSearch}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -312,8 +312,8 @@ const AdminSupplierList: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Categoria</label>
                 <select
-                  value={filters.category_id || ''}
-                  onChange={(e) => handleFilterChange({ category_id: e.target.value || undefined })}
+                  value={filters.categories?.[0] || ''}
+                  onChange={(e) => handleFilterChange({ categories: e.target.value ? [e.target.value] : undefined })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Todas</option>
@@ -381,7 +381,7 @@ const AdminSupplierList: React.FC = () => {
               <button className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
                 Exportar Selecionados
               </button>
-              <button 
+              <button
                 onClick={() => setSelectedSuppliers([])}
                 className="px-3 py-1 text-sm text-blue-600 hover:text-blue-700 transition-colors"
               >
@@ -406,7 +406,7 @@ const AdminSupplierList: React.FC = () => {
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </th>
-                <th 
+                <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('name')}
                 >
@@ -423,7 +423,7 @@ const AdminSupplierList: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Localização
                 </th>
-                <th 
+                <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('rating')}
                 >
@@ -437,7 +437,7 @@ const AdminSupplierList: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th 
+                <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('created_at')}
                 >
@@ -464,12 +464,26 @@ const AdminSupplierList: React.FC = () => {
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
                   </td>
-                  
+
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
                         <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <Building className="h-5 w-5 text-gray-500" />
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {supplier.supplier_category_relations?.slice(0, 2).map((relation) => (
+                              <span
+                                key={relation.supplier_categories.id}
+                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                              >
+                                {relation.supplier_categories.name}
+                              </span>
+                            ))}
+                            {(supplier.supplier_category_relations?.length || 0) > 2 && (
+                              <span className="text-xs text-gray-400">
+                                +{(supplier.supplier_category_relations?.length || 0) - 2}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="ml-4">
@@ -487,7 +501,7 @@ const AdminSupplierList: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  
+
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="space-y-1">
                       <div className="flex items-center text-sm text-gray-900">
@@ -501,9 +515,9 @@ const AdminSupplierList: React.FC = () => {
                       {supplier.website && (
                         <div className="flex items-center text-sm text-gray-500">
                           <Globe className="h-3 w-3 mr-1 text-gray-400" />
-                          <a 
-                            href={supplier.website} 
-                            target="_blank" 
+                          <a
+                            href={supplier.website}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-700"
                           >
@@ -513,14 +527,14 @@ const AdminSupplierList: React.FC = () => {
                       )}
                     </div>
                   </td>
-                  
+
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center text-sm text-gray-900">
                       <MapPin className="h-3 w-3 mr-1 text-gray-400" />
                       {supplier.city}, {supplier.state}
                     </div>
                   </td>
-                  
+
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <Star className="h-4 w-4 text-yellow-400 fill-current" />
@@ -529,7 +543,7 @@ const AdminSupplierList: React.FC = () => {
                       </span>
                     </div>
                   </td>
-                  
+
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="relative">
                       <select
@@ -543,14 +557,14 @@ const AdminSupplierList: React.FC = () => {
                       </select>
                     </div>
                   </td>
-                  
+
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex items-center">
                       <Calendar className="h-3 w-3 mr-1 text-gray-400" />
                       {new Date(supplier.created_at).toLocaleDateString('pt-BR')}
                     </div>
                   </td>
-                  
+
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end space-x-2">
                       <button
@@ -622,7 +636,7 @@ const AdminSupplierList: React.FC = () => {
               Próximo
             </button>
           </div>
-          
+
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-gray-700">
@@ -633,7 +647,7 @@ const AdminSupplierList: React.FC = () => {
                 de <span className="font-medium">{suppliers.length}</span> resultados
               </p>
             </div>
-            
+
             <div>
               <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                 <button
@@ -643,11 +657,11 @@ const AdminSupplierList: React.FC = () => {
                 >
                   Anterior
                 </button>
-                
+
                 <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
                   Página {currentPage}
                 </span>
-                
+
                 <button
                   onClick={() => setCurrentPage(prev => prev + 1)}
                   disabled={suppliers.length < itemsPerPage}

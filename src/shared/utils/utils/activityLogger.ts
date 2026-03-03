@@ -26,9 +26,10 @@ class ActivityLogger {
     };
 
     this.saveLogs([log, ...this.getLogs().slice(0, this.MAX_LOGS - 1)]);
-    
+
     // Also log to console in development
-    if (process.env.NODE_ENV === 'development') {
+    // @ts-ignore
+    if (import.meta.env.DEV) {
       console.log(`[${severity.toUpperCase()}] ${category}: ${action} - ${details}`, metadata);
     }
   }
@@ -87,10 +88,10 @@ class ActivityLogger {
     logs.forEach(log => {
       // Count by category
       byCategory[log.category] = (byCategory[log.category] || 0) + 1;
-      
+
       // Count by severity
       bySeverity[log.severity] = (bySeverity[log.severity] || 0) + 1;
-      
+
       // Count today and week
       const logDate = new Date(log.timestamp);
       if (logDate >= today) {
@@ -118,7 +119,7 @@ class ActivityLogger {
   static exportLogs(format: 'json' | 'csv' = 'json'): void {
     const logs = this.loadLogs();
     const timestamp = new Date().toISOString().split('T')[0];
-    
+
     if (format === 'json') {
       const dataStr = JSON.stringify(logs, null, 2);
       this.downloadFile(dataStr, `activity-logs-${timestamp}.json`, 'application/json');
@@ -126,7 +127,7 @@ class ActivityLogger {
       const csvContent = this.convertToCSV(logs);
       this.downloadFile(csvContent, `activity-logs-${timestamp}.csv`, 'text/csv');
     }
-    
+
     this.log('export_logs', `Logs exportados em formato ${format.toUpperCase()}`, 'export', 'info', { format, count: logs.length });
   }
 
@@ -177,7 +178,7 @@ class ActivityLogger {
       log.category,
       log.severity
     ]);
-    
+
     return [headers, ...rows]
       .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
       .join('\n');

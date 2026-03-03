@@ -130,12 +130,14 @@ export const useSupplierDocuments = () => {
 
       if (error) throw error;
 
+      const dataTyped = data as any;
+
       // Atualizar lista local se estamos visualizando documentos do mesmo fornecedor
       if (documents.length > 0 && documents[0].supplier_id === supplier_id) {
         await fetchDocumentsBySupplier(supplier_id);
       }
 
-      return data;
+      return dataTyped;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao fazer upload do documento');
       return null;
@@ -209,11 +211,10 @@ export const useSupplierDocuments = () => {
       if (fetchError) throw fetchError;
 
       // Excluir arquivo do storage se existir
-      if (document.file_url) {
-        const filePath = document.file_url.split('/').slice(-3).join('/'); // Extrair caminho do arquivo
+      if ((document as any).file_path) {
         await supabase.storage
           .from('documents')
-          .remove([filePath]);
+          .remove([(document as any).file_path]);
       }
 
       // Excluir registro do documento
@@ -225,7 +226,7 @@ export const useSupplierDocuments = () => {
       if (error) throw error;
 
       // Atualizar lista local
-      await fetchDocumentsBySupplier(document.supplier_id);
+      await fetchDocumentsBySupplier((document as any).supplier_id);
 
       return true;
     } catch (err) {
