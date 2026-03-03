@@ -16,9 +16,14 @@ const AdminLayout: React.FC = () => {
       toast.success('Logout realizado com sucesso!', {
         description: 'Até logo!'
       });
-      navigate('/admin/login');
+      // Forçar navegação e limpeza de estado
+      navigate('/admin/login', { replace: true });
+      // Recarregar a página para limpar qualquer estado cacheado
+      window.location.reload();
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
+      // fallback: Mesmo em caso de erro, limpar e redirecionar
+      navigate('/admin/login', { replace: true });
     }
   };
 
@@ -67,14 +72,13 @@ const AdminLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 sm:w-72 bg-white shadow-lg transform ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 sm:w-72 bg-white shadow-lg transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
         <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 border-b border-gray-200">
           <div className="flex items-center min-w-0">
-            <img 
-              src="/images/logo_better_now.png" 
-              alt="Better Now" 
+            <img
+              src="/images/logo_better_now.png"
+              alt="Better Now"
               className="h-6 sm:h-8 w-auto flex-shrink-0"
             />
             <span className="ml-2 text-lg sm:text-xl font-semibold text-gray-800 truncate">Admin</span>
@@ -98,11 +102,10 @@ const AdminLayout: React.FC = () => {
                       navigate(item.path);
                       setSidebarOpen(false);
                     }}
-                    className={`w-full flex items-center px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-medium rounded-lg transition-colors ${
-                      isActivePath(item.path)
+                    className={`w-full flex items-center px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-medium rounded-lg transition-colors ${isActivePath(item.path)
                         ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     <Icon className="mr-2 sm:mr-3 h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                     <span className="truncate">{item.name}</span>
@@ -137,9 +140,9 @@ const AdminLayout: React.FC = () => {
               <Menu className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
             <div className="flex items-center min-w-0">
-              <img 
-                src="/images/logo_better_now.png" 
-                alt="Better Now" 
+              <img
+                src="/images/logo_better_now.png"
+                alt="Better Now"
                 className="h-6 sm:h-8 w-auto flex-shrink-0"
               />
               <span className="ml-2 text-base sm:text-lg font-semibold text-gray-800 truncate">Admin</span>
@@ -156,7 +159,7 @@ const AdminLayout: React.FC = () => {
 
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
