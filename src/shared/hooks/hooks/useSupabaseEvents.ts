@@ -25,6 +25,165 @@ interface EventPhoto {
   uploaded_by?: string;
 }
 
+/**
+ * Mapeamento bidirecional para ajustar os campos do frontend aos nomes reais 
+ * das colunas da tabela app_events no Supabase:
+ * 
+ * Colunas reais no Supabase (app_events):
+ * id, title, event_date, start_time, end_time, location, location_link,
+ * client_id, event_type_id, status, guests, observations, videos, deleted_at, created_at, updated_at
+ */
+
+const enrichEventFromDb = (dbItem: any): Event => {
+  if (!dbItem) return dbItem;
+
+  let descriptionStr = '';
+  let isPublicVal = true;
+  let requiresApprovalVal = false;
+  let endDateVal = '';
+  let contactEmailVal = '';
+  let contactPhoneVal = '';
+  let eventTypeIdVal = dbItem.event_type_id || dbItem.event_type || '';
+  let priceBatchesVal: any[] = Array.isArray(dbItem.price_batches) ? dbItem.price_batches : [];
+
+  if (dbItem.observations) {
+    try {
+      const trimmed = String(dbItem.observations).trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        const parsed = JSON.parse(trimmed);
+        descriptionStr = parsed.desc ?? parsed.description ?? dbItem.observations;
+        if (parsed.is_public !== undefined) isPublicVal = Boolean(parsed.is_public);
+        if (parsed.requires_approval !== undefined) requiresApprovalVal = Boolean(parsed.requires_approval);
+        if (parsed.end_date) endDateVal = parsed.end_date;
+        if (parsed.contact_email) contactEmailVal = parsed.contact_email;
+        if (parsed.contact_phone) contactPhoneVal = parsed.contact_phone;
+        if (parsed.event_type_id || parsed.event_type) {
+          eventTypeIdVal = parsed.event_type_id || parsed.event_type;
+        }
+        if (Array.isArray(parsed.price_batches) && priceBatchesVal.length === 0) {
+          priceBatchesVal = parsed.price_batches;
+        }
+      } else {
+        descriptionStr = dbItem.observations;
+      }
+    } catch {
+      descriptionStr = dbItem.observations;
+    }
+  }
+
+  if (dbItem.is_public !== undefined && dbItem.is_public !== null) {
+    isPublicVal = Boolean(dbItem.is_public);
+  }
+  if (dbItem.requires_approval !== undefined && dbItem.requires_approval !== null) {
+    requiresApprovalVal = Boolean(dbItem.requires_approval);
+  }
+  if (dbItem.end_date) {
+    endDateVal = dbItem.end_date;
+  }
+  if (dbItem.contact_email) {
+    contactEmailVal = dbItem.contact_email;
+  }
+  if (dbItem.contact_phone) {
+    contactPhoneVal = dbItem.contact_phone;
+  }
+
+  return {
+    ...dbItem,
+    id: dbItem.id,
+    name: dbItem.title || dbItem.name || '',
+    title: dbItem.title || dbItem.name || '',
+    description: descriptionStr,
+    basic_description: descriptionStr,
+    event_date: dbItem.event_date,
+    event_time: dbItem.start_time || dbItem.event_time || '',
+    end_date: endDateVal,
+    end_time: dbItem.end_time || '',
+    location: dbItem.location || '',
+    location_link: dbItem.location_link || '',
+    event_type: eventTypeIdVal,
+    event_type_id: eventTypeIdVal,
+    contact_email: contactEmailVal,
+    contact_phone: contactPhoneVal,
+    max_guests: dbItem.guests ?? 0,
+    current_guests: dbItem.guests ?? 0,
+    capacity: dbItem.guests ?? 0,
+    max_participants: dbItem.guests ?? 0,
+    status: dbItem.status || 'active',
+    is_active: dbItem.status !== 'cancelled' && dbItem.deleted_at === null,
+    is_public: isPublicVal,
+    requires_approval: requiresApprovalVal,
+    price_batches: priceBatchesVal,
+  };
+};
+
+const enrichEventArrayFromDb = (items: any[]): Event[] => {
+  return (items || []).map(enrichEventFromDb);
+};
+
+const toEventDbPayload = (eventData: Partial<Event>): any => {
+  const payload: any = {};
+
+  const titleVal = eventData.title || eventData.name;
+  if (titleVal !== undefined) {
+    payload.title = titleVal;
+  }
+  if (eventData.event_date !== undefined) {
+    payload.event_date = eventData.event_date;
+  }
+  if (eventData.event_time !== undefined) {
+    payload.start_time = eventData.event_time;
+  }
+  if (eventData.end_time !== undefined) {
+    payload.end_time = eventData.end_time;
+  }
+  if (eventData.location !== undefined) {
+    payload.location = eventData.location;
+  }
+  if (eventData.location_link !== undefined) {
+    payload.location_link = eventData.location_link;
+  }
+
+  const typeVal = eventData.event_type_id || eventData.event_type || '';
+  if (typeVal && /^[0-9a-fA-F-]{36}$/.test(typeVal)) {
+    payload.event_type_id = typeVal;
+  }
+
+  if (eventData.status !== undefined) {
+    payload.status = eventData.status;
+  }
+
+  const guestsVal = eventData.max_guests ?? eventData.max_participants ?? eventData.capacity;
+  if (guestsVal !== undefined) {
+    payload.guests = guestsVal;
+  }
+
+  if (eventData.videos !== undefined) {
+    payload.videos = eventData.videos;
+  }
+
+  const descText = eventData.description || eventData.basic_description || eventData.additional_info || '';
+  const isPub = eventData.is_public ?? true;
+  const reqApp = eventData.requires_approval ?? false;
+  const endDate = eventData.end_date || '';
+  const contactEmail = eventData.contact_email || '';
+  const contactPhone = eventData.contact_phone || '';
+  const priceBatchesVal = eventData.price_batches || [];
+
+  payload.observations = JSON.stringify({
+    desc: descText,
+    is_public: isPub,
+    requires_approval: reqApp,
+    end_date: endDate,
+    contact_email: contactEmail,
+    contact_phone: contactPhone,
+    event_type_id: typeVal,
+    event_type: typeVal,
+    price_batches: priceBatchesVal
+  });
+
+  return payload;
+};
+
 // Hook return type
 interface UseSupabaseEventsReturn extends UseAsyncState<Event[]> {
   events: Event[];
@@ -39,7 +198,7 @@ interface UseSupabaseEventsReturn extends UseAsyncState<Event[]> {
   // Actions
   fetchEvents: (filters?: EventFilters, pagination?: PaginationParams) => Promise<void>;
   fetchDeletedEvents: () => Promise<void>;
-  createEvent: (eventData: Omit<Event, 'id' | 'created_at' | 'updated_at' | 'current_guests'>) => Promise<Event>;
+  createEvent: (eventData: Omit<Event, 'id' | 'created_at' | 'updated_at' | 'current_participants'>) => Promise<Event>;
   updateEvent: (id: string, eventData: Partial<Event>) => Promise<Event>;
   deleteEvent: (id: string) => Promise<void>;
   restoreEvent: (id: string) => Promise<void>;
@@ -100,7 +259,6 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
     const errorMessage = err?.message || 'Erro desconhecido';
     setError(errorMessage);
     
-    // Only show toast if it's not a duplicate within the last 2 seconds
     const now = Date.now();
     const lastToastKey = `toast_${message}`;
     const lastToastTime = (window as any)[lastToastKey] || 0;
@@ -123,21 +281,18 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       const limit = pagination?.limit || 10;
       const offset = (page - 1) * limit;
 
-      // Generate cache key based on filters and pagination
       const cacheKey = `events:filtered:${JSON.stringify({ filters, page, limit })}`;
 
-      // Try to get from cache first
       const cachedResult = await cacheService.memoize(cacheKey, async () => {
         let query = supabase
           .from('app_events')
-          .select('*, event_types!event_type_id(*)', { count: 'exact' })
+          .select('*', { count: 'exact' })
           .is('deleted_at', null)
           .order('event_date', { ascending: true })
           .range(offset, offset + limit - 1);
 
-        // Apply filters
         if (filters?.search) {
-          query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+          query = query.or(`title.ilike.%${filters.search}%,observations.ilike.%${filters.search}%`);
         }
         if (filters?.event_type_id) {
           query = query.eq('event_type_id', filters.event_type_id);
@@ -148,18 +303,12 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
         if (filters?.date_to) {
           query = query.lte('event_date', filters.date_to);
         }
-        if (filters?.is_active !== undefined) {
-          query = query.eq('is_active', filters.is_active);
-        }
-        if (filters?.allow_ticket_sales !== undefined) {
-          query = query.eq('allow_ticket_sales', filters.allow_ticket_sales);
-        }
 
-        const { data, error, count } = await query;
-        if (error) throw error;
+        const { data, error: fetchErr, count } = await query;
+        if (fetchErr) throw fetchErr;
 
-        return { data: data || [], count: count || 0 };
-      }, 2 * 60 * 1000); // Cache por 2 minutos
+        return { data: enrichEventArrayFromDb(data || []), count: count || 0 };
+      }, 2 * 60 * 1000);
 
       setEvents(cachedResult.data);
       setTotalCount(cachedResult.count);
@@ -178,14 +327,14 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const { data, error: fetchErr } = await supabase
         .from('app_events')
-        .select('*, event_types!event_type_id(*)')
+        .select('*')
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false });
 
-      if (error) throw error;
-      setDeletedEvents(data || []);
+      if (fetchErr) throw fetchErr;
+      setDeletedEvents(enrichEventArrayFromDb(data || []));
     } catch (err: any) {
       handleError(err, 'Erro ao carregar eventos da lixeira');
     } finally {
@@ -199,26 +348,25 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const payload = toEventDbPayload(eventData);
+
+      const { data, error: insertErr } = await supabase
         .from('app_events')
-        .insert([{
-          ...eventData,
-          current_guests: 0,
-        }])
-        .select('*, event_types!event_type_id(*)')
+        .insert([payload])
+        .select('*')
         .single();
 
-      if (error) throw error;
+      if (insertErr) throw insertErr;
       
-      setEvents(prev => [data, ...prev]);
+      const enriched = enrichEventFromDb(data);
+      setEvents(prev => [enriched, ...prev]);
       
-      // Invalidate cache after creating event
       cacheUtils.invalidateEvents();
       
       toast.success('Evento criado com sucesso!');
-      ActivityLogger.log('event_created', `Evento "${data.name}" criado`, 'system', 'success', { eventId: data.id });
+      ActivityLogger.log('event_created', `Evento "${enriched.title || enriched.name}" criado`, 'system', 'success', { eventId: enriched.id });
       
-      return data;
+      return enriched;
     } catch (err: any) {
       handleError(err, 'Erro ao criar evento');
       throw err;
@@ -233,28 +381,30 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const payload = {
+        ...toEventDbPayload(eventData),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error: updateErr } = await supabase
         .from('app_events')
-        .update({
-          ...eventData,
-          updated_at: new Date().toISOString(),
-        })
+        .update(payload)
         .eq('id', id)
-        .select('*, event_types!event_type_id(*)')
+        .select('*')
         .single();
 
-      if (error) throw error;
+      if (updateErr) throw updateErr;
       
-      setEvents(prev => prev.map(event => event.id === id ? data : event));
+      const enriched = enrichEventFromDb(data);
+      setEvents(prev => prev.map(event => event.id === id ? enriched : event));
       
-      // Invalidate cache after updating event
       cacheUtils.invalidateEvents();
       cacheService.delete(CACHE_KEYS.EVENTS.BY_ID(id));
       
       toast.success('Evento atualizado com sucesso!');
-      ActivityLogger.log('event_updated', `Evento "${data.name}" atualizado`, 'system', 'success', { eventId: data.id });
+      ActivityLogger.log('event_updated', `Evento "${enriched.title || enriched.name}" atualizado`, 'system', 'success', { eventId: enriched.id });
       
-      return data;
+      return enriched;
     } catch (err: any) {
       handleError(err, 'Erro ao atualizar evento');
       throw err;
@@ -269,20 +419,21 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const { data, error: deleteErr } = await supabase
         .from('app_events')
         .update({ 
           deleted_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .select('*, event_types!event_type_id(*)')
+        .select('*')
         .single();
 
-      if (error) throw error;
+      if (deleteErr) throw deleteErr;
       
+      const enriched = enrichEventFromDb(data);
       setEvents(prev => prev.filter(event => event.id !== id));
-      setDeletedEvents(prev => [data, ...prev]);
+      setDeletedEvents(prev => [enriched, ...prev]);
       toast.success('Evento movido para a lixeira!');
     } catch (err: any) {
       handleError(err, 'Erro ao mover evento para lixeira');
@@ -298,20 +449,21 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const { data, error: restoreErr } = await supabase
         .from('app_events')
         .update({ 
           deleted_at: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .select('*, event_types!event_type_id(*)')
+        .select('*')
         .single();
 
-      if (error) throw error;
+      if (restoreErr) throw restoreErr;
       
+      const enriched = enrichEventFromDb(data);
       setDeletedEvents(prev => prev.filter(event => event.id !== id));
-      setEvents(prev => [data, ...prev]);
+      setEvents(prev => [enriched, ...prev]);
       toast.success('Evento restaurado com sucesso!');
     } catch (err: any) {
       handleError(err, 'Erro ao restaurar evento');
@@ -327,12 +479,12 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
-      const { error } = await supabase
+      const { error: delErr } = await supabase
         .from('app_events')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (delErr) throw delErr;
       
       setDeletedEvents(prev => prev.filter(event => event.id !== id));
       toast.success('Evento excluído permanentemente!');
@@ -350,17 +502,16 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from('event_photos')
+      const { data, error: fetchErr } = await supabase
+        .from('app_event_photos')
         .select('*')
         .eq('event_id', eventId)
-        .order('created_at', { ascending: false });
+        .order('uploaded_at', { ascending: false });
 
-      if (error) throw error;
-      
-      const photos = data || [];
-      setEventPhotos(photos);
-      return photos;
+      if (fetchErr) throw fetchErr;
+
+      setEventPhotos(data || []);
+      return data || [];
     } catch (err: any) {
       handleError(err, 'Erro ao carregar fotos do evento');
       return [];
@@ -375,43 +526,39 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
-      // Upload file to storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${eventId}/${Date.now()}.${fileExt}`;
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('event-photos')
-        .upload(fileName, file);
+      const filePath = `event-photos/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('events')
+        .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
-        .from('event-photos')
-        .getPublicUrl(fileName);
+        .from('events')
+        .getPublicUrl(filePath);
 
-      // Insert photo record
-      const { data, error } = await supabase
-        .from('event_photos')
+      const { data, error: insertError } = await supabase
+        .from('app_event_photos')
         .insert([{
           event_id: eventId,
           photo_url: publicUrl,
           caption: caption || null,
+          uploaded_at: new Date().toISOString()
         }])
         .select()
         .single();
 
-      if (error) throw error;
-      
-      // Update local state
+      if (insertError) throw insertError;
+
       setEventPhotos(prev => [data, ...prev]);
-      
       toast.success('Foto enviada com sucesso!');
-      ActivityLogger.log('event_photo_uploaded', `Foto enviada para evento ${eventId}`, 'system', 'success', { eventId, photoId: data.id });
-      
+
       return data;
     } catch (err: any) {
-      handleError(err, 'Erro ao enviar foto');
+      handleError(err, 'Erro ao enviar foto do evento');
       throw err;
     } finally {
       setLoading(false);
@@ -424,38 +571,15 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
-      // Get photo data first to delete from storage
-      const { data: photoData, error: fetchError } = await supabase
-        .from('event_photos')
-        .select('photo_url')
-        .eq('id', photoId)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      // Extract file path from URL and delete from storage
-      if (photoData?.photo_url) {
-        const urlParts = photoData.photo_url.split('/');
-        const fileName = urlParts.slice(-2).join('/'); // Get eventId/filename.ext
-        
-        await supabase.storage
-          .from('event-photos')
-          .remove([fileName]);
-      }
-
-      // Delete photo record
-      const { error } = await supabase
-        .from('event_photos')
+      const { error: delErr } = await supabase
+        .from('app_event_photos')
         .delete()
         .eq('id', photoId);
 
-      if (error) throw error;
-      
-      // Update local state
+      if (delErr) throw delErr;
+
       setEventPhotos(prev => prev.filter(photo => photo.id !== photoId));
-      
       toast.success('Foto excluída com sucesso!');
-      ActivityLogger.log('event_photo_deleted', `Foto ${photoId} excluída`, 'system', 'success', { photoId });
     } catch (err: any) {
       handleError(err, 'Erro ao excluir foto');
       throw err;
@@ -464,28 +588,19 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
     }
   }, [handleError]);
 
-  // Refetch function for UseAsyncState compatibility
-  const refetch = useCallback(async () => {
-    await fetchEvents();
-  }, [fetchEvents]);
-
   return {
-    // Data
     data: events,
+    refetch: fetchEvents,
     events,
     deletedEvents,
     eventPhotos,
+    loading,
+    error,
     totalCount,
     currentPage,
     totalPages,
     hasNextPage,
     hasPreviousPage,
-    
-    // State
-    loading,
-    error,
-    
-    // Actions
     fetchEvents,
     fetchDeletedEvents,
     createEvent,
@@ -493,18 +608,13 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
     deleteEvent,
     restoreEvent,
     permanentDeleteEvent,
-    refetch,
-    
-    // Event photos actions
     fetchEventPhotos,
     uploadEventPhoto,
     deleteEventPhoto,
-    
-    // Utility functions
     getEventById,
     getActiveEvents,
     getUpcomingEvents,
     getPastEvents,
-    clearError,
+    clearError
   };
 };

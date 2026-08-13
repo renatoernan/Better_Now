@@ -314,9 +314,21 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setLoading(true);
       setError(null);
 
+      // Map frontend fields back to legacy database fields
+      const payload: any = {
+        ...clientData,
+        nome: clientData.name,
+      };
+
+      if (clientData.whatsapp) payload.telefone = clientData.whatsapp;
+      if (clientData.logradouro) payload.endereco = clientData.logradouro;
+      if (clientData.uf) payload.estado = clientData.uf;
+      if (clientData.notes) payload.observacoes = clientData.notes;
+      if (clientData.is_active !== undefined) payload.ativo = clientData.is_active;
+
       const { data, error } = await supabase
         .from('app_clients')
-        .insert([clientData])
+        .insert([payload])
         .select()
         .single();
 
@@ -346,12 +358,22 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setLoading(true);
       setError(null);
 
+      // Map frontend fields back to legacy database fields
+      const payload: any = {
+        ...clientData,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (clientData.name) payload.nome = clientData.name;
+      if (clientData.whatsapp) payload.telefone = clientData.whatsapp;
+      if (clientData.logradouro) payload.endereco = clientData.logradouro;
+      if (clientData.uf) payload.estado = clientData.uf;
+      if (clientData.notes) payload.observacoes = clientData.notes;
+      if (clientData.is_active !== undefined) payload.ativo = clientData.is_active;
+
       const { data, error } = await supabase
         .from('app_clients')
-        .update({
-          ...clientData,
-          updated_at: new Date().toISOString(),
-        })
+        .update(payload)
         .eq('id', id)
         .select()
         .single();
@@ -527,7 +549,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         .from('app_client_events')
         .select(`
           *,
-          event:app_events(
+          event:events(
             id,
             title,
             description,

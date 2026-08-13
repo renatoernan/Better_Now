@@ -51,13 +51,13 @@ export const useDashboardData = () => {
     try {
       // Buscar total de clientes
       const { count: clientsCount } = await supabase
-        .from('app_clients')
+        .from('clients')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null);
 
       // Buscar eventos ativos (não deletados e futuros)
       const { count: eventsCount } = await supabase
-        .from('app_events')
+        .from('events')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
         .gte('event_date', new Date().toISOString().split('T')[0]);
@@ -89,7 +89,7 @@ export const useDashboardData = () => {
     try {
       // Últimos 5 eventos criados
       const { data: recentEvents } = await supabase
-        .from('app_events')
+        .from('events')
         .select('id, title, event_date, created_at')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
@@ -128,7 +128,7 @@ export const useDashboardData = () => {
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       
       const { data: eventsData } = await supabase
-        .from('app_events')
+        .from('events')
         .select('event_date, created_at')
         .is('deleted_at', null)
         .gte('created_at', sixMonthsAgo.toISOString());
@@ -148,7 +148,7 @@ export const useDashboardData = () => {
       const today = now.toISOString().split('T')[0];
       
       const { data: allEvents } = await supabase
-        .from('app_events')
+        .from('events')
         .select('event_date')
         .is('deleted_at', null);
 

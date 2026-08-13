@@ -78,6 +78,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         };
 
         setUser(userData);
+        setLoading(false);
         ActivityLogger.logAuth('login_success', `Login realizado com sucesso para ${email}`, 'success', { email, userId: data.user.id });
         return true;
       }
@@ -93,7 +94,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     let currentUser = user?.email || 'unknown';
 
     try {
-      // Se o usuário estiver nulo no estado mas houver uma sessão, tentar pegar o email da sessão
       if (currentUser === 'unknown') {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user?.email) {
@@ -104,100 +104,117 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       ActivityLogger.logAuth('logout_attempt', `Tentativa de logout para ${currentUser}`, 'info', { email: currentUser });
       await supabase.auth.signOut();
       setUser(null);
+      setLoading(false);
       ActivityLogger.logAuth('logout_success', `Logout realizado com sucesso para ${currentUser}`, 'success', { email: currentUser });
     } catch (error) {
       console.error('Logout error:', error);
       ActivityLogger.logAuth('logout_error', `Erro no logout: ${error}`, 'error', { email: currentUser, error: error.toString() });
       setUser(null);
+      setLoading(false);
     }
   };
 
-  // Check for existing session on mount
+  // Check for existing session on mount with non-blocking initialization & failsafe timeout
   useEffect(() => {
-    const getSession = async () => {
+    let mounted = true;
+
+    const initAuth = async () => {
       try {
-        // Timeout de segurança: não travar a UI por mais de 10s
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Session check timeout')), 10000)
-        );
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted) {
+          if (session?.user) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              role: 'admin'
+            });
 
-        const sessionPromise = supabase.auth.getSession();
-        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+            // Asynchronously verify role without blocking UI rendering
+            (async () => {
+              try {
+                const { data: adminData } = await supabase
+                  .from('app_admin_users')
+                  .select('role')
+                  .eq('id', session.user.id)
+                  .maybeSingle();
 
-        if (error) {
-          console.error('Session error:', error);
-          ActivityLogger.logAuth('session_check_error', `Erro ao verificar sessão: ${error}`, 'error', { error: error.toString() });
-          setLoading(false);
-          return;
-        }
-
-        if (session?.user) {
-          // Check if user is admin (com timeout)
-          const adminPromise = supabase
-            .from('app_admin_users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          const adminTimeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Admin check timeout')), 8000)
-          );
-
-          try {
-            const { data: adminData, error: adminError } = await Promise.race([adminPromise, adminTimeoutPromise]) as any;
-
-            if (!adminError && adminData) {
-              const userData: User = {
-                id: session.user.id,
-                email: session.user.email!,
-                role: adminData.role
-              };
-              setUser(userData);
-              ActivityLogger.logAuth('session_restored', `Sessão restaurada para ${session.user.email}`, 'info', { email: session.user.email, userId: session.user.id });
-            }
-          } catch (adminTimeout) {
-            console.warn('Admin check timed out, continuing without admin status');
+                if (mounted && adminData?.role) {
+                  setUser(prev => prev ? { ...prev, role: adminData.role } : prev);
+                }
+              } catch (err) {
+                console.warn('Erro ao atualizar role de admin:', err);
+              }
+            })();
+          } else {
+            setUser(null);
           }
         }
-      } catch (error) {
-        console.error('Session check error:', error);
-        ActivityLogger.logAuth('session_check_error', `Erro ao verificar sessão: ${error}`, 'error', { error: error.toString() });
+      } catch (err) {
+        console.error('Erro na inicialização da autenticação:', err);
+        if (mounted) setUser(null);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
-    getSession();
+    initAuth();
 
-    // Listen for auth changes
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!mounted) return;
+
         if (event === 'SIGNED_OUT' || !session) {
           setUser(null);
           ActivityLogger.logAuth('auth_state_signed_out', 'Usuário desconectado', 'info');
-        } else if (event === 'SIGNED_IN' && session?.user) {
-          // Check if user is admin
-          const { data: adminData, error: adminError } = await supabase
-            .from('app_admin_users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
+          setLoading(false);
+        } else if (session?.user) {
+          setUser({
+            id: session.user.id,
+            email: session.user.email!,
+            role: 'admin'
+          });
 
-          if (!adminError && adminData) {
-            const userData: User = {
-              id: session.user.id,
-              email: session.user.email!,
-              role: adminData.role
-            };
-            setUser(userData);
+          // Asynchronously verify role
+          (async () => {
+            try {
+              const { data: adminData } = await supabase
+                .from('app_admin_users')
+                .select('role')
+                .eq('id', session.user.id)
+                .maybeSingle();
+
+              if (mounted && adminData?.role) {
+                setUser(prev => prev ? { ...prev, role: adminData.role } : prev);
+              }
+            } catch (err) {
+              console.warn('Erro ao verificar role no onAuthStateChange:', err);
+            }
+          })();
+
+          if (event === 'SIGNED_IN') {
             ActivityLogger.logAuth('auth_state_signed_in', `Usuário autenticado: ${session.user.email}`, 'success', { email: session.user.email, userId: session.user.id });
+          } else if (event === 'INITIAL_SESSION') {
+            ActivityLogger.logAuth('session_restored', `Sessão restaurada para ${session.user.email}`, 'info', { email: session.user.email, userId: session.user.id });
           }
+
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    // Failsafe timeout to prevent permanent loading spinners
+    const failsafeTimeout = setTimeout(() => {
+      if (mounted) {
+        setLoading(false);
+      }
+    }, 2000);
+
+    return () => {
+      mounted = false;
+      clearTimeout(failsafeTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const value = {

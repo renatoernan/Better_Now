@@ -189,7 +189,7 @@ export const useSupplierCategories = () => {
           )
         `)
         .eq('category_id', categoryId)
-        .eq('app_suppliers.deleted_at', null);
+        .is('app_suppliers.deleted_at', null);
 
       if (error) throw error;
 

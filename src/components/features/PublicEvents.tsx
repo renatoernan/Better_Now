@@ -306,7 +306,7 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
             eventType: event.event_type,
             hasEventType: !!event.event_type
           });
-          return event.event_type && (
+          return event.event_type && !/^[0-9a-fA-F-]{36}$/.test(event.event_type) && (
             <div className="absolute top-4 left-4">
               <span className="bg-white/90 text-gray-800 px-3 py-1 rounded-full text-sm font-medium">
                 {event.event_type}

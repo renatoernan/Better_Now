@@ -68,7 +68,7 @@ const EventForm: React.FC<EventFormProps> = ({
     if (event) {
       setValue('title', event.title || '');
       setValue('description', event.description || '');
-      setValue('event_type', event.event_type || '');
+      setValue('event_type', event.event_type || event.event_type_id || '');
       setValue('event_date', event.event_date || '');
       setValue('event_time', event.event_time || '');
       setValue('end_date', event.end_date || '');
@@ -79,7 +79,7 @@ const EventForm: React.FC<EventFormProps> = ({
       setValue('status', event.status || 'draft');
       setValue('is_public', event.is_public ?? true);
       setValue('requires_approval', event.requires_approval ?? false);
-      setValue('event_type_id', event.event_type_id || '');
+      setValue('event_type_id', event.event_type_id || event.event_type || '');
       setValue('contact_email', event.contact_email || '');
       setValue('contact_phone', event.contact_phone || '');
       setValue('additional_info', event.additional_info || '');
@@ -319,6 +319,12 @@ const EventForm: React.FC<EventFormProps> = ({
                     <select
                       {...register('event_type_id')}
                       id="event_type_id"
+                      value={watch('event_type_id') || watch('event_type') || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setValue('event_type_id', val);
+                        setValue('event_type', val);
+                      }}
                       className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
                         errors.event_type_id ? 'border-red-500 bg-red-50' : 'border-gray-300'
                       }`}

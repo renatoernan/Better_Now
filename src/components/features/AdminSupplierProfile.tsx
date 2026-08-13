@@ -619,7 +619,7 @@ const AdminSupplierProfile: React.FC = () => {
                             <span className="font-medium">Valor:</span> R$ {service.value?.toFixed(2) || '0.00'}
                           </div>
                           <div>
-                            <span className="font-medium">Evento:</span> {(service as any).app_events?.name || 'N/A'}
+                            <span className="font-medium">Evento:</span> {(service as any).events?.name || (service as any).app_events?.name || 'N/A'}
                           </div>
                         </div>
                         {service.notes && (

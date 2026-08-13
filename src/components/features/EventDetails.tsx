@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import Header from '../layout/Header';
 import Footer from '../layout/Footer';
 import EventImage from '../shared/EventImage';
@@ -14,6 +14,9 @@ import PhoneLoginModal from '../shared/PhoneLoginModal';
 import TokenVerificationModal from '../shared/TokenVerificationModal';
 import ClientRegistrationModal from '../shared/ClientRegistrationModal';
 import SuccessModal from '../shared/SuccessModal';
+import StripeCheckoutModal from '../shared/StripeCheckoutModal';
+import PaymentSuccessModal from '../shared/PaymentSuccessModal';
+import { createCheckoutSession } from '../../shared/services/stripeService';
 import { supabase } from '../../shared/services/lib/supabase';
 import { toast } from 'sonner';
 
@@ -22,6 +25,7 @@ const EventDetails: React.FC = () => {
   const TOKEN_EXPIRATION_TIME = 59;
   
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { fetchEventById } = usePublicEvents();
   const [event, setEvent] = useState<EventType | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -42,6 +46,35 @@ const EventDetails: React.FC = () => {
   const [tokenError, setTokenError] = useState('');
   const [tokenTimestamp, setTokenTimestamp] = useState<number>(0);
   const [timeRemaining, setTimeRemaining] = useState<number>(30);
+
+  // Estados para o Checkout do Stripe
+  const [showStripeCheckoutModal, setShowStripeCheckoutModal] = useState(false);
+  const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
+  const [stripeCheckoutLoading, setStripeCheckoutLoading] = useState(false);
+  const [stripeErrorMessage, setStripeErrorMessage] = useState<string | null>(null);
+  const [stripeSessionId, setStripeSessionId] = useState<string>('');
+
+  // Efeito para verificar parâmetros de retorno da Stripe (?payment=success&session_id=...)
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment');
+    const sessionId = searchParams.get('session_id');
+
+    if (paymentStatus === 'success' && sessionId) {
+      setStripeSessionId(sessionId);
+      setShowPaymentSuccessModal(true);
+      
+      // Limpar parâmetros da URL sem recarregar a página
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('payment');
+      newParams.delete('session_id');
+      setSearchParams(newParams, { replace: true });
+    } else if (paymentStatus === 'cancel') {
+      toast.info('Pagamento cancelado.');
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('payment');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -350,6 +383,25 @@ const EventDetails: React.FC = () => {
     }
   };
 
+  const handleConfirmStripeCheckout = async () => {
+    if (!id || !priceBatches[selectedBatch]) return;
+    setStripeCheckoutLoading(true);
+    setStripeErrorMessage(null);
+
+    const res = await createCheckoutSession({
+      event_id: id,
+      batch_index: selectedBatch,
+      quantity: quantity,
+      client_name: currentClientName,
+      client_phone: currentPhone,
+    });
+
+    if (res.error) {
+      setStripeErrorMessage(res.error);
+      setStripeCheckoutLoading(false);
+    }
+  };
+
   const handlePurchase = () => {
     if (!event || !priceBatches[selectedBatch]) return;
     
@@ -359,11 +411,12 @@ const EventDetails: React.FC = () => {
       return;
     }
     
-    // Lógica normal de compra para eventos públicos
+    // Lógica de compra: abrir modal do Stripe
     const selectedBatchData = priceBatches[selectedBatch];
     const status = getBatchStatus(selectedBatchData);
     if (selectedBatchData && status === 'active') {
-      alert(`Comprando ${quantity} ingresso(s) do lote "${selectedBatchData.name}" por ${formatPrice(selectedBatchData.price * quantity)}`);
+      setStripeErrorMessage(null);
+      setShowStripeCheckoutModal(true);
     }
   };
 
@@ -376,7 +429,7 @@ const EventDetails: React.FC = () => {
       });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert('Link copiado para a área de transferência!');
+      toast.success('Link copiado para a área de transferência!');
     }
   };
 
@@ -466,7 +519,10 @@ const EventDetails: React.FC = () => {
       
       <SuccessModal
         isOpen={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
+        onClose={() => {
+          setShowSuccessModal(false);
+          setShowStripeCheckoutModal(true);
+        }}
         title="Cliente Existente!"
         message="Verificação realizada com sucesso. Você pode prosseguir com a compra."
         buttonText="Continuar Compra"
@@ -478,6 +534,31 @@ const EventDetails: React.FC = () => {
         title="Validação Pendente"
         message={`Olá, ${currentClientName}, seu número já está cadastrado e está pendente de validação. Aguarde que entraremos em contato via WhatsApp.`}
         buttonText="Entendi"
+      />
+
+      {/* Modais de Pagamento do Stripe */}
+      <StripeCheckoutModal
+        isOpen={showStripeCheckoutModal}
+        onClose={() => {
+          setShowStripeCheckoutModal(false);
+          setStripeErrorMessage(null);
+        }}
+        eventTitle={event?.title || 'Evento'}
+        batchName={priceBatches[selectedBatch]?.name || `Lote ${selectedBatch + 1}`}
+        unitPrice={priceBatches[selectedBatch]?.price || 0}
+        quantity={quantity}
+        clientName={currentClientName}
+        clientPhone={currentPhone}
+        onConfirmCheckout={handleConfirmStripeCheckout}
+        loading={stripeCheckoutLoading}
+        errorMessage={stripeErrorMessage}
+      />
+
+      <PaymentSuccessModal
+        isOpen={showPaymentSuccessModal}
+        onClose={() => setShowPaymentSuccessModal(false)}
+        sessionId={stripeSessionId}
+        eventTitle={event?.title}
       />
       
       <Header />
@@ -514,15 +595,17 @@ const EventDetails: React.FC = () => {
                   {/* CONTEÚDO DA DESCRIÇÃO */}
                   <div className="p-8">
                     <div className="flex flex-wrap items-center gap-2 mb-4">
-                      <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                        {event.event_type}
-                      </span>
+                      {event.event_type && !/^[0-9a-fA-F-]{36}$/.test(event.event_type) && (
+                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                          {event.event_type}
+                        </span>
+                      )}
                       <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
                         Ativo
                       </span>
                     </div>
                     
-                    {/* Componente de Informações */}
+                    {/* Componente de Informações (renderiza a descrição no topo) */}
                     <EventInfo
                       title={event.title}
                       date={event.event_date}
@@ -535,9 +618,8 @@ const EventDetails: React.FC = () => {
                       description={event.description}
                     />
 
-                    {/* Componente de Descrição */}
+                    {/* Componente de Descrição (apenas descrição detalhada e programação) */}
                     <EventDescription
-                      basicDescription={event.basic_description}
                       detailedDescription={event.detailed_description}
                       schedule={typeof event.schedule === 'string' ? JSON.parse(event.schedule) : event.schedule}
                     />

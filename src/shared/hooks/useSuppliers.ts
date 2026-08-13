@@ -26,7 +26,7 @@ export const useSuppliers = () => {
         .from('app_suppliers')
         .select(`
           *,
-          supplier_category_relations(
+          app_supplier_category_relations(
             is_primary,
             app_supplier_categories(id, name, color, icon)
           )
@@ -90,7 +90,7 @@ export const useSuppliers = () => {
         .from('app_suppliers')
         .select(`
           *,
-          supplier_category_relations(
+          app_supplier_category_relations(
             is_primary,
             app_supplier_categories(*)
           ),
@@ -276,7 +276,7 @@ export const useSuppliers = () => {
           app_supplier_categories(name, color),
           app_suppliers!inner(id)
         `)
-        .eq('app_suppliers.deleted_at', null);
+        .is('app_suppliers.deleted_at', null);
 
       if (categoryError) throw categoryError;
 
