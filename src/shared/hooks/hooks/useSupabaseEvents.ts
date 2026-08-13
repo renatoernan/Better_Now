@@ -45,6 +45,8 @@ const enrichEventFromDb = (dbItem: any): Event => {
   let contactPhoneVal = '';
   let eventTypeIdVal = dbItem.event_type_id || dbItem.event_type || '';
   let priceBatchesVal: any[] = Array.isArray(dbItem.price_batches) ? dbItem.price_batches : [];
+  let imageUrlVal = dbItem.image_url || '';
+  let videosVal: string[] = Array.isArray(dbItem.videos) ? dbItem.videos : [];
 
   if (dbItem.observations) {
     try {
@@ -62,6 +64,12 @@ const enrichEventFromDb = (dbItem: any): Event => {
         }
         if (Array.isArray(parsed.price_batches) && priceBatchesVal.length === 0) {
           priceBatchesVal = parsed.price_batches;
+        }
+        if (!imageUrlVal && parsed.image_url) {
+          imageUrlVal = parsed.image_url;
+        }
+        if (videosVal.length === 0 && Array.isArray(parsed.videos)) {
+          videosVal = parsed.videos;
         }
       } else {
         descriptionStr = dbItem.observations;
@@ -113,6 +121,8 @@ const enrichEventFromDb = (dbItem: any): Event => {
     is_public: isPublicVal,
     requires_approval: requiresApprovalVal,
     price_batches: priceBatchesVal,
+    image_url: imageUrlVal,
+    videos: videosVal
   };
 };
 
@@ -157,6 +167,10 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
     payload.guests = guestsVal;
   }
 
+  if (eventData.image_url !== undefined) {
+    payload.image_url = eventData.image_url;
+  }
+
   if (eventData.videos !== undefined) {
     payload.videos = eventData.videos;
   }
@@ -168,6 +182,8 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
   const contactEmail = eventData.contact_email || '';
   const contactPhone = eventData.contact_phone || '';
   const priceBatchesVal = eventData.price_batches || [];
+  const imageUrlVal = eventData.image_url || '';
+  const videosVal = eventData.videos || [];
 
   payload.observations = JSON.stringify({
     desc: descText,
@@ -178,7 +194,9 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
     contact_phone: contactPhone,
     event_type_id: typeVal,
     event_type: typeVal,
-    price_batches: priceBatchesVal
+    price_batches: priceBatchesVal,
+    image_url: imageUrlVal,
+    videos: videosVal
   });
 
   return payload;

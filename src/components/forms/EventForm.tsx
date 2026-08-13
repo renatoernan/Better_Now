@@ -37,8 +37,10 @@ const EventForm: React.FC<EventFormProps> = ({
     watch,
     setValue,
     clearErrors,
+    trigger,
     formState: { errors, isSubmitting, isValid }
   } = useForm<Event>({
+    mode: 'onChange',
     defaultValues: {
       title: '',
       description: '',
@@ -66,32 +68,34 @@ const EventForm: React.FC<EventFormProps> = ({
 
   useEffect(() => {
     if (event) {
-      setValue('title', event.title || '');
-      setValue('description', event.description || '');
-      setValue('event_type', event.event_type || event.event_type_id || '');
-      setValue('event_date', event.event_date || '');
-      setValue('event_time', event.event_time || '');
-      setValue('end_date', event.end_date || '');
-      setValue('end_time', event.end_time || '');
-      setValue('location', event.location || '');
-      setValue('location_link', event.location_link || '');
-      setValue('max_guests', event.max_guests || 0);
-      setValue('status', event.status || 'draft');
-      setValue('is_public', event.is_public ?? true);
-      setValue('requires_approval', event.requires_approval ?? false);
-      setValue('event_type_id', event.event_type_id || event.event_type || '');
-      setValue('contact_email', event.contact_email || '');
-      setValue('contact_phone', event.contact_phone || '');
-      setValue('additional_info', event.additional_info || '');
-      setValue('image_url', event.image_url || '');
-      setValue('videos', event.videos || []);
+      setValue('title', event.title || '', { shouldValidate: true });
+      setValue('description', event.description || '', { shouldValidate: true });
+      setValue('event_type', event.event_type || event.event_type_id || '', { shouldValidate: true });
+      setValue('event_date', event.event_date || '', { shouldValidate: true });
+      setValue('event_time', event.event_time || '', { shouldValidate: true });
+      setValue('end_date', event.end_date || '', { shouldValidate: true });
+      setValue('end_time', event.end_time || '', { shouldValidate: true });
+      setValue('location', event.location || '', { shouldValidate: true });
+      setValue('location_link', event.location_link || '', { shouldValidate: true });
+      setValue('max_guests', event.max_guests || 0, { shouldValidate: true });
+      setValue('status', event.status || 'draft', { shouldValidate: true });
+      setValue('is_public', event.is_public ?? true, { shouldValidate: true });
+      setValue('requires_approval', event.requires_approval ?? false, { shouldValidate: true });
+      setValue('event_type_id', event.event_type_id || event.event_type || '', { shouldValidate: true });
+      setValue('contact_email', event.contact_email || '', { shouldValidate: true });
+      setValue('contact_phone', event.contact_phone || '', { shouldValidate: true });
+      setValue('additional_info', event.additional_info || '', { shouldValidate: true });
+      setValue('image_url', event.image_url || '', { shouldValidate: true });
+      setValue('videos', event.videos || [], { shouldValidate: true });
       
       // Load price batches if available
       if (event.price_batches && Array.isArray(event.price_batches)) {
         setPriceBatches(event.price_batches);
       }
+
+      trigger();
     }
-  }, [event, setValue]);
+  }, [event, setValue, trigger]);
 
   const addPriceBatch = () => {
     const currentBatches = [...priceBatches];
@@ -184,7 +188,7 @@ const EventForm: React.FC<EventFormProps> = ({
   };
 
   const handleInputChange = (field: keyof Event, value: any) => {
-    setValue(field, value);
+    setValue(field, value, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
   };
 
   const handlePhoneChange = (value: string) => {
@@ -198,7 +202,8 @@ const EventForm: React.FC<EventFormProps> = ({
       const reader = new FileReader();
       reader.onload = () => {
         const imageUrl = reader.result as string;
-        setValue('image_url', imageUrl);
+        setValue('image_url', imageUrl, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+        trigger();
         resolve(imageUrl);
       };
       reader.readAsDataURL(file);
@@ -206,7 +211,8 @@ const EventForm: React.FC<EventFormProps> = ({
   };
 
   const handleImageRemove = () => {
-    setValue('image_url', '');
+    setValue('image_url', '', { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    trigger();
   };
 
   const handleVideoUpload = async (file: File): Promise<string> => {
@@ -216,7 +222,8 @@ const EventForm: React.FC<EventFormProps> = ({
       reader.onload = () => {
         const videoUrl = reader.result as string;
         const currentVideos = watch('videos') || [];
-        setValue('videos', [...currentVideos, videoUrl]);
+        setValue('videos', [...currentVideos, videoUrl], { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+        trigger();
         resolve(videoUrl);
       };
       reader.readAsDataURL(file);
@@ -224,7 +231,8 @@ const EventForm: React.FC<EventFormProps> = ({
   };
 
   const handleVideoRemove = () => {
-    setValue('videos', []);
+    setValue('videos', [], { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    trigger();
   };
 
   // Carregar tipos de eventos ativos ao montar o componente
@@ -322,8 +330,9 @@ const EventForm: React.FC<EventFormProps> = ({
                       value={watch('event_type_id') || watch('event_type') || ''}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setValue('event_type_id', val);
-                        setValue('event_type', val);
+                        setValue('event_type_id', val, { shouldValidate: true, shouldDirty: true });
+                        setValue('event_type', val, { shouldValidate: true, shouldDirty: true });
+                        trigger();
                       }}
                       className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
                         errors.event_type_id ? 'border-red-500 bg-red-50' : 'border-gray-300'

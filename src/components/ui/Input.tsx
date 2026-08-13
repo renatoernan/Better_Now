@@ -9,6 +9,7 @@ import type { InputProps } from '../../shared/types';
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ 
     className, 
+    type = 'text',
     variant = 'default',
     size = 'default',
     error,
@@ -41,6 +42,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
     return (
       <input
+        type={type}
         className={cn(
           baseStyles,
           variants[variant],
