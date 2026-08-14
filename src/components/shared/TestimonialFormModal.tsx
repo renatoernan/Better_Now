@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Send, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { testimonialFormDataSchema, type TestimonialFormData } from '../../shared/types/schemas/validationSchemas';
 import { useSupabaseTestimonials } from '../../shared/hooks/hooks/useSupabaseTestimonials';
+import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEventTypes';
 import { toast } from 'sonner';
 
 interface TestimonialFormModalProps {
@@ -13,8 +14,15 @@ interface TestimonialFormModalProps {
 
 const TestimonialFormModal: React.FC<TestimonialFormModalProps> = ({ isOpen, onClose }) => {
   const { createTestimonial, loading } = useSupabaseTestimonials();
+  const { eventTypes, fetchEventTypes } = useSupabaseEventTypes();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchEventTypes(true);
+    }
+  }, [isOpen]);
 
   const {
     register,
@@ -189,13 +197,11 @@ const TestimonialFormModal: React.FC<TestimonialFormModalProps> = ({ isOpen, onC
                 disabled={isSubmitting}
               >
                 <option value="">Selecione o tipo de evento</option>
-                <option value="Casamento">Casamento</option>
-                <option value="Aniversário">Aniversário</option>
-                <option value="Formatura">Formatura</option>
-                <option value="Corporativo">Corporativo</option>
-                <option value="Infantil">Infantil</option>
-                <option value="Debutante">Debutante</option>
-                <option value="Outro">Outro</option>
+                {eventTypes.map((type) => (
+                  <option key={type.id} value={type.name}>
+                    {type.name}
+                  </option>
+                ))}
               </select>
               {errors.event_type && (
                 <div className="flex items-center gap-1 mt-1 text-red-600">

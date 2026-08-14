@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { testimonialSchema, eventTypeOptions, statusOptions } from '../../shared/types/schemas/testimonialSchema';
+import { testimonialSchema, statusOptions } from '../../shared/types/schemas/testimonialSchema';
 import { useSupabaseTestimonials } from '../../shared/hooks/hooks/useSupabaseTestimonials';
+import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEventTypes';
 import type { TestimonialFormData } from '../../shared/types/schemas/testimonialSchema';
 import type { LocalTestimonial } from '../../shared/hooks/hooks/useSupabaseTestimonials';
 
@@ -16,6 +17,7 @@ interface TestimonialEditModalProps {
 
 const TestimonialEditModal: React.FC<TestimonialEditModalProps> = ({ isOpen, onClose, testimonial, onSave }) => {
   const { updateTestimonial, loading } = useSupabaseTestimonials();
+  const { eventTypes, fetchEventTypes } = useSupabaseEventTypes();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
@@ -39,8 +41,11 @@ const TestimonialEditModal: React.FC<TestimonialEditModalProps> = ({ isOpen, onC
   const testimonialText = watch('testimonial_text');
   const remainingChars = 1000 - (testimonialText?.length || 0);
 
-  // Preencher formulário quando o depoimento for carregado
+  // Preencher formulário quando o depoimento for carregado e buscar tipos de eventos
   useEffect(() => {
+    if (isOpen) {
+      fetchEventTypes(true);
+    }
     if (testimonial && isOpen) {
       setValue('name', testimonial.name);
       setValue('whatsapp', testimonial.whatsapp);
@@ -147,11 +152,16 @@ const TestimonialEditModal: React.FC<TestimonialEditModalProps> = ({ isOpen, onC
               disabled={isSubmitting}
             >
               <option value="">Selecione o tipo de evento</option>
-              {eventTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              {eventTypes.map((type) => (
+                <option key={type.id} value={type.name}>
+                  {type.name}
                 </option>
               ))}
+              {testimonial.event_type && !eventTypes.some((t) => t.name === testimonial.event_type) && (
+                <option value={testimonial.event_type}>
+                  {testimonial.event_type}
+                </option>
+              )}
             </select>
             {errors.event_type && (
               <p className="mt-1 text-sm text-red-600">{errors.event_type.message}</p>

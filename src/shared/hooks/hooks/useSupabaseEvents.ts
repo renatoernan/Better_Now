@@ -34,6 +34,12 @@ interface EventPhoto {
  * client_id, event_type_id, status, guests, observations, videos, deleted_at, created_at, updated_at
  */
 
+const isEventActive = (status?: string): boolean => {
+  if (!status) return false;
+  const normalized = String(status).trim().toLowerCase();
+  return normalized === 'active' || normalized === 'ativo' || normalized === 'published';
+};
+
 const enrichEventFromDb = (dbItem: any): Event => {
   if (!dbItem) return dbItem;
 
@@ -43,6 +49,7 @@ const enrichEventFromDb = (dbItem: any): Event => {
   let endDateVal = '';
   let contactEmailVal = '';
   let contactPhoneVal = '';
+  let statusVal = dbItem.status || '';
   let eventTypeIdVal = dbItem.event_type_id || dbItem.event_type || '';
   let priceBatchesVal: any[] = Array.isArray(dbItem.price_batches) ? dbItem.price_batches : [];
   let imageUrlVal = dbItem.image_url || '';
@@ -54,6 +61,7 @@ const enrichEventFromDb = (dbItem: any): Event => {
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
         const parsed = JSON.parse(trimmed);
         descriptionStr = parsed.desc ?? parsed.description ?? dbItem.observations;
+        if (!statusVal && parsed.status) statusVal = parsed.status;
         if (parsed.is_public !== undefined) isPublicVal = Boolean(parsed.is_public);
         if (parsed.requires_approval !== undefined) requiresApprovalVal = Boolean(parsed.requires_approval);
         if (parsed.end_date) endDateVal = parsed.end_date;
@@ -116,8 +124,8 @@ const enrichEventFromDb = (dbItem: any): Event => {
     current_guests: dbItem.guests ?? 0,
     capacity: dbItem.guests ?? 0,
     max_participants: dbItem.guests ?? 0,
-    status: dbItem.status || 'active',
-    is_active: dbItem.status !== 'cancelled' && dbItem.deleted_at === null,
+    status: statusVal || 'draft',
+    is_active: isEventActive(statusVal) && dbItem.deleted_at === null,
     is_public: isPublicVal,
     requires_approval: requiresApprovalVal,
     price_batches: priceBatchesVal,
@@ -167,14 +175,6 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
     payload.guests = guestsVal;
   }
 
-  if (eventData.image_url !== undefined) {
-    payload.image_url = eventData.image_url;
-  }
-
-  if (eventData.videos !== undefined) {
-    payload.videos = eventData.videos;
-  }
-
   const descText = eventData.description || eventData.basic_description || eventData.additional_info || '';
   const isPub = eventData.is_public ?? true;
   const reqApp = eventData.requires_approval ?? false;
@@ -187,6 +187,7 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
 
   payload.observations = JSON.stringify({
     desc: descText,
+    status: eventData.status,
     is_public: isPub,
     requires_approval: reqApp,
     end_date: endDate,

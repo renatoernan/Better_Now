@@ -2,6 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/lib/supabase';
 import { Event } from '../../types/types/event';
 
+// Função auxiliar para verificar se o status do evento é Ativo
+const isEventActive = (status?: string): boolean => {
+  if (!status) return false;
+  const normalized = String(status).trim().toLowerCase();
+  return normalized === 'active' || normalized === 'ativo' || normalized === 'published';
+};
+
 // Converter registro do banco app_events para a interface Event do frontend
 const enrichEventFromDb = (dbItem: any): Event => {
   if (!dbItem) return dbItem;
@@ -12,8 +19,11 @@ const enrichEventFromDb = (dbItem: any): Event => {
   let endDateVal = '';
   let contactEmailVal = '';
   let contactPhoneVal = '';
+  let statusVal = dbItem.status || '';
   let eventTypeIdVal = dbItem.event_type_id || dbItem.event_type || '';
   let priceBatchesVal: any[] = Array.isArray(dbItem.price_batches) ? dbItem.price_batches : [];
+  let imageUrlVal = dbItem.image_url || '';
+  let videosVal: string[] = Array.isArray(dbItem.videos) ? dbItem.videos : [];
 
   if (dbItem.observations) {
     try {
@@ -21,6 +31,7 @@ const enrichEventFromDb = (dbItem: any): Event => {
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
         const parsed = JSON.parse(trimmed);
         descriptionStr = parsed.desc ?? parsed.description ?? dbItem.observations;
+        if (!statusVal && parsed.status) statusVal = parsed.status;
         if (parsed.is_public !== undefined) isPublicVal = Boolean(parsed.is_public);
         if (parsed.requires_approval !== undefined) requiresApprovalVal = Boolean(parsed.requires_approval);
         if (parsed.end_date) endDateVal = parsed.end_date;
@@ -31,6 +42,12 @@ const enrichEventFromDb = (dbItem: any): Event => {
         }
         if (Array.isArray(parsed.price_batches) && priceBatchesVal.length === 0) {
           priceBatchesVal = parsed.price_batches;
+        }
+        if (!imageUrlVal && parsed.image_url) {
+          imageUrlVal = parsed.image_url;
+        }
+        if (videosVal.length === 0 && Array.isArray(parsed.videos)) {
+          videosVal = parsed.videos;
         }
       } else {
         descriptionStr = dbItem.observations;
@@ -45,6 +62,15 @@ const enrichEventFromDb = (dbItem: any): Event => {
   }
   if (dbItem.requires_approval !== undefined && dbItem.requires_approval !== null) {
     requiresApprovalVal = Boolean(dbItem.requires_approval);
+  }
+  if (dbItem.end_date) {
+    endDateVal = dbItem.end_date;
+  }
+  if (dbItem.contact_email) {
+    contactEmailVal = dbItem.contact_email;
+  }
+  if (dbItem.contact_phone) {
+    contactPhoneVal = dbItem.contact_phone;
   }
 
   return {
@@ -68,11 +94,13 @@ const enrichEventFromDb = (dbItem: any): Event => {
     current_guests: dbItem.guests ?? 0,
     capacity: dbItem.guests ?? 0,
     max_participants: dbItem.guests ?? 0,
-    status: dbItem.status || 'active',
-    is_active: dbItem.status !== 'cancelled' && dbItem.deleted_at === null,
+    status: statusVal || 'draft',
+    is_active: isEventActive(statusVal) && dbItem.deleted_at === null,
     is_public: isPublicVal,
     requires_approval: requiresApprovalVal,
     price_batches: priceBatchesVal,
+    image_url: imageUrlVal,
+    videos: videosVal
   };
 };
 
@@ -112,8 +140,10 @@ export const usePublicEvents = () => {
       }
 
       const enriched = enrichEventArrayFromDb(data || []);
-      // Filtrar apenas eventos públicos e não cancelados
-      const publicEvents = enriched.filter(e => e.is_public !== false && e.status !== 'cancelled');
+      // Filtrar apenas eventos públicos e com status Ativo
+      const publicEvents = enriched.filter(
+        e => e.is_public !== false && isEventActive(e.status)
+      );
 
       setEvents(publicEvents);
     } catch (err: any) {
@@ -149,7 +179,11 @@ export const usePublicEvents = () => {
         data = fallback.data;
       }
 
-      return enrichEventFromDb(data);
+      const event = enrichEventFromDb(data);
+      if (!event || event.is_public === false || !isEventActive(event.status)) {
+        return null;
+      }
+      return event;
     } catch (err: any) {
       const errorMessage = err.message || 'Erro ao carregar evento';
       setError(errorMessage);
@@ -159,7 +193,7 @@ export const usePublicEvents = () => {
     }
   }, []);
 
-  // Buscar eventos em destaque (próximos 3 eventos)
+  // Buscar eventos em destaque (próximos 3 eventos ativos)
   const fetchFeaturedEvents = useCallback(async () => {
     try {
       setLoading(true);
@@ -185,7 +219,7 @@ export const usePublicEvents = () => {
       }
 
       const enriched = enrichEventArrayFromDb(data || []);
-      return enriched.filter(e => e.is_public !== false && e.status !== 'cancelled').slice(0, 3);
+      return enriched.filter(e => e.is_public !== false && isEventActive(e.status)).slice(0, 3);
     } catch (err: any) {
       setError(err.message);
       console.error('Erro ao carregar eventos em destaque:', err);
@@ -219,7 +253,7 @@ export const usePublicEvents = () => {
       }
 
       const enriched = enrichEventArrayFromDb(data || []);
-      return enriched.filter(e => e.is_public !== false && e.category === category);
+      return enriched.filter(e => e.is_public !== false && isEventActive(e.status) && e.category === category);
     } catch (err: any) {
       setError(err.message);
       console.error('Erro ao carregar eventos por categoria:', err);
