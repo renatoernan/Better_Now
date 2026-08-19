@@ -56,7 +56,7 @@ serve(async (req) => {
 
         // 1. Atualizar o status do pedido para 'paid'
         const { data: order, error: updateError } = await supabase
-          .from("event_orders")
+          .from("app_event_orders")
           .update({
             status: "paid",
             stripe_payment_intent_id: paymentIntentId,
@@ -75,7 +75,7 @@ serve(async (req) => {
           const amountTotal = (session.amount_total || 0) / 100;
 
           const { data: newOrder, error: insertError } = await supabase
-            .from("event_orders")
+            .from("app_event_orders")
             .insert({
               event_id: metadata.event_id || null,
               client_id: metadata.client_id || null,
@@ -102,7 +102,7 @@ serve(async (req) => {
         }
 
         if (orderData) {
-          // 2. Gerar N ingressos na tabela event_tickets com QR Code único
+          // 2. Gerar N ingressos na tabela app_event_tickets com QR Code único
           const quantity = orderData.quantity || 1;
           const ticketsToInsert = [];
 
@@ -121,7 +121,7 @@ serve(async (req) => {
           }
 
           const { data: createdTickets, error: ticketError } = await supabase
-            .from("event_tickets")
+            .from("app_event_tickets")
             .insert(ticketsToInsert)
             .select();
 
@@ -163,7 +163,7 @@ serve(async (req) => {
         const sessionId = session.id;
 
         await supabase
-          .from("event_orders")
+          .from("app_event_orders")
           .update({
             status: event.type === "checkout.session.expired" ? "canceled" : "failed",
             updated_at: new Date().toISOString(),

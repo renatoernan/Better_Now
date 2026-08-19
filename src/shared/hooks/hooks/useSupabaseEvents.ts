@@ -52,6 +52,8 @@ const enrichEventFromDb = (dbItem: any): Event => {
   let statusVal = dbItem.status || '';
   let eventTypeIdVal = dbItem.event_type_id || dbItem.event_type || '';
   let priceBatchesVal: any[] = Array.isArray(dbItem.price_batches) ? dbItem.price_batches : [];
+  let paymentMethodsVal: any[] = Array.isArray(dbItem.payment_methods) ? dbItem.payment_methods : [];
+  let checkoutFieldsVal: any[] = Array.isArray(dbItem.checkout_fields) ? dbItem.checkout_fields : [];
   let imageUrlVal = dbItem.image_url || '';
   let videosVal: string[] = Array.isArray(dbItem.videos) ? dbItem.videos : [];
 
@@ -73,11 +75,26 @@ const enrichEventFromDb = (dbItem: any): Event => {
         if (Array.isArray(parsed.price_batches) && priceBatchesVal.length === 0) {
           priceBatchesVal = parsed.price_batches;
         }
+        if (Array.isArray(parsed.payment_methods) && paymentMethodsVal.length === 0) {
+          paymentMethodsVal = parsed.payment_methods;
+        }
+        if (Array.isArray(parsed.checkout_fields) && checkoutFieldsVal.length === 0) {
+          checkoutFieldsVal = parsed.checkout_fields;
+        }
         if (!imageUrlVal && parsed.image_url) {
           imageUrlVal = parsed.image_url;
         }
         if (videosVal.length === 0 && Array.isArray(parsed.videos)) {
           videosVal = parsed.videos;
+        }
+        if (parsed.waha_msg_order_created) {
+          dbItem.waha_msg_order_created = parsed.waha_msg_order_created;
+        }
+        if (parsed.waha_msg_order_confirmed) {
+          dbItem.waha_msg_order_confirmed = parsed.waha_msg_order_confirmed;
+        }
+        if (parsed.waha_msg_order_cancelled) {
+          dbItem.waha_msg_order_cancelled = parsed.waha_msg_order_cancelled;
         }
       } else {
         descriptionStr = dbItem.observations;
@@ -129,6 +146,11 @@ const enrichEventFromDb = (dbItem: any): Event => {
     is_public: isPublicVal,
     requires_approval: requiresApprovalVal,
     price_batches: priceBatchesVal,
+    payment_methods: paymentMethodsVal,
+    checkout_fields: checkoutFieldsVal,
+    waha_msg_order_created: dbItem.waha_msg_order_created || '',
+    waha_msg_order_confirmed: dbItem.waha_msg_order_confirmed || '',
+    waha_msg_order_cancelled: dbItem.waha_msg_order_cancelled || '',
     image_url: imageUrlVal,
     videos: videosVal
   };
@@ -182,8 +204,23 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
   const contactEmail = eventData.contact_email || '';
   const contactPhone = eventData.contact_phone || '';
   const priceBatchesVal = eventData.price_batches || [];
+  const paymentMethodsVal = eventData.payment_methods || [];
+  const checkoutFieldsVal = eventData.checkout_fields || [];
+  const wahaMsgCreatedVal = eventData.waha_msg_order_created || '';
+  const wahaMsgConfirmedVal = eventData.waha_msg_order_confirmed || '';
+  const wahaMsgCancelledVal = eventData.waha_msg_order_cancelled || '';
   const imageUrlVal = eventData.image_url || '';
   const videosVal = eventData.videos || [];
+
+  if (eventData.waha_msg_order_created !== undefined) {
+    payload.waha_msg_order_created = eventData.waha_msg_order_created;
+  }
+  if (eventData.waha_msg_order_confirmed !== undefined) {
+    payload.waha_msg_order_confirmed = eventData.waha_msg_order_confirmed;
+  }
+  if (eventData.waha_msg_order_cancelled !== undefined) {
+    payload.waha_msg_order_cancelled = eventData.waha_msg_order_cancelled;
+  }
 
   payload.observations = JSON.stringify({
     desc: descText,
@@ -196,6 +233,11 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
     event_type_id: typeVal,
     event_type: typeVal,
     price_batches: priceBatchesVal,
+    payment_methods: paymentMethodsVal,
+    checkout_fields: checkoutFieldsVal,
+    waha_msg_order_created: wahaMsgCreatedVal,
+    waha_msg_order_confirmed: wahaMsgConfirmedVal,
+    waha_msg_order_cancelled: wahaMsgCancelledVal,
     image_url: imageUrlVal,
     videos: videosVal
   });

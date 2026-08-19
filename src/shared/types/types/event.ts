@@ -1,7 +1,7 @@
-import { PriceBatch, ScheduleItem } from './core';
+import { PriceBatch, ScheduleItem, PaymentMethodFee, CheckoutFieldConfig } from './core';
 
-// Re-export PriceBatch and ScheduleItem for external use
-export type { PriceBatch, ScheduleItem } from './core';
+// Re-export PriceBatch, ScheduleItem, PaymentMethodFee and CheckoutFieldConfig for external use
+export type { PriceBatch, ScheduleItem, PaymentMethodFee, CheckoutFieldConfig } from './core';
 
 export interface Event {
   id: string;
@@ -35,6 +35,11 @@ export interface Event {
   additional_info?: string;
   allow_ticket_sales?: boolean;
   price_batches?: PriceBatch[] | string;
+  payment_methods?: PaymentMethodFee[];
+  checkout_fields?: CheckoutFieldConfig[];
+  waha_msg_order_created?: string;
+  waha_msg_order_confirmed?: string;
+  waha_msg_order_cancelled?: string;
   schedule?: ScheduleItem[] | string;
   registration_deadline?: string;
   created_at?: string;
@@ -74,6 +79,11 @@ export interface TicketCardProps {
   priceBatches: PriceBatch[];
   selectedBatch: number;
   quantity: number;
+  paymentMethods?: PaymentMethodFee[];
+  selectedPaymentMethod?: string;
+  onPaymentMethodSelect?: (method: string) => void;
+  selectedInstallments?: number;
+  onInstallmentsSelect?: (installments: number) => void;
   onBatchSelect: (index: number) => void;
   onQuantityChange: (increment: boolean) => void;
   onPurchase: () => void;

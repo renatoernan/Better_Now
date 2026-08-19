@@ -20,6 +20,13 @@ export interface AppSettings {
   business_hours_weekdays: string;
   business_hours_weekend: string;
   business_hours_closed_days: string;
+  waha_api_url: string;
+  waha_session_name: string;
+  waha_api_key: string;
+  waha_enabled: boolean;
+  waha_msg_order_created: string;
+  waha_msg_order_confirmed: string;
+  waha_msg_order_cancelled: string;
 }
 
 export interface AppSettingsHook {
@@ -48,7 +55,14 @@ const defaultSettings: AppSettings = {
   notification_email: 'admin@betternow.com',
   business_hours_weekdays: 'Segunda a Sexta: 08:00 - 18:00',
   business_hours_weekend: 'Sábado: 08:00 - 12:00',
-  business_hours_closed_days: 'Domingo: Fechado'
+  business_hours_closed_days: 'Domingo: Fechado',
+  waha_api_url: '',
+  waha_session_name: 'default',
+  waha_api_key: '',
+  waha_enabled: true,
+  waha_msg_order_created: 'Olá, {cliente}! Recebemos seu pedido #{numero_pedido} para o evento *{evento}*.\n\n💰 *Total:* {total}\n⏳ *Status:* Aguardando Pagamento\n\nAssim que o pagamento for confirmado, você receberá seus ingressos por aqui!',
+  waha_msg_order_confirmed: '🎉 Parabéns, {cliente}! Seu pagamento para o evento *{evento}* foi confirmado com sucesso!\n\n🎟️ *Quantidade de Ingressos:* {quantidade}\n📅 *Data:* {data_evento}\n📍 *Local:* {local_evento}\n\nVocê pode acessar seus ingressos a qualquer momento através do link: {link_acesso}',
+  waha_msg_order_cancelled: 'Olá, {cliente}. Informamos que seu pedido #{numero_pedido} para o evento *{evento}* foi cancelado.\n\nSe você tiver alguma dúvida, entre em contato conosco.',
 };
 
 export const useAppSettings = (): AppSettingsHook => {

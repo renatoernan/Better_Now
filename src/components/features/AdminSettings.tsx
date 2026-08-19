@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Settings, Save, Globe, Bell, Shield, Database, Palette, Mail, Loader2, RefreshCw, AlertCircle, Clock, Upload, Eye, EyeOff, Trash2, RotateCcw, Move, X, Image as ImageIcon, Plus } from 'lucide-react';
+import { Settings, Save, Globe, Bell, Shield, Database, Palette, Mail, Loader2, RefreshCw, AlertCircle, Clock, Upload, Eye, EyeOff, Trash2, RotateCcw, Move, X, Image as ImageIcon, Plus, MessageSquare, Key, Smartphone, Play, CheckSquare, Square, Copy, Check, Sparkles } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAppSettings, AppSettings } from '../../shared/hooks/hooks/useAppSettings';
@@ -9,21 +9,26 @@ import {
   businessHoursSettingsSchema,
   carouselSettingsSchema,
   systemSettingsSchema,
+  wahaSettingsSchema,
   SiteSettings,
   ContactSettings,
   BusinessHoursSettings,
   CarouselSettings,
-  SystemSettings
+  SystemSettings,
+  WahaSettings
 } from '../../shared/types/schemas/validationSchemas';
 import { useSupabaseImages } from '../../shared/hooks/hooks/useSupabaseImages';
 import { CarouselImage } from '../../shared/services/lib/supabase';
 import { PhoneInput } from '../ui/PhoneInput';
+import { WahaTestModal } from '../shared/WahaTestModal';
 
-type SettingsCategory = 'site' | 'contact' | 'business_hours' | 'carousel' | 'system';
+type SettingsCategory = 'site' | 'contact' | 'waha' | 'business_hours' | 'carousel' | 'system';
 
 const AdminSettings: React.FC = () => {
   const { settings, loading, saving, error, updateSetting, updateMultipleSettings, loadSettings } = useAppSettings();
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('site');
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     images,
@@ -48,6 +53,8 @@ const AdminSettings: React.FC = () => {
         return siteSettingsSchema;
       case 'contact':
         return contactSettingsSchema;
+      case 'waha':
+        return wahaSettingsSchema;
       case 'business_hours':
         return businessHoursSettingsSchema;
       case 'carousel':
@@ -73,6 +80,16 @@ const AdminSettings: React.FC = () => {
           address: settings.address || '',
           social_instagram: settings.social_instagram || '',
           social_whatsapp: settings.social_whatsapp || '',
+        };
+      case 'waha':
+        return {
+          waha_api_url: settings.waha_api_url || '',
+          waha_session_name: settings.waha_session_name || 'default',
+          waha_api_key: settings.waha_api_key || '',
+          waha_enabled: settings.waha_enabled ?? true,
+          waha_msg_order_created: settings.waha_msg_order_created || '',
+          waha_msg_order_confirmed: settings.waha_msg_order_confirmed || '',
+          waha_msg_order_cancelled: settings.waha_msg_order_cancelled || '',
         };
       case 'business_hours':
         return {
@@ -139,6 +156,8 @@ const AdminSettings: React.FC = () => {
         return ['site_title'];
       case 'contact':
         return ['contact_email', 'phone', 'address', 'social_instagram', 'social_whatsapp'];
+      case 'waha':
+        return ['waha_api_url', 'waha_session_name', 'waha_api_key', 'waha_enabled', 'waha_msg_order_created', 'waha_msg_order_confirmed', 'waha_msg_order_cancelled'];
       case 'business_hours':
         return ['business_hours_weekdays', 'business_hours_weekend', 'business_hours_closed_days'];
       case 'carousel':
@@ -234,6 +253,7 @@ const AdminSettings: React.FC = () => {
             {[
               { id: 'site', name: 'Site', icon: Globe },
               { id: 'contact', name: 'Contato', icon: Mail },
+              { id: 'waha', name: 'WhatsApp (WAHA)', icon: MessageSquare },
               { id: 'business_hours', name: 'Horários', icon: Clock },
               { id: 'carousel', name: 'Carrossel', icon: Palette },
               { id: 'system', name: 'Sistema', icon: Database }
@@ -320,10 +340,9 @@ const AdminSettings: React.FC = () => {
                   </label>
                   <PhoneInput
                     value={watch('phone') || ''}
-                    onChange={(value) => setValue('phone', value)}
-                    placeholder="+55 11 99999-9999"
+                    onChange={(value) => setValue('phone', value, { shouldDirty: true })}
                     error={!!errors.phone}
-                    name="phone"
+                    placeholder="(11) 99999-9999"
                   />
                   {errors.phone && (
                     <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
@@ -394,6 +413,166 @@ const AdminSettings: React.FC = () => {
                       <span>{String(errors.social_whatsapp?.message || '')}</span>
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Categoria WhatsApp WAHA */}
+          {activeCategory === 'waha' && (
+            <div className="space-y-6">
+              {/* Header do Card WAHA */}
+              <div className="flex items-center gap-4 pb-4 border-b border-gray-100">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm shrink-0">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    Integração WhatsApp (WAHA)
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Configure os parâmetros do seu servidor próprio WAHA (WhatsApp HTTP API).
+                  </p>
+                </div>
+              </div>
+
+              {/* Indicador de Seção */}
+              <div className="border-b border-gray-200">
+                <div className="inline-block border-b-2 border-emerald-600 pb-3">
+                  <span className="text-sm font-bold text-emerald-700">
+                    Servidor WAHA
+                  </span>
+                </div>
+              </div>
+
+              {/* Formulário do Servidor WAHA */}
+              <div className="space-y-6 pt-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* URL do Servidor */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-slate-400" />
+                      URL DO SERVIDOR WAHA
+                    </label>
+                    <input
+                      type="text"
+                      {...register('waha_api_url')}
+                      placeholder="https://waha.tradersbots.com.br"
+                      className={`w-full px-4 py-3.5 bg-slate-50/80 border rounded-2xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all shadow-sm text-sm ${
+                        errors.waha_api_url ? 'border-red-300 bg-red-50' : 'border-slate-200/90'
+                      }`}
+                    />
+                    {errors.waha_api_url && (
+                      <div className="flex items-center gap-1 mt-1 text-red-600 text-xs">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        <span>{String(errors.waha_api_url?.message || '')}</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      Endereço base do container / servidor WAHA.
+                    </p>
+                  </div>
+
+                  {/* Nome da Sessão */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+                      NOME DA SESSÃO (SESSION NAME)
+                    </label>
+                    <input
+                      type="text"
+                      {...register('waha_session_name')}
+                      placeholder="Cesire"
+                      className={`w-full px-4 py-3.5 bg-slate-50/80 border rounded-2xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all shadow-sm text-sm ${
+                        errors.waha_session_name ? 'border-red-300 bg-red-50' : 'border-slate-200/90'
+                      }`}
+                    />
+                    {errors.waha_session_name && (
+                      <div className="flex items-center gap-1 mt-1 text-red-600 text-xs">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        <span>{String(errors.waha_session_name?.message || '')}</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      Identificador da sessão ativa no seu WAHA.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Chave de API */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Key className="w-3.5 h-3.5 text-slate-400" />
+                      CHAVE DE API (WAHA_API_KEY)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        {...register('waha_api_key')}
+                        placeholder="••••••••••••••••••••••••••••"
+                        className={`w-full px-4 py-3.5 pr-11 bg-slate-50/80 border rounded-2xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all shadow-sm text-sm font-mono ${
+                          errors.waha_api_key ? 'border-red-300 bg-red-50' : 'border-slate-200/90'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                      >
+                        {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {errors.waha_api_key && (
+                      <div className="flex items-center gap-1 mt-1 text-red-600 text-xs">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        <span>{String(errors.waha_api_key?.message || '')}</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      Chave de segurança (cabeçalho X-Api-Key).
+                    </p>
+                  </div>
+
+                  {/* Toggle Habilitado */}
+                  <div className="flex flex-col justify-center">
+                    <label className="flex items-center gap-3 p-4 bg-emerald-50/40 border border-emerald-200/60 rounded-2xl cursor-pointer hover:bg-emerald-50/80 transition-all">
+                      <input
+                        type="checkbox"
+                        {...register('waha_enabled')}
+                        className="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <span className="text-sm font-semibold text-gray-900 block">
+                          Envio Automático Ativo
+                        </span>
+                        <span className="text-xs text-gray-500 block">
+                          Dispara mensagens de confirmação e status automaticamente aos clientes.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Ações Inferiores idênticas ao print */}
+                <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsTestModalOpen(true)}
+                    className="border border-emerald-500 text-emerald-700 bg-emerald-50/40 hover:bg-emerald-100/80 rounded-xl px-5 py-2.5 flex items-center gap-2 font-medium transition-all shadow-sm text-sm"
+                  >
+                    <Play className="w-4 h-4 fill-emerald-600/30" />
+                    Testar Conexão
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmit(onSubmit)}
+                    disabled={saving}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 py-2.5 flex items-center gap-2 font-semibold shadow-sm transition-all text-sm disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {saving ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -816,6 +995,15 @@ const AdminSettings: React.FC = () => {
           </p>
         </div>
       )}
+
+      {/* Modal de Teste WAHA */}
+      <WahaTestModal
+        isOpen={isTestModalOpen}
+        onClose={() => setIsTestModalOpen(false)}
+        apiUrl={watch('waha_api_url')}
+        sessionName={watch('waha_session_name')}
+        apiKey={watch('waha_api_key')}
+      />
     </div>
   );
 };

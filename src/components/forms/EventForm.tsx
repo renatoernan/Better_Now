@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle } from 'lucide-react';
-import { Event, PriceBatch } from '../../shared/types/types/event';
+import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle, CreditCard, FileText, QrCode, Percent, Upload, Image as ImageIcon, UserCheck, ClipboardList, CheckSquare, GripVertical, ArrowUp, ArrowDown, MessageSquare, Copy, Check, Sparkles, RefreshCw } from 'lucide-react';
+import { Event, PriceBatch, PaymentMethodFee, CheckoutFieldConfig } from '../../shared/types/types/event';
 import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEventTypes';
 import ImageUpload from '../shared/ImageUpload';
 import VideoUpload from '../shared/VideoUpload';
 import { toast } from 'sonner';
 import { PhoneInput } from '../ui/PhoneInput';
+
+const DEFAULT_WAHA_MSG_CREATED = 'Olá, {cliente}! Recebemos seu pedido #{numero_pedido} para o evento *{evento}*.\n\n💰 *Total:* {total}\n⏳ *Status:* Aguardando Pagamento\n\nAssim que o pagamento for confirmado, você receberá seus ingressos por aqui!';
+const DEFAULT_WAHA_MSG_CONFIRMED = '🎉 Parabéns, {cliente}! Seu pagamento para o evento *{evento}* foi confirmado com sucesso!\n\n🎟️ *Quantidade de Ingressos:* {quantidade}\n📅 *Data:* {data_evento}\n📍 *Local:* {local_evento}\n\nVocê pode acessar seus ingressos a qualquer momento através do link: {link_acesso}';
+const DEFAULT_WAHA_MSG_CANCELLED = 'Olá, {cliente}. Informamos que seu pedido #{numero_pedido} para o evento *{evento}* foi cancelado.\n\nSe você tiver alguma dúvida, entre em contato conosco.';
 
 interface LocalPriceBatch {
   id: string;
@@ -15,6 +19,33 @@ interface LocalPriceBatch {
   start_date: string;
   end_date?: string;
 }
+
+const DEFAULT_PAYMENT_METHODS: PaymentMethodFee[] = [
+  { method: 'boleto', label: 'Boleto Bancário', enabled: false, fee_percentage: 0 },
+  { method: 'credit_card', label: 'Cartão de Crédito', enabled: false, fee_percentage: 0, max_installments: 12 },
+  { method: 'pix_stripe', label: 'Pix', enabled: false, fee_percentage: 0 },
+  { method: 'pix_chave', label: 'Pix (Chave / QR Code Próprio)', enabled: false, fee_percentage: 0, qr_code_url: '', pix_key: '' }
+];
+
+const DEFAULT_CHECKOUT_FIELDS: CheckoutFieldConfig[] = [
+  { field: 'cpf', label: 'CPF / Documento', enabled: true, required: true, type: 'cpf' },
+  { field: 'nome', label: 'Nome Completo', enabled: true, required: true, type: 'text' },
+  { field: 'apelido', label: 'Apelido / Nome Social', enabled: false, required: false, type: 'text' },
+  { field: 'whatsapp', label: 'WhatsApp', enabled: true, required: true, type: 'phone' },
+  { field: 'telefone', label: 'Telefone', enabled: false, required: false, type: 'phone' },
+  { field: 'email', label: 'E-mail', enabled: true, required: false, type: 'email' },
+  { field: 'data_nascimento', label: 'Data de Nascimento', enabled: false, required: false, type: 'date' },
+  { field: 'profissao', label: 'Profissão / Cargo', enabled: false, required: false, type: 'text' },
+  { field: 'empresa', label: 'Empresa / Organização', enabled: false, required: false, type: 'text' },
+  { field: 'cep', label: 'CEP', enabled: false, required: false, type: 'cep' },
+  { field: 'logradouro', label: 'Endereço / Logradouro', enabled: false, required: false, type: 'text' },
+  { field: 'numero', label: 'Número', enabled: false, required: false, type: 'text' },
+  { field: 'complemento', label: 'Complemento', enabled: false, required: false, type: 'text' },
+  { field: 'bairro', label: 'Bairro', enabled: false, required: false, type: 'text' },
+  { field: 'cidade', label: 'Cidade', enabled: false, required: false, type: 'text' },
+  { field: 'uf', label: 'Estado (UF)', enabled: false, required: false, type: 'select' },
+  { field: 'notes', label: 'Observações / Como soube', enabled: false, required: false, type: 'textarea' },
+];
 
 interface EventFormProps {
   event?: Event | null;
@@ -60,11 +91,21 @@ const EventForm: React.FC<EventFormProps> = ({
       contact_phone: '',
       additional_info: '',
       image_url: '',
-      videos: []
+      videos: [],
+      waha_msg_order_created: DEFAULT_WAHA_MSG_CREATED,
+      waha_msg_order_confirmed: DEFAULT_WAHA_MSG_CONFIRMED,
+      waha_msg_order_cancelled: DEFAULT_WAHA_MSG_CANCELLED,
     }
   });
 
+  type EventFormTab = 'details' | 'media' | 'payments' | 'checkout' | 'whatsapp';
+
+  const [activeTab, setActiveTab] = useState<EventFormTab>('details');
   const [priceBatches, setPriceBatches] = useState<LocalPriceBatch[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodFee[]>(DEFAULT_PAYMENT_METHODS);
+  const [checkoutFields, setCheckoutFields] = useState<CheckoutFieldConfig[]>(DEFAULT_CHECKOUT_FIELDS);
+  const [draggedFieldIndex, setDraggedFieldIndex] = useState<number | null>(null);
+  const [copiedTag, setCopiedTag] = useState<string | null>(null);
 
   useEffect(() => {
     if (event) {
@@ -87,10 +128,55 @@ const EventForm: React.FC<EventFormProps> = ({
       setValue('additional_info', event.additional_info || '', { shouldValidate: true });
       setValue('image_url', event.image_url || '', { shouldValidate: true });
       setValue('videos', event.videos || [], { shouldValidate: true });
+      setValue('waha_msg_order_created', event.waha_msg_order_created || DEFAULT_WAHA_MSG_CREATED, { shouldValidate: true });
+      setValue('waha_msg_order_confirmed', event.waha_msg_order_confirmed || DEFAULT_WAHA_MSG_CONFIRMED, { shouldValidate: true });
+      setValue('waha_msg_order_cancelled', event.waha_msg_order_cancelled || DEFAULT_WAHA_MSG_CANCELLED, { shouldValidate: true });
       
-      // Load price batches if available
       if (event.price_batches && Array.isArray(event.price_batches)) {
         setPriceBatches(event.price_batches);
+      }
+
+      if (event.payment_methods && Array.isArray(event.payment_methods)) {
+        const merged = DEFAULT_PAYMENT_METHODS.map(defaultPm => {
+          const found = event.payment_methods?.find(pm => pm.method === defaultPm.method);
+          return found ? { ...defaultPm, ...found } : defaultPm;
+        });
+        setPaymentMethods(merged);
+      } else {
+        setPaymentMethods(DEFAULT_PAYMENT_METHODS);
+      }
+
+      if (event.checkout_fields && Array.isArray(event.checkout_fields) && event.checkout_fields.length > 0) {
+        const canonicalKey = (k: string) => {
+          if (k === 'documento') return 'cpf';
+          if (k === 'observacoes') return 'notes';
+          return k;
+        };
+
+        const seenKeys = new Set<string>();
+        const savedFields: CheckoutFieldConfig[] = [];
+
+        event.checkout_fields.forEach(savedField => {
+          const key = canonicalKey(savedField.field);
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            const defaultDef = DEFAULT_CHECKOUT_FIELDS.find(df => df.field === key);
+            savedFields.push({
+              ...(defaultDef || { type: 'text' as const, label: savedField.label || key }),
+              ...savedField,
+              field: key,
+              label: defaultDef ? defaultDef.label : (savedField.label || key)
+            });
+          }
+        });
+
+        const missingFields = DEFAULT_CHECKOUT_FIELDS.filter(
+          df => !seenKeys.has(df.field)
+        );
+
+        setCheckoutFields([...savedFields, ...missingFields]);
+      } else {
+        setCheckoutFields(DEFAULT_CHECKOUT_FIELDS);
       }
 
       trigger();
@@ -100,7 +186,6 @@ const EventForm: React.FC<EventFormProps> = ({
   const addPriceBatch = () => {
     const currentBatches = [...priceBatches];
     
-    // Se é o primeiro lote, nomeia como "Lote Único"
     if (currentBatches.length === 0) {
       const newBatch: LocalPriceBatch = {
         id: Date.now().toString(),
@@ -147,11 +232,112 @@ const EventForm: React.FC<EventFormProps> = ({
 
 
 
+  const updatePaymentMethodFee = (method: 'boleto' | 'credit_card' | 'pix_stripe' | 'pix_chave', fee: number) => {
+    setPaymentMethods(prev => prev.map(pm => pm.method === method ? { ...pm, fee_percentage: fee } : pm));
+  };
+
+  const togglePaymentMethod = (method: 'boleto' | 'credit_card', enabled: boolean) => {
+    setPaymentMethods(prev => prev.map(pm => pm.method === method ? { ...pm, enabled } : pm));
+  };
+
+  const setPixOption = (option: 'none' | 'pix_stripe' | 'pix_chave') => {
+    setPaymentMethods(prev => prev.map(pm => {
+      if (pm.method === 'pix_stripe') {
+        return { ...pm, enabled: option === 'pix_stripe' };
+      }
+      if (pm.method === 'pix_chave') {
+        return { ...pm, enabled: option === 'pix_chave' };
+      }
+      return pm;
+    }));
+  };
+
+  const handleQrCodeUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const qrUrl = reader.result as string;
+      setPaymentMethods(prev => prev.map(pm => pm.method === 'pix_chave' ? { ...pm, qr_code_url: qrUrl } : pm));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleQrCodeRemove = () => {
+    setPaymentMethods(prev => prev.map(pm => pm.method === 'pix_chave' ? { ...pm, qr_code_url: '' } : pm));
+  };
+
+  const updatePixKey = (key: string) => {
+    setPaymentMethods(prev => prev.map(pm => pm.method === 'pix_chave' ? { ...pm, pix_key: key } : pm));
+  };
+
+  const updateCardMaxInstallments = (maxInstallments: number) => {
+    setPaymentMethods(prev => prev.map(pm => pm.method === 'credit_card' ? { ...pm, max_installments: maxInstallments } : pm));
+  };
+
+  const toggleCheckoutField = (fieldName: string, enabled: boolean) => {
+    if (fieldName === 'nome' || fieldName === 'whatsapp') return; // Campos fixos
+    setCheckoutFields(prev => prev.map(f => {
+      if (f.field === fieldName) {
+        return {
+          ...f,
+          enabled,
+          required: enabled ? f.required : false
+        };
+      }
+      return f;
+    }));
+  };
+
+  const toggleCheckoutFieldRequired = (fieldName: string, required: boolean) => {
+    if (fieldName === 'nome' || fieldName === 'whatsapp') return; // Campos fixos
+    setCheckoutFields(prev => prev.map(f => {
+      if (f.field === fieldName) {
+        return { ...f, required };
+      }
+      return f;
+    }));
+  };
+
+  const handleDragStart = (index: number) => {
+    setDraggedFieldIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedFieldIndex === null || draggedFieldIndex === index) return;
+    
+    // Reordenar a lista em tempo real
+    setCheckoutFields(prev => {
+      const items = [...prev];
+      const [draggedItem] = items.splice(draggedFieldIndex, 1);
+      items.splice(index, 0, draggedItem);
+      return items;
+    });
+    setDraggedFieldIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedFieldIndex(null);
+  };
+
+  const moveField = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= checkoutFields.length) return;
+
+    setCheckoutFields(prev => {
+      const items = [...prev];
+      const [item] = items.splice(index, 1);
+      items.splice(targetIndex, 0, item);
+      return items;
+    });
+  };
+
   const onSubmit = async (data: Event) => {
     try {
       const eventData: Partial<Event> = {
         ...data,
-        price_batches: priceBatches as PriceBatch[]
+        price_batches: priceBatches as PriceBatch[],
+        payment_methods: paymentMethods,
+        checkout_fields: checkoutFields
       };
       await onSave(eventData);
     } catch (error) {
@@ -241,605 +427,1188 @@ const EventForm: React.FC<EventFormProps> = ({
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
-        <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full max-h-[92vh]">
           {/* Header fixo */}
-          <div className="p-6 border-b border-gray-200 flex-shrink-0">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-900">
+          <div className="px-6 py-5 border-b border-gray-200 flex-shrink-0 bg-white flex justify-between items-center">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                 {event ? 'Editar Evento' : 'Novo Evento'}
               </h2>
-              <button
-                type="button"
-                onClick={onCancel}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Configure os dados, pagamentos, checkout e mensagens de WhatsApp do evento
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-gray-400 hover:text-gray-600 p-2 rounded-xl hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Navegação por Abas */}
+          <div className="border-b border-gray-200 bg-slate-50/70 px-6 flex-shrink-0">
+            <nav className="flex space-x-1 sm:space-x-3 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" aria-label="Tabs">
+              {[
+                {
+                  id: 'details',
+                  name: 'Dados Evento',
+                  icon: Calendar,
+                  hasError: !!(errors.title || errors.description || errors.event_date || errors.event_time || errors.location)
+                },
+                {
+                  id: 'media',
+                  name: 'Mídias',
+                  icon: ImageIcon,
+                  hasError: false
+                },
+                {
+                  id: 'payments',
+                  name: 'Formas Pagamento e Taxas',
+                  icon: CreditCard,
+                  hasError: false
+                },
+                {
+                  id: 'checkout',
+                  name: 'Formulário Comprador',
+                  icon: UserCheck,
+                  hasError: false
+                },
+                {
+                  id: 'whatsapp',
+                  name: 'Mensagens WhatsApp',
+                  icon: MessageSquare,
+                  hasError: false
+                }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id as EventFormTab)}
+                    className={`whitespace-nowrap py-3.5 px-3 border-b-2 font-medium text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
+                      isActive
+                        ? 'border-blue-600 text-blue-600 bg-white shadow-2xs font-semibold'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <span>{tab.name}</span>
+                    {tab.hasError && (
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Campos obrigatórios pendentes nesta aba" />
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
 
           {/* Conteúdo scrollável */}
-          <div className="flex-1 overflow-y-auto p-6 min-h-0">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-h-0 bg-slate-50/30">
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Coluna Esquerda */}
+            {/* ABA 1: DADOS DO EVENTO */}
+            {activeTab === 'details' && (
               <div className="space-y-6">
-                {/* Informações Básicas */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Info className="w-5 h-5" />
-                    Informações Básicas
-                  </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Coluna Esquerda */}
+                  <div className="space-y-6">
+                    {/* Informações Básicas */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-2xs space-y-4">
+                      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <Info className="w-4 h-4 text-blue-600" />
+                        Informações Básicas
+                      </h3>
 
-                  {/* Nome do Evento */}
-                  <div className="mb-4">
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                      Nome do Evento *
-                    </label>
-                    <input
-                      {...register('title', { required: 'Nome do evento é obrigatório' })}
-                      type="text"
-                      id="title"
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.title ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      placeholder="Digite o nome do evento"
-                      disabled={isSubmitting}
-                    />
-                    {errors.title && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600">
-                        <AlertCircle className="w-4 h-4" />
-                        <span className="text-sm">{errors.title.message}</span>
+                      {/* Nome do Evento */}
+                      <div>
+                        <label htmlFor="title" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                          Nome do Evento *
+                        </label>
+                        <input
+                          {...register('title', { required: 'Nome do evento é obrigatório' })}
+                          type="text"
+                          id="title"
+                          className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            errors.title ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                          }`}
+                          placeholder="Digite o nome do evento"
+                          disabled={isSubmitting}
+                        />
+                        {errors.title && (
+                          <div className="flex items-center gap-1 mt-1 text-red-600">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span className="text-xs">{errors.title.message}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  {/* Descrição */}
-                  <div className="mb-4">
-                    <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
-                      Descrição do Evento *
-                    </label>
-                    <textarea
-                      {...register('description', { required: 'Descrição é obrigatória' })}
-                      id="description"
-                      rows={6}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none ${
-                        errors.description ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      placeholder="Descrição detalhada do evento"
-                      disabled={isSubmitting}
-                    />
-                    {errors.description && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600">
-                        <AlertCircle className="w-4 h-4" />
-                        <span className="text-sm">{errors.description.message}</span>
+                      {/* Descrição */}
+                      <div>
+                        <label htmlFor="description" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                          Descrição do Evento *
+                        </label>
+                        <textarea
+                          {...register('description', { required: 'Descrição é obrigatória' })}
+                          id="description"
+                          rows={4}
+                          className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none ${
+                            errors.description ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                          }`}
+                          placeholder="Descrição detalhada do evento"
+                          disabled={isSubmitting}
+                        />
+                        {errors.description && (
+                          <div className="flex items-center gap-1 mt-1 text-red-600">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span className="text-xs">{errors.description.message}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  {/* Tipo Evento */}
-                  <div className="mb-4">
-                    <label htmlFor="event_type_id" className="block text-sm font-medium text-gray-700 mb-2">
-                      Tipo Evento
-                    </label>
-                    <select
-                      {...register('event_type_id')}
-                      id="event_type_id"
-                      value={watch('event_type_id') || watch('event_type') || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setValue('event_type_id', val, { shouldValidate: true, shouldDirty: true });
-                        setValue('event_type', val, { shouldValidate: true, shouldDirty: true });
-                        trigger();
-                      }}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.event_type_id ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      disabled={isSubmitting}
-                    >
-                      <option value="">Selecione um tipo de evento</option>
-                      {eventTypes.map((eventType) => (
-                        <option key={eventType.id} value={eventType.id}>
-                          {eventType.name}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.event_type_id && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600">
-                        <AlertCircle className="w-4 h-4" />
-                        <span className="text-sm">{errors.event_type_id.message}</span>
+                      {/* Tipo Evento */}
+                      <div>
+                        <label htmlFor="event_type_id" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                          Tipo de Evento
+                        </label>
+                        <select
+                          {...register('event_type_id')}
+                          id="event_type_id"
+                          value={watch('event_type_id') || watch('event_type') || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setValue('event_type_id', val, { shouldValidate: true, shouldDirty: true });
+                            setValue('event_type', val, { shouldValidate: true, shouldDirty: true });
+                            trigger();
+                          }}
+                          className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            errors.event_type_id ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                          }`}
+                          disabled={isSubmitting}
+                        >
+                          <option value="">Selecione um tipo de evento</option>
+                          {eventTypes.map((eventType) => (
+                            <option key={eventType.id} value={eventType.id}>
+                              {eventType.name}
+                            </option>
+                          ))}
+                        </select>
+                        {errors.event_type_id && (
+                          <div className="flex items-center gap-1 mt-1 text-red-600">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span className="text-xs">{errors.event_type_id.message}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Data e Hora */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Calendar className="w-5 h-5" />
-                    Data e Hora
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Data de Início */}
-                    <div>
-                      <label htmlFor="event_date" className="block text-sm font-medium text-gray-700 mb-2">
-                        Data de Início *
-                      </label>
-                      <input
-                        {...register('event_date', { required: 'Data de início é obrigatória' })}
-                        type="date"
-                        id="event_date"
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                          errors.event_date ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                        disabled={isSubmitting}
-                      />
-                      {errors.event_date && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm">{errors.event_date.message}</span>
-                        </div>
-                      )}
                     </div>
 
-                    {/* Horário de Início */}
-                    <div>
-                      <label htmlFor="event_time" className="block text-sm font-medium text-gray-700 mb-2">
-                        Horário de Início *
-                      </label>
-                      <input
-                        {...register('event_time', { required: 'Horário de início é obrigatório' })}
-                        type="time"
-                        id="event_time"
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                          errors.event_time ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                        disabled={isSubmitting}
-                      />
-                      {errors.event_time && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm">{errors.event_time.message}</span>
-                        </div>
-                      )}
-                    </div>
+                    {/* Data e Hora */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-2xs space-y-4">
+                      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <Calendar className="w-4 h-4 text-blue-600" />
+                        Data e Horário
+                      </h3>
 
-                    {/* Data de Término */}
-                    <div>
-                      <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-2">
-                        Data de Término
-                      </label>
-                      <input
-                        {...register('end_date')}
-                        type="date"
-                        id="end_date"
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                          errors.end_date ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                        disabled={isSubmitting}
-                      />
-                      {errors.end_date && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm">{errors.end_date.message}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Horário de Término */}
-                    <div>
-                      <label htmlFor="end_time" className="block text-sm font-medium text-gray-700 mb-2">
-                        Horário de Término
-                      </label>
-                      <input
-                        {...register('end_time')}
-                        type="time"
-                        id="end_time"
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                          errors.end_time ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                        disabled={isSubmitting}
-                      />
-                      {errors.end_time && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm">{errors.end_time.message}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Local */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <MapPin className="w-5 h-5" />
-                    Local
-                  </h3>
-
-                  {/* Endereço */}
-                  <div className="mb-4">
-                    <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-2">
-                      Endereço *
-                    </label>
-                    <input
-                      {...register('location', { required: 'Local é obrigatório' })}
-                      type="text"
-                      id="location"
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.location ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      placeholder="Endereço completo do evento"
-                      disabled={isSubmitting}
-                    />
-                    {errors.location && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600">
-                        <AlertCircle className="w-4 h-4" />
-                        <span className="text-sm">{errors.location.message}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Link do Local */}
-                  <div>
-                    <label htmlFor="location_link" className="block text-sm font-medium text-gray-700 mb-2">
-                      Link do Local (Google Maps, etc.)
-                    </label>
-                    <input
-                      {...register('location_link')}
-                      type="url"
-                      id="location_link"
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.location_link ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      placeholder="https://maps.google.com/..."
-                      disabled={isSubmitting}
-                    />
-                    {errors.location_link && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600">
-                        <AlertCircle className="w-4 h-4" />
-                        <span className="text-sm">{errors.location_link.message}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Coluna Direita */}
-              <div className="space-y-6">
-                {/* Participantes */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    Participantes
-                  </h3>
-
-                  <div>
-                      <label htmlFor="max_guests" className="block text-sm font-medium text-gray-700 mb-2">
-                        Máximo de Participantes
-                      </label>
-                    <input
-                        {...register('max_guests', { valueAsNumber: true })}
-                        type="number"
-                        id="max_guests"
-                        min="0"
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                          errors.max_guests ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                        placeholder="0 = ilimitado"
-                        disabled={isSubmitting}
-                      />
-                      {errors.max_guests && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm">{errors.max_guests.message}</span>
-                        </div>
-                      )}
-                  </div>
-                </div>
-
-                {/* Lotes de Preços */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                      <DollarSign className="w-5 h-5" />
-                      Lotes de Preços
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={addPriceBatch}
-                      disabled={isSubmitting}
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Adicionar Lote
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {priceBatches.map((batch, index) => (
-                      <div key={batch.id} className="border border-gray-200 rounded-lg p-4 bg-white">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-medium text-gray-900">{batch.name}</h4>
-                          {priceBatches.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removePriceBatch(batch.id)}
-                              disabled={isSubmitting}
-                              className="text-red-600 hover:text-red-800 transition-colors disabled:opacity-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Data de Início */}
+                        <div>
+                          <label htmlFor="event_date" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Data de Início *
+                          </label>
+                          <input
+                            {...register('event_date', { required: 'Data de início é obrigatória' })}
+                            type="date"
+                            id="event_date"
+                            className={`w-full px-3.5 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                              errors.event_date ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                            }`}
+                            disabled={isSubmitting}
+                          />
+                          {errors.event_date && (
+                            <div className="flex items-center gap-1 mt-1 text-red-600">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span className="text-xs">{errors.event_date.message}</span>
+                            </div>
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {/* Nome do Lote */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Nome do Lote *
-                            </label>
-                            <input
-                              type="text"
-                              value={batch.name}
-                              onChange={(e) => updatePriceBatch(batch.id, 'name', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                              placeholder="Ex: Lote Promocional"
-                              disabled={isSubmitting}
-                            />
-                          </div>
+                        {/* Horário de Início */}
+                        <div>
+                          <label htmlFor="event_time" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Horário de Início *
+                          </label>
+                          <input
+                            {...register('event_time', { required: 'Horário de início é obrigatório' })}
+                            type="time"
+                            id="event_time"
+                            className={`w-full px-3.5 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                              errors.event_time ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                            }`}
+                            disabled={isSubmitting}
+                          />
+                          {errors.event_time && (
+                            <div className="flex items-center gap-1 mt-1 text-red-600">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span className="text-xs">{errors.event_time.message}</span>
+                            </div>
+                          )}
+                        </div>
 
-                          {/* Preço */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Preço (R$) *
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={batch.price}
-                              onChange={(e) => updatePriceBatch(batch.id, 'price', parseFloat(e.target.value) || 0)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                              placeholder="0.00"
-                              disabled={isSubmitting}
-                            />
-                          </div>
+                        {/* Data de Término */}
+                        <div>
+                          <label htmlFor="end_date" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Data de Término
+                          </label>
+                          <input
+                            {...register('end_date')}
+                            type="date"
+                            id="end_date"
+                            className={`w-full px-3.5 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                              errors.end_date ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                            }`}
+                            disabled={isSubmitting}
+                          />
+                        </div>
 
-                          {/* Data de Início */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Início da Vigência *
-                            </label>
-                            <input
-                              type="datetime-local"
-                              value={batch.start_date}
-                              onChange={(e) => updatePriceBatch(batch.id, 'start_date', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                              disabled={isSubmitting}
-                            />
-                          </div>
-
-                          {/* Data de Fim */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Fim da Vigência
-                            </label>
-                            <input
-                              type="datetime-local"
-                              value={batch.end_date || ''}
-                              onChange={(e) => updatePriceBatch(batch.id, 'end_date', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                              disabled={isSubmitting}
-                            />
-                          </div>
+                        {/* Horário de Término */}
+                        <div>
+                          <label htmlFor="end_time" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Horário de Término
+                          </label>
+                          <input
+                            {...register('end_time')}
+                            type="time"
+                            id="end_time"
+                            className={`w-full px-3.5 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                              errors.end_time ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                            }`}
+                            disabled={isSubmitting}
+                          />
                         </div>
                       </div>
-                    ))}
-                  </div>
-
-                  {priceBatches.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      <DollarSign className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p>Nenhum lote de preço adicionado</p>
-                      <p className="text-sm">Clique em "Adicionar Lote" para começar</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Contato */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Mail className="w-5 h-5" />
-                    Contato
-                  </h3>
-
-                  <div className="space-y-4">
-                    {/* Email */}
-                    <div>
-                      <label htmlFor="contact_email" className="block text-sm font-medium text-gray-700 mb-2">
-                        Email de Contato
-                      </label>
-                      <input
-                        {...register('contact_email')}
-                        type="email"
-                        id="contact_email"
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                          errors.contact_email ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                        placeholder="contato@exemplo.com"
-                        disabled={isSubmitting}
-                      />
-                      {errors.contact_email && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm">{errors.contact_email.message}</span>
-                        </div>
-                      )}
                     </div>
 
-                    {/* Telefone */}
-                    <div>
-                      <label htmlFor="contact_phone" className="block text-sm font-medium text-gray-700 mb-2">
-                        Telefone de Contato
-                      </label>
-                      <PhoneInput
-                        value={watch('contact_phone')}
-                        onChange={(value) => setValue('contact_phone', value)}
-                        placeholder="(11) 99999-9999"
-                        error={!!errors.contact_phone}
-                        disabled={isSubmitting}
-                      />
-                      {errors.contact_phone && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm">{errors.contact_phone.message}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                    {/* Local */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-2xs space-y-4">
+                      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <MapPin className="w-4 h-4 text-blue-600" />
+                        Localização
+                      </h3>
 
-                {/* Configurações */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Tag className="w-5 h-5" />
-                    Configurações
-                  </h3>
-
-                  <div className="space-y-4">
-                    {/* Status */}
-                    <div>
-                      <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
-                        Status
-                      </label>
-                      <select
-                        {...register('status')}
-                        id="status"
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                          errors.status ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                        disabled={isSubmitting}
-                      >
-                        <option value="draft">Rascunho</option>
-                        <option value="active">Ativo</option>
-                        <option value="cancelled">Cancelado</option>
-                        <option value="completed">Finalizado</option>
-                      </select>
-                      {errors.status && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm">{errors.status.message}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Checkboxes */}
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-3">
+                      <div>
+                        <label htmlFor="location" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                          Endereço / Local *
+                        </label>
                         <input
-                          {...register('is_public')}
-                          type="checkbox"
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          {...register('location', { required: 'Local é obrigatório' })}
+                          type="text"
+                          id="location"
+                          className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            errors.location ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                          }`}
+                          placeholder="Endereço completo do evento"
                           disabled={isSubmitting}
                         />
-                        <span className="text-sm font-medium text-gray-700">
-                          Evento público (visível para todos)
-                        </span>
-                      </label>
-
-                      <label className="flex items-center gap-3">
-                        <input
-                          {...register('requires_approval')}
-                          type="checkbox"
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          disabled={isSubmitting}
-                        />
-                        <span className="text-sm font-medium text-gray-700">
-                          Requer aprovação para participar
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Informações Adicionais */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    Informações Adicionais
-                  </h3>
-
-                  <div>
-                    <label htmlFor="additional_info" className="block text-sm font-medium text-gray-700 mb-2">
-                      Informações Extras
-                    </label>
-                    <textarea
-                      {...register('additional_info')}
-                      id="additional_info"
-                      rows={4}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none ${
-                        errors.additional_info ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                      }`}
-                      placeholder="Informações adicionais sobre o evento"
-                      disabled={isSubmitting}
-                    />
-                    {errors.additional_info && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600">
-                        <AlertCircle className="w-4 h-4" />
-                        <span className="text-sm">{errors.additional_info.message}</span>
+                        {errors.location && (
+                          <div className="flex items-center gap-1 mt-1 text-red-600">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span className="text-xs">{errors.location.message}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
+
+                      <div>
+                        <label htmlFor="location_link" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                          Link do Local (Google Maps, Waze, etc.)
+                        </label>
+                        <input
+                          {...register('location_link')}
+                          type="url"
+                          id="location_link"
+                          className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            errors.location_link ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                          }`}
+                          placeholder="https://maps.google.com/..."
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Coluna Direita */}
+                  <div className="space-y-6">
+                    {/* Participantes & Capacidade */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-2xs space-y-4">
+                      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <Users className="w-4 h-4 text-blue-600" />
+                        Capacidade de Participantes
+                      </h3>
+
+                      <div>
+                        <label htmlFor="max_guests" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                          Máximo de Participantes (0 = Ilimitado)
+                        </label>
+                        <input
+                          {...register('max_guests', { valueAsNumber: true })}
+                          type="number"
+                          id="max_guests"
+                          min="0"
+                          className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            errors.max_guests ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                          }`}
+                          placeholder="0 = ilimitado"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Lotes de Preços */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-2xs space-y-4">
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                        <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                          <DollarSign className="w-4 h-4 text-blue-600" />
+                          Lotes de Ingressos
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={addPriceBatch}
+                          disabled={isSubmitting}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-2xs"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Adicionar Lote
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {priceBatches.map((batch, index) => (
+                          <div key={batch.id} className="border border-gray-200 rounded-xl p-3.5 bg-slate-50/50 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-semibold text-xs text-gray-800 uppercase tracking-wider">
+                                {batch.name || `Lote ${index + 1}`}
+                              </h4>
+                              {priceBatches.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removePriceBatch(batch.id)}
+                                  disabled={isSubmitting}
+                                  className="text-red-500 hover:text-red-700 p-1 rounded transition-colors"
+                                  title="Remover lote"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              <div>
+                                <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                                  Nome do Lote *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={batch.name}
+                                  onChange={(e) => updatePriceBatch(batch.id, 'name', e.target.value)}
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                                  placeholder="Ex: 1º Lote"
+                                  disabled={isSubmitting}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                                  Preço (R$) *
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={batch.price}
+                                  onChange={(e) => updatePriceBatch(batch.id, 'price', parseFloat(e.target.value) || 0)}
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                                  placeholder="0.00"
+                                  disabled={isSubmitting}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                                  Início da Vigência
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={batch.start_date}
+                                  onChange={(e) => updatePriceBatch(batch.id, 'start_date', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                                  disabled={isSubmitting}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                                  Fim da Vigência
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={batch.end_date || ''}
+                                  onChange={(e) => updatePriceBatch(batch.id, 'end_date', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                                  disabled={isSubmitting}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {priceBatches.length === 0 && (
+                        <div className="text-center py-6 text-gray-400 bg-slate-50 rounded-xl border border-dashed border-gray-200">
+                          <DollarSign className="w-8 h-8 mx-auto mb-1 opacity-40" />
+                          <p className="text-xs font-medium text-gray-600">Nenhum lote de preço adicionado</p>
+                          <p className="text-[11px] text-gray-400">Clique em "Adicionar Lote" para cadastrar os ingressos</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status & Visibilidade */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-2xs space-y-4">
+                      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <Tag className="w-4 h-4 text-blue-600" />
+                        Status e Visibilidade
+                      </h3>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="status" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Status do Evento
+                          </label>
+                          <select
+                            {...register('status')}
+                            id="status"
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            disabled={isSubmitting}
+                          >
+                            <option value="draft">Rascunho</option>
+                            <option value="active">Ativo</option>
+                            <option value="cancelled">Cancelado</option>
+                            <option value="completed">Finalizado</option>
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col justify-center space-y-2 pt-2">
+                          <label className="flex items-center gap-2.5 cursor-pointer">
+                            <input
+                              {...register('is_public')}
+                              type="checkbox"
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              disabled={isSubmitting}
+                            />
+                            <span className="text-xs font-medium text-gray-700">
+                              Evento público (visível no site)
+                            </span>
+                          </label>
+
+                          <label className="flex items-center gap-2.5 cursor-pointer">
+                            <input
+                              {...register('requires_approval')}
+                              type="checkbox"
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              disabled={isSubmitting}
+                            />
+                            <span className="text-xs font-medium text-gray-700">
+                              Requer aprovação de cadastro
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Contato & Informações Extras */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-2xs space-y-4">
+                      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <Mail className="w-4 h-4 text-blue-600" />
+                        Contato e Informações Extras
+                      </h3>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="contact_email" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Email de Contato
+                          </label>
+                          <input
+                            {...register('contact_email')}
+                            type="email"
+                            id="contact_email"
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                            placeholder="contato@exemplo.com"
+                            disabled={isSubmitting}
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="contact_phone" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Telefone de Contato
+                          </label>
+                          <PhoneInput
+                            value={watch('contact_phone')}
+                            onChange={(value) => setValue('contact_phone', value, { shouldDirty: true })}
+                            placeholder="(11) 99999-9999"
+                            error={!!errors.contact_phone}
+                            disabled={isSubmitting}
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label htmlFor="additional_info" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Informações Extras
+                          </label>
+                          <textarea
+                            {...register('additional_info')}
+                            id="additional_info"
+                            rows={3}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+                            placeholder="Regras, observações, dress code, etc."
+                            disabled={isSubmitting}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Mídia */}
-            <div className="mt-6 bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Mídia do Evento
-              </h3>
+            {/* ABA 2: MÍDIAS DO EVENTO */}
+            {activeTab === 'media' && (
+              <div className="max-w-4xl mx-auto space-y-6">
+                <div className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-2xs space-y-5">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                      <ImageIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900">
+                        Mídia do Evento (Imagens e Vídeos)
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Faça o upload do banner principal e vídeos promocionais que serão exibidos na página do evento
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Upload de Imagem */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Imagem Principal
-                  </label>
-                  <ImageUpload
-              onImageUpload={handleImageUpload}
-              currentImage={watch('image_url')}
-              onImageRemove={handleImageRemove}
-            />
-                </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-gray-400" />
+                        IMAGEM PRINCIPAL DE CAPA
+                      </label>
+                      <ImageUpload
+                        onImageUpload={handleImageUpload}
+                        currentImage={watch('image_url')}
+                        onImageRemove={handleImageRemove}
+                      />
+                    </div>
 
-                {/* Upload de Vídeos */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Vídeos do Evento
-                  </label>
-                  <VideoUpload
-                    onVideoUpload={handleVideoUpload}
-                    currentVideo={watch('videos')?.[0]}
-                    onVideoRemove={handleVideoRemove}
-                  />
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Video className="w-3.5 h-3.5 text-gray-400" />
+                        VÍDEOS PROMOCIONAIS DO EVENTO
+                      </label>
+                      <VideoUpload
+                        onVideoUpload={handleVideoUpload}
+                        currentVideo={watch('videos')?.[0]}
+                        onVideoRemove={handleVideoRemove}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* ABA 3: FORMAS DE PAGAMENTO E TAXAS */}
+            {activeTab === 'payments' && (
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-2xs space-y-5">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900">
+                        Formas de Pagamento e Taxas de Conveniência
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Defina quais métodos de pagamento serão aceitos e a taxa percentual repassada ao comprador
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Boleto Bancário */}
+                    {(() => {
+                      const boleto = paymentMethods.find(pm => pm.method === 'boleto') || { method: 'boleto', label: 'Boleto Bancário', enabled: false, fee_percentage: 0 };
+                      return (
+                        <div className={`p-4 rounded-xl border transition-all ${boleto.enabled ? 'bg-indigo-50/20 border-indigo-200 shadow-2xs' : 'bg-gray-50/70 border-gray-200 opacity-80'}`}>
+                          <div className="flex items-center justify-between">
+                            <label className="flex items-center gap-3 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={boleto.enabled}
+                                onChange={(e) => togglePaymentMethod('boleto', e.target.checked)}
+                                disabled={isSubmitting}
+                                className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                              />
+                              <div className="flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-gray-600" />
+                                <span className="text-sm font-semibold text-gray-800">Boleto Bancário</span>
+                              </div>
+                            </label>
+                            {boleto.enabled && (
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs text-gray-500 font-medium">Taxa:</label>
+                                <div className="relative w-24">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    value={boleto.fee_percentage || ''}
+                                    onChange={(e) => updatePaymentMethodFee('boleto', parseFloat(e.target.value) || 0)}
+                                    placeholder="0.0"
+                                    disabled={isSubmitting}
+                                    className="w-full pl-2 pr-6 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg focus:ring-1 focus:ring-indigo-500 text-right bg-white"
+                                  />
+                                  <span className="absolute right-2 top-2 text-xs text-gray-400 font-bold">%</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Cartão de Crédito */}
+                    {(() => {
+                      const card = paymentMethods.find(pm => pm.method === 'credit_card') || { method: 'credit_card', label: 'Cartão de Crédito', enabled: false, fee_percentage: 0 };
+                      return (
+                        <div className={`p-4 rounded-xl border transition-all ${card.enabled ? 'bg-indigo-50/20 border-indigo-200 shadow-2xs' : 'bg-gray-50/70 border-gray-200 opacity-80'}`}>
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <label className="flex items-center gap-3 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={card.enabled}
+                                onChange={(e) => togglePaymentMethod('credit_card', e.target.checked)}
+                                disabled={isSubmitting}
+                                className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                              />
+                              <div className="flex items-center gap-2">
+                                <CreditCard className="w-4 h-4 text-gray-600" />
+                                <span className="text-sm font-semibold text-gray-800">Cartão de Crédito</span>
+                              </div>
+                            </label>
+                            {card.enabled && (
+                              <div className="flex flex-wrap items-center gap-3 pl-7 sm:pl-0">
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-gray-500 font-medium">Taxa:</label>
+                                  <div className="relative w-24">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                      value={card.fee_percentage || ''}
+                                      onChange={(e) => updatePaymentMethodFee('credit_card', parseFloat(e.target.value) || 0)}
+                                      placeholder="0.0"
+                                      disabled={isSubmitting}
+                                      className="w-full pl-2 pr-6 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg focus:ring-1 focus:ring-indigo-500 text-right bg-white"
+                                    />
+                                    <span className="absolute right-2 top-2 text-xs text-gray-400 font-bold">%</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-gray-500 font-medium">Máx. Parcelas:</label>
+                                  <select
+                                    value={card.max_installments || 12}
+                                    onChange={(e) => updateCardMaxInstallments(Number(e.target.value))}
+                                    disabled={isSubmitting}
+                                    className="px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-1 focus:ring-indigo-500 bg-white font-medium text-gray-700"
+                                  >
+                                    <option value={1}>1x (À vista)</option>
+                                    <option value={2}>Até 2x</option>
+                                    <option value={3}>Até 3x</option>
+                                    <option value={4}>Até 4x</option>
+                                    <option value={5}>Até 5x</option>
+                                    <option value={6}>Até 6x</option>
+                                    <option value={10}>Até 10x</option>
+                                    <option value={12}>Até 12x</option>
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Pix Options */}
+                    {(() => {
+                      const pixStripe = paymentMethods.find(pm => pm.method === 'pix_stripe');
+                      const pixChave = paymentMethods.find(pm => pm.method === 'pix_chave');
+                      const activePix = pixStripe?.enabled ? 'pix_stripe' : pixChave?.enabled ? 'pix_chave' : 'none';
+
+                      return (
+                        <div className="p-4 rounded-xl border border-gray-200 bg-white space-y-4 shadow-2xs">
+                          <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                            <QrCode className="w-4 h-4 text-emerald-600" />
+                            <span className="text-sm font-semibold text-gray-800">Opções de Pagamento via Pix</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <label className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${activePix === 'none' ? 'border-gray-400 bg-gray-100 text-gray-800 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                              <input
+                                type="radio"
+                                name="pix_option"
+                                checked={activePix === 'none'}
+                                onChange={() => setPixOption('none')}
+                                disabled={isSubmitting}
+                                className="text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span>Desabilitado</span>
+                            </label>
+
+                            <label className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${activePix === 'pix_stripe' ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                              <input
+                                type="radio"
+                                name="pix_option"
+                                checked={activePix === 'pix_stripe'}
+                                onChange={() => setPixOption('pix_stripe')}
+                                disabled={isSubmitting}
+                                className="text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span>Pix (Online / Gateway)</span>
+                            </label>
+
+                            <label className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${activePix === 'pix_chave' ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                              <input
+                                type="radio"
+                                name="pix_option"
+                                checked={activePix === 'pix_chave'}
+                                onChange={() => setPixOption('pix_chave')}
+                                disabled={isSubmitting}
+                                className="text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span>Pix Chave / QR Próprio</span>
+                            </label>
+                          </div>
+
+                          {/* Se Pix Online estiver ativo */}
+                          {activePix === 'pix_stripe' && (
+                            <div className="pt-2 flex items-center justify-between bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
+                              <span className="text-xs text-emerald-800">
+                                Pagamento Pix automático processado online no checkout.
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs text-gray-600 font-medium">Taxa:</label>
+                                <div className="relative w-24">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    value={pixStripe?.fee_percentage || ''}
+                                    onChange={(e) => updatePaymentMethodFee('pix_stripe', parseFloat(e.target.value) || 0)}
+                                    placeholder="0.0"
+                                    disabled={isSubmitting}
+                                    className="w-full pl-2 pr-6 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg focus:ring-1 focus:ring-emerald-500 text-right bg-white"
+                                  />
+                                  <span className="absolute right-2 top-2 text-xs text-gray-400 font-bold">%</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Se Pix Chave estiver ativo */}
+                          {activePix === 'pix_chave' && (
+                            <div className="pt-2 space-y-4 bg-emerald-50/40 p-4 rounded-xl border border-emerald-100">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-700 font-semibold">
+                                  Taxa de conveniência Pix Chave:
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-gray-600 font-medium">Taxa:</label>
+                                  <div className="relative w-24">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                      value={pixChave?.fee_percentage || ''}
+                                      onChange={(e) => updatePaymentMethodFee('pix_chave', parseFloat(e.target.value) || 0)}
+                                      placeholder="0.0"
+                                      disabled={isSubmitting}
+                                      className="w-full pl-2 pr-6 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg focus:ring-1 focus:ring-emerald-500 text-right bg-white"
+                                    />
+                                    <span className="absolute right-2 top-2 text-xs text-gray-400 font-bold">%</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Upload de QR Code próprio */}
+                              <div className="border-t border-emerald-100/80 pt-3">
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                                  QR Code do Pix (Imagem) *
+                                </label>
+                                {pixChave?.qr_code_url ? (
+                                  <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200">
+                                    <img
+                                      src={pixChave.qr_code_url}
+                                      alt="QR Code Pix"
+                                      className="w-20 h-20 object-contain rounded-lg border border-gray-100 p-1 bg-white"
+                                    />
+                                    <div className="flex-1 space-y-1">
+                                      <p className="text-xs font-semibold text-gray-800">QR Code carregado</p>
+                                      <p className="text-xs text-gray-500">Este QR Code será exibido ao comprador na conclusão do pedido.</p>
+                                      <button
+                                        type="button"
+                                        onClick={handleQrCodeRemove}
+                                        disabled={isSubmitting}
+                                        className="text-xs text-red-600 hover:text-red-800 font-medium inline-flex items-center gap-1 mt-1 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        Remover QR Code
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <label className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-white rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer transition-colors group">
+                                    <QrCode className="w-8 h-8 text-emerald-500 mb-1.5 group-hover:scale-105 transition-transform" />
+                                    <span className="text-xs font-semibold text-gray-700">Clique para enviar a imagem do QR Code</span>
+                                    <span className="text-[11px] text-gray-400 mt-0.5">PNG, JPG ou WEBP</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      disabled={isSubmitting}
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleQrCodeUpload(file);
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+
+                              {/* Campo de Chave Pix / Copia e Cola */}
+                              <div className="border-t border-emerald-100/80 pt-3">
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                                  Chave Pix ou Código Copia e Cola (opcional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={pixChave?.pix_key || ''}
+                                  onChange={(e) => updatePixKey(e.target.value)}
+                                  disabled={isSubmitting}
+                                  placeholder="Ex: financeiro@betternow.com.br ou 00020126580014br.gov.bcb.pix..."
+                                  className="w-full px-3.5 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors bg-white font-mono"
+                                />
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                  Permite ao comprador copiar a chave com um clique pelo botão "Copiar código do QR Code".
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ABA 3: FORMULÁRIO COMPRADOR (CHECKOUT) */}
+            {activeTab === 'checkout' && (
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-2xs space-y-5">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                        <UserCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">
+                          Dados do Comprador no Checkout
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                          Selecione os dados que o comprador preencherá e <strong>arraste os campos</strong> para definir a ordem de exibição
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-2xs">
+                    <div className="grid grid-cols-12 bg-gray-50 px-3 sm:px-4 py-2.5 text-[11px] sm:text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200">
+                      <div className="col-span-2 sm:col-span-1 text-center" title="Reordenar">Pos.</div>
+                      <div className="col-span-5 sm:col-span-6 pl-2">Campo de Cadastro</div>
+                      <div className="col-span-2 sm:col-span-2 text-center">Exibir</div>
+                      <div className="col-span-3 sm:col-span-3 text-center">Obrigatório</div>
+                    </div>
+
+                    <div className="divide-y divide-gray-100">
+                      {checkoutFields.map((fieldConfig, index) => {
+                        const isFixed = fieldConfig.field === 'nome' || fieldConfig.field === 'whatsapp';
+                        const isDragging = draggedFieldIndex === index;
+
+                        return (
+                          <div 
+                            key={fieldConfig.field}
+                            draggable={!isSubmitting}
+                            onDragStart={() => handleDragStart(index)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragEnd={handleDragEnd}
+                            className={`grid grid-cols-12 px-3 sm:px-4 py-2.5 items-center transition-all ${
+                              isDragging 
+                                ? 'bg-indigo-50 border-2 border-dashed border-indigo-400 opacity-60 scale-[0.99]' 
+                                : fieldConfig.enabled 
+                                  ? 'bg-white hover:bg-indigo-50/40' 
+                                  : 'bg-gray-50/60 opacity-60'
+                            }`}
+                          >
+                            {/* Alça de Arraste & Botões de Ordem */}
+                            <div className="col-span-2 sm:col-span-1 flex items-center justify-center gap-0.5">
+                              <div 
+                                className="cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-indigo-600 rounded transition-colors"
+                                title="Clique e arraste para reordenar"
+                              >
+                                <GripVertical className="w-4 h-4" />
+                              </div>
+                              <div className="hidden sm:flex flex-col gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => moveField(index, 'up')}
+                                  disabled={index === 0 || isSubmitting}
+                                  className="text-gray-400 hover:text-indigo-600 disabled:opacity-20 disabled:hover:text-gray-400 p-0.5"
+                                  title="Mover para cima"
+                                >
+                                  <ArrowUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveField(index, 'down')}
+                                  disabled={index === checkoutFields.length - 1 || isSubmitting}
+                                  className="text-gray-400 hover:text-indigo-600 disabled:opacity-20 disabled:hover:text-gray-400 p-0.5"
+                                  title="Mover para baixo"
+                                >
+                                  <ArrowDown className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Nome do Campo */}
+                            <div className="col-span-5 sm:col-span-6 flex items-center gap-2 pl-2">
+                              <span className="text-xs font-semibold text-gray-800">
+                                {fieldConfig.label}
+                              </span>
+                              {isFixed && (
+                                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200 shrink-0">
+                                  Padrão
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Checkbox Exibir */}
+                            <div className="col-span-2 sm:col-span-2 flex justify-center">
+                              {isFixed ? (
+                                <input
+                                  type="checkbox"
+                                  checked={true}
+                                  disabled={true}
+                                  className="w-4 h-4 text-indigo-600 rounded border-gray-300 opacity-60 cursor-not-allowed"
+                                />
+                              ) : (
+                                <input
+                                  type="checkbox"
+                                  checked={fieldConfig.enabled}
+                                  onChange={(e) => toggleCheckoutField(fieldConfig.field, e.target.checked)}
+                                  disabled={isSubmitting}
+                                  className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                />
+                              )}
+                            </div>
+
+                            {/* Checkbox Obrigatório */}
+                            <div className="col-span-3 sm:col-span-3 flex justify-center">
+                              {isFixed ? (
+                                <span className="text-[11px] text-red-600 font-bold">Sim (Fixo)</span>
+                              ) : (
+                                <input
+                                  type="checkbox"
+                                  checked={fieldConfig.required}
+                                  onChange={(e) => toggleCheckoutFieldRequired(fieldConfig.field, e.target.checked)}
+                                  disabled={!fieldConfig.enabled || isSubmitting}
+                                  className={`w-4 h-4 rounded border-gray-300 focus:ring-indigo-500 ${
+                                    fieldConfig.enabled 
+                                      ? 'text-indigo-600 cursor-pointer' 
+                                      : 'opacity-30 cursor-not-allowed'
+                                  }`}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-500 flex items-center gap-1.5 bg-gray-50 p-3 rounded-xl border border-gray-200/60">
+                    <span>💡</span>
+                    <span><strong>Dica:</strong> Arraste as linhas ou use as setas para cima/baixo para organizar a ordem em que os campos aparecerão na tela de compra.</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ABA 4: MENSAGENS WHATSAPP */}
+            {activeTab === 'whatsapp' && (
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-2xs space-y-5">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900">
+                        Comunicação WhatsApp (WAHA) dos Ingressos
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Personalize as mensagens automáticas enviadas aos compradores deste evento
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Card de Tags Dinâmicas */}
+                  <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-4 shadow-2xs">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900 mb-2">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      Tags Dinâmicas (clique para copiar):
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        '{cliente}',
+                        '{evento}',
+                        '{total}',
+                        '{quantidade}',
+                        '{data_evento}',
+                        '{local_evento}',
+                        '{numero_pedido}',
+                        '{link_acesso}'
+                      ].map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(tag);
+                            setCopiedTag(tag);
+                            setTimeout(() => setCopiedTag(null), 2000);
+                            toast.success(`Tag ${tag} copiada!`);
+                          }}
+                          className="bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs px-2.5 py-1 rounded-lg font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          {copiedTag === tag ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-emerald-500" />}
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Mensagem de Pedido Criado */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label htmlFor="waha_msg_order_created" className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          1. Pedido Criado (Aguardando Pagamento)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setValue('waha_msg_order_created', DEFAULT_WAHA_MSG_CREATED, { shouldDirty: true })}
+                          className="text-xs text-emerald-700 hover:text-emerald-800 font-medium flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Restaurar Padrão
+                        </button>
+                      </div>
+                      <textarea
+                        {...register('waha_msg_order_created')}
+                        id="waha_msg_order_created"
+                        rows={3}
+                        className="w-full px-4 py-3 bg-slate-50/70 border border-gray-300 rounded-xl text-gray-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs leading-relaxed"
+                        placeholder="Mensagem de pedido criado..."
+                      />
+                    </div>
+
+                    {/* Mensagem de Pagamento Confirmado */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label htmlFor="waha_msg_order_confirmed" className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          2. Pagamento Confirmado (Ingressos Emitidos)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setValue('waha_msg_order_confirmed', DEFAULT_WAHA_MSG_CONFIRMED, { shouldDirty: true })}
+                          className="text-xs text-emerald-700 hover:text-emerald-800 font-medium flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Restaurar Padrão
+                        </button>
+                      </div>
+                      <textarea
+                        {...register('waha_msg_order_confirmed')}
+                        id="waha_msg_order_confirmed"
+                        rows={3}
+                        className="w-full px-4 py-3 bg-slate-50/70 border border-gray-300 rounded-xl text-gray-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs leading-relaxed"
+                        placeholder="Mensagem de pagamento confirmado..."
+                      />
+                    </div>
+
+                    {/* Mensagem de Cancelamento */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label htmlFor="waha_msg_order_cancelled" className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          3. Pedido Cancelado / Recusado
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setValue('waha_msg_order_cancelled', DEFAULT_WAHA_MSG_CANCELLED, { shouldDirty: true })}
+                          className="text-xs text-emerald-700 hover:text-emerald-800 font-medium flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Restaurar Padrão
+                        </button>
+                      </div>
+                      <textarea
+                        {...register('waha_msg_order_cancelled')}
+                        id="waha_msg_order_cancelled"
+                        rows={2}
+                        className="w-full px-4 py-3 bg-slate-50/70 border border-gray-300 rounded-xl text-gray-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs leading-relaxed"
+                        placeholder="Mensagem de cancelamento..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
           </div>
 
           {/* Botões flutuantes fixos na parte inferior */}
-          <div className="flex-shrink-0 bg-white border-t border-gray-200 p-6">
-            <div className="flex gap-4">
+          <div className="flex-shrink-0 bg-white border-t border-gray-200 px-6 py-4">
+            <div className="flex gap-3 justify-end">
               <button
                 type="button"
                 onClick={onCancel}
                 disabled={isSubmitting}
-                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 text-sm cursor-pointer"
               >
                 Cancelar
               </button>
@@ -847,11 +1616,11 @@ const EventForm: React.FC<EventFormProps> = ({
                 type="submit"
                 form="event-form"
                 disabled={isSubmitting || !isValid}
-                className={`flex-1 px-6 py-3 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                className={`px-6 py-2.5 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 text-sm shadow-sm cursor-pointer ${
                   isSubmitting || !isValid
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                } text-white`}
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
               >
                 {isSubmitting ? (
                   <>

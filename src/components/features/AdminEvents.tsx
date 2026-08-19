@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X } from 'lucide-react';
+import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt } from 'lucide-react';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { Event } from '../../shared/types/types/event';
 import { toast } from 'sonner';
@@ -11,9 +11,10 @@ const EventGallery = React.lazy(() => import('./EventGallery'));
 const DigitalCheckIn = React.lazy(() => import('./DigitalCheckIn'));
 const EventReports = React.lazy(() => import('./EventReports'));
 const AdminEventTypes = React.lazy(() => import('../AdminEventTypes'));
+const AdminEventOrders = React.lazy(() => import('./AdminEventOrders'));
 const ConfirmModal = React.lazy(() => import('../shared/ConfirmModal'));
 
-type ViewMode = 'list' | 'form' | 'gallery' | 'checkin' | 'reports' | 'event-types';
+type ViewMode = 'list' | 'form' | 'gallery' | 'checkin' | 'reports' | 'event-types' | 'orders';
 
 const AdminEvents: React.FC = () => {
   console.log('🚀 AdminEvents component loaded');
@@ -278,6 +279,18 @@ const AdminEvents: React.FC = () => {
         </div>
         <DigitalCheckIn eventId={selectedEvent.id} />
       </div>
+    );
+  }
+
+  if (viewMode === 'orders' && selectedEvent) {
+    return (
+      <AdminEventOrders
+        event={selectedEvent}
+        onBack={() => {
+          setViewMode('list');
+          setSelectedEvent(null);
+        }}
+      />
     );
   }
 
@@ -556,6 +569,16 @@ const AdminEvents: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedEvent(event);
+                              setViewMode('orders');
+                            }}
+                            className="text-emerald-600 hover:text-emerald-800 p-1 rounded transition-colors"
+                            title="Ordens & Ingressos"
+                          >
+                            <Receipt className="h-4 w-4" />
+                          </button>
                           <button
                             onClick={() => {
                               setSelectedEvent(event);

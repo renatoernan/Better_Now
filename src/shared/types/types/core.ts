@@ -53,13 +53,17 @@ export interface ScheduleItem {
 // Client related types
 export interface Client extends BaseEntity {
   name: string;
+  nome?: string;
   email: string;
   phone?: string;
+  telefone?: string;
   whatsapp?: string;
   apelido?: string;
   cpf?: string;
+  documento?: string;
   cnpj?: string;
   address?: string;
+  endereco?: string;
   numero?: string;
   cep?: string;
   logradouro?: string;
@@ -69,15 +73,41 @@ export interface Client extends BaseEntity {
   city?: string;
   state?: string;
   uf?: string;
+  estado?: string;
   zip_code?: string;
+  data_nascimento?: string;
+  profissao?: string;
+  empresa?: string;
   notes?: string;
+  observacoes?: string;
   validated?: boolean;
   is_active: boolean;
+  ativo?: boolean;
 }
 
 // Purchase related types
-export type PaymentMethod = 'pix' | 'credit_card' | 'debit_card';
-export type PaymentStatus = 'pending' | 'paid' | 'cancelled' | 'refunded';
+export type PaymentMethod = 'pix' | 'credit_card' | 'debit_card' | 'boleto' | 'pix_stripe' | 'pix_chave';
+export type PaymentStatus = 'pending' | 'paid' | 'cancelled' | 'refunded' | 'pending_proof';
+
+export interface PaymentMethodFee {
+  method: 'boleto' | 'credit_card' | 'pix_stripe' | 'pix_chave';
+  label: string;
+  enabled: boolean;
+  fee_percentage: number;
+  qr_code_url?: string;
+  pix_key?: string;
+  max_installments?: number;
+}
+
+export type CheckoutFieldType = 'text' | 'email' | 'phone' | 'cpf' | 'cep' | 'select' | 'textarea' | 'date';
+
+export interface CheckoutFieldConfig {
+  field: string;
+  label: string;
+  enabled: boolean;
+  required: boolean;
+  type: CheckoutFieldType;
+}
 
 export interface Purchase extends BaseEntity {
   event_id: string;

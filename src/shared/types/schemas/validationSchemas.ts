@@ -318,6 +318,16 @@ export const systemSettingsSchema = z.object({
   notification_email: z.string().email('Email inválido'),
 });
 
+export const wahaSettingsSchema = z.object({
+  waha_api_url: z.string().optional().or(z.literal('')),
+  waha_session_name: z.string().min(1, 'Nome da sessão é obrigatório').max(100, 'Nome da sessão muito longo'),
+  waha_api_key: z.string().max(255, 'Chave de API muito longa').optional().or(z.literal('')),
+  waha_enabled: z.boolean().default(true),
+  waha_msg_order_created: z.string().max(2000, 'Mensagem muito longa').optional().or(z.literal('')),
+  waha_msg_order_confirmed: z.string().max(2000, 'Mensagem muito longa').optional().or(z.literal('')),
+  waha_msg_order_cancelled: z.string().max(2000, 'Mensagem muito longa').optional().or(z.literal('')),
+});
+
 export const appSettingsSchema = z.object({
   company_name: z.string().min(1, 'Nome da empresa é obrigatório').max(200, 'Nome muito longo'),
   company_email: z.string().email('Email inválido'),
@@ -458,6 +468,7 @@ export type ContactSettings = z.infer<typeof contactSettingsSchema>;
 export type BusinessHoursSettings = z.infer<typeof businessHoursSettingsSchema>;
 export type CarouselSettings = z.infer<typeof carouselSettingsSchema>;
 export type SystemSettings = z.infer<typeof systemSettingsSchema>;
+export type WahaSettings = z.infer<typeof wahaSettingsSchema>;
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
 export type RegisterData = z.infer<typeof registerSchema>;

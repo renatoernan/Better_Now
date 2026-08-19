@@ -24,6 +24,8 @@ const enrichEventFromDb = (dbItem: any): Event => {
   let priceBatchesVal: any[] = Array.isArray(dbItem.price_batches) ? dbItem.price_batches : [];
   let imageUrlVal = dbItem.image_url || '';
   let videosVal: string[] = Array.isArray(dbItem.videos) ? dbItem.videos : [];
+  let paymentMethodsVal: any[] = Array.isArray(dbItem.payment_methods) ? dbItem.payment_methods : [];
+  let checkoutFieldsVal: any[] = Array.isArray(dbItem.checkout_fields) ? dbItem.checkout_fields : [];
 
   if (dbItem.observations) {
     try {
@@ -48,6 +50,12 @@ const enrichEventFromDb = (dbItem: any): Event => {
         }
         if (videosVal.length === 0 && Array.isArray(parsed.videos)) {
           videosVal = parsed.videos;
+        }
+        if (paymentMethodsVal.length === 0 && Array.isArray(parsed.payment_methods)) {
+          paymentMethodsVal = parsed.payment_methods;
+        }
+        if (checkoutFieldsVal.length === 0 && Array.isArray(parsed.checkout_fields)) {
+          checkoutFieldsVal = parsed.checkout_fields;
         }
       } else {
         descriptionStr = dbItem.observations;
@@ -100,7 +108,9 @@ const enrichEventFromDb = (dbItem: any): Event => {
     requires_approval: requiresApprovalVal,
     price_batches: priceBatchesVal,
     image_url: imageUrlVal,
-    videos: videosVal
+    videos: videosVal,
+    payment_methods: paymentMethodsVal,
+    checkout_fields: checkoutFieldsVal
   };
 };
 

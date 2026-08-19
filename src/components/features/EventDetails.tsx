@@ -8,15 +8,21 @@ import EventDescription from '../shared/EventDescription';
 import TicketCard from '../shared/TicketCard';
 import { usePublicEvents } from '../../shared/hooks/hooks/usePublicEvents';
 import { ArrowLeft } from 'lucide-react';
-import { Event as EventType, PriceBatch, ScheduleItem } from '../../shared/types/types/event';
+import { Event as EventType, PriceBatch, ScheduleItem, PaymentMethodFee } from '../../shared/types/types/event';
 import { processPriceBatches, getBatchStatus, formatPrice } from '../../shared/utils/utils/eventUtils';
 import PhoneLoginModal from '../shared/PhoneLoginModal';
 import TokenVerificationModal from '../shared/TokenVerificationModal';
 import ClientRegistrationModal from '../shared/ClientRegistrationModal';
 import SuccessModal from '../shared/SuccessModal';
 import StripeCheckoutModal from '../shared/StripeCheckoutModal';
+import PixChavePaymentModal from '../shared/PixChavePaymentModal';
+import PaymentProofUploadModal from '../shared/PaymentProofUploadModal';
 import PaymentSuccessModal from '../shared/PaymentSuccessModal';
-import { createCheckoutSession } from '../../shared/services/stripeService';
+import CheckoutClientModal, { CheckoutClientData } from '../shared/CheckoutClientModal';
+import PriceUpdatedModal from '../shared/PriceUpdatedModal';
+import PendingOrderRecoveryModal, { PendingOrderInfo } from '../shared/PendingOrderRecoveryModal';
+import { createMercadoPagoCheckout, checkMercadoPagoPaymentStatus, findPendingOrderForClient, cancelPendingOrder } from '../../shared/services/mercadoPagoService';
+import { getClientIpAddress } from '../../shared/utils/utils/ipUtils';
 import { supabase } from '../../shared/services/lib/supabase';
 import { toast } from 'sonner';
 
@@ -32,23 +38,30 @@ const EventDetails: React.FC = () => {
   const [selectedBatch, setSelectedBatch] = useState<number>(0);
   const [quantity, setQuantity] = useState<number>(1);
   const [priceBatches, setPriceBatches] = useState<PriceBatch[]>([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  const [selectedInstallments, setSelectedInstallments] = useState<number | null>(null);
   
-  // Estados para autenticação
+  // Estados para autenticação e captura de dados do comprador
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+  const [showCheckoutClientModal, setShowCheckoutClientModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showPendingValidationModal, setShowPendingValidationModal] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [currentPhone, setCurrentPhone] = useState('');
   const [currentClientName, setCurrentClientName] = useState('');
+  const [currentClientEmail, setCurrentClientEmail] = useState('');
+  const [currentClientCpf, setCurrentClientCpf] = useState('');
   const [generatedToken, setGeneratedToken] = useState('');
   const [tokenError, setTokenError] = useState('');
   const [tokenTimestamp, setTokenTimestamp] = useState<number>(0);
   const [timeRemaining, setTimeRemaining] = useState<number>(30);
 
-  // Estados para o Checkout do Stripe
+  // Estados para o Checkout do Stripe e Pix Chave
   const [showStripeCheckoutModal, setShowStripeCheckoutModal] = useState(false);
+  const [showPixChaveModal, setShowPixChaveModal] = useState(false);
+  const [showPaymentProofModal, setShowPaymentProofModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [stripeCheckoutLoading, setStripeCheckoutLoading] = useState(false);
   const [stripeErrorMessage, setStripeErrorMessage] = useState<string | null>(null);
@@ -91,6 +104,9 @@ const EventDetails: React.FC = () => {
           // Se não há price_batches, definir array vazio
           setPriceBatches([]);
         }
+
+        // Deixar a seleção da forma de pagamento para o comprador no card
+        setSelectedPaymentMethod('');
         
         setLoading(false);
       }
@@ -109,6 +125,21 @@ const EventDetails: React.FC = () => {
     }
   };
 
+  // Obter configurações do método de pagamento ativo
+  const currentPaymentMethodConfig = (event?.payment_methods || []).find(pm => pm.method === selectedPaymentMethod);
+  const currentFeePercentage = currentPaymentMethodConfig?.fee_percentage || 0;
+  const currentUnitPrice = priceBatches[selectedBatch]?.price || 0;
+  const currentSubtotal = currentUnitPrice * quantity;
+  const currentFeeAmount = currentSubtotal * (currentFeePercentage / 100);
+
+  const getPaymentMethodLabel = (methodKey?: string) => {
+    if (methodKey === 'boleto') return 'Boleto Bancário';
+    if (methodKey === 'credit_card') return 'Cartão de Crédito';
+    if (methodKey === 'pix' || methodKey === 'pix_stripe') return 'Pix';
+    if (methodKey === 'pix_chave') return 'Pix (Chave / QR Code)';
+    return undefined;
+  };
+
   // Função para gerar token de 6 dígitos
   const generateToken = (): string => {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -118,8 +149,8 @@ const EventDetails: React.FC = () => {
   const checkClientExists = async (phone: string): Promise<{exists: boolean, name?: string, validated?: boolean}> => {
     try {
       const { data, error } = await supabase
-        .from('app_clients')
-        .select('id, name, validated')
+        .from('app_people')
+        .select('id, nome, validated')
         .eq('whatsapp', phone)
         .single();
       
@@ -130,7 +161,7 @@ const EventDetails: React.FC = () => {
       if (data) {
         return {
           exists: true,
-          name: data.name,
+          name: data.nome,
           validated: data.validated
         };
       }
@@ -247,7 +278,7 @@ const EventDetails: React.FC = () => {
       // Atualizar cliente como validado
       try {
         const { error: updateError } = await supabase
-          .from('app_clients')
+          .from('app_people')
           .update({ validated: true })
           .eq('whatsapp', currentPhone);
         
@@ -270,7 +301,6 @@ const EventDetails: React.FC = () => {
   // Handler para reenvio de token
   const handleResendToken = async () => {
     setAuthLoading(true);
-    // Limpar qualquer erro existente imediatamente
     setTokenError('');
     
     try {
@@ -309,7 +339,7 @@ const EventDetails: React.FC = () => {
     setAuthLoading(true);
     
     try {
-      // Verificar se o telefone já existe na tabela clients
+      // Verificar se o telefone já existe na tabela app_people
       const clientData = await checkClientExists(data.telefone);
       
       if (clientData.exists) {
@@ -343,14 +373,15 @@ const EventDetails: React.FC = () => {
         return;
       }
       
-      // Cliente não existe - inserir na tabela clients
+      // Cliente não existe - inserir na tabela app_people
       const { error: supabaseError } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .insert({
-          name: data.nome,
+          nome: data.nome,
           whatsapp: data.telefone,
           notes: data.comoSoube,
-          validated: false
+          validated: false,
+          is_active: true
         });
       
       if (supabaseError) {
@@ -371,7 +402,6 @@ const EventDetails: React.FC = () => {
       if (webhookSuccess) {
         setShowRegistrationModal(false);
         toast.success('Cadastro realizado com sucesso!');
-        // Aqui você pode prosseguir com a compra ou mostrar próximos passos
       } else {
         toast.error('Erro ao enviar notificação. Cadastro foi salvo, mas tente novamente.');
       }
@@ -383,26 +413,278 @@ const EventDetails: React.FC = () => {
     }
   };
 
+  const [awaitingPaymentOrderId, setAwaitingPaymentOrderId] = useState<string | null>(null);
+  const [paymentWindowRef, setPaymentWindowRef] = useState<Window | null>(null);
+
+  // Estados para o Modal de Preço Atualizado
+  const [showPriceUpdatedModal, setShowPriceUpdatedModal] = useState(false);
+  const [priceMismatchDetails, setPriceMismatchDetails] = useState<{
+    oldPrice: number;
+    newPrice: number;
+    batchName: string;
+    reason: 'price_changed' | 'batch_expired' | 'batch_sold_out' | 'fee_changed';
+  }>({
+    oldPrice: 0,
+    newPrice: 0,
+    batchName: 'Lote',
+    reason: 'price_changed',
+  });
+
+  // Estados para Recuperação de Pedidos Pendentes Duplicados
+  const [showPendingRecoveryModal, setShowPendingRecoveryModal] = useState(false);
+  const [pendingOrderFound, setPendingOrderFound] = useState<PendingOrderInfo | null>(null);
+  const [reusableOrderId, setReusableOrderId] = useState<string | null>(null);
+
+  // Valida e sincroniza os dados do evento em tempo real direto do banco antes de qualquer avanço financeiro
+  const verifyAndSyncEventData = async (): Promise<boolean> => {
+    if (!id) return false;
+
+    try {
+      const freshEvent = await fetchEventById(id);
+      if (!freshEvent) {
+        toast.error('Este evento não está mais disponível.');
+        return false;
+      }
+
+      const freshBatches = freshEvent.price_batches ? processPriceBatches(freshEvent.price_batches) : [];
+      const currentBatchData = priceBatches[selectedBatch];
+      const freshBatchData = freshBatches[selectedBatch] || freshBatches[0];
+
+      // Atualizar o evento e os lotes no estado local
+      setEvent(freshEvent as EventType);
+      setPriceBatches(freshBatches);
+
+      if (!freshBatchData) {
+        toast.error('Lote de ingressos indisponível.');
+        return false;
+      }
+
+      // 1. Checar se o status do lote mudou (expirado ou esgotado)
+      const freshBatchStatus = getBatchStatus(freshBatchData);
+      if (freshBatchStatus !== 'active') {
+        setPriceMismatchDetails({
+          oldPrice: Number(currentBatchData?.price || 0),
+          newPrice: Number(freshBatchData.price || 0),
+          batchName: freshBatchData.name || `Lote ${selectedBatch + 1}`,
+          reason: freshBatchStatus === 'expired' ? 'batch_expired' : 'batch_sold_out',
+        });
+        setShowPriceUpdatedModal(true);
+        setShowCheckoutClientModal(false);
+        setShowStripeCheckoutModal(false);
+        return false;
+      }
+
+      // 2. Checar se o valor do lote foi alterado no admin
+      const oldPrice = Number(currentBatchData?.price || 0);
+      const newPrice = Number(freshBatchData.price || 0);
+
+      if (Math.abs(oldPrice - newPrice) > 0.001) {
+        setPriceMismatchDetails({
+          oldPrice,
+          newPrice,
+          batchName: freshBatchData.name || `Lote ${selectedBatch + 1}`,
+          reason: 'price_changed',
+        });
+        setShowPriceUpdatedModal(true);
+        setShowCheckoutClientModal(false);
+        setShowStripeCheckoutModal(false);
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('Erro ao validar dados do evento em tempo real:', err);
+      return true;
+    }
+  };
+
   const handleConfirmStripeCheckout = async () => {
     if (!id || !priceBatches[selectedBatch]) return;
+
+    // Validar preço em tempo real antes de gerar o checkout
+    const isUpToDate = await verifyAndSyncEventData();
+    if (!isUpToDate) return;
+
     setStripeCheckoutLoading(true);
     setStripeErrorMessage(null);
 
-    const res = await createCheckoutSession({
-      event_id: id,
-      batch_index: selectedBatch,
-      quantity: quantity,
-      client_name: currentClientName,
-      client_phone: currentPhone,
-    });
+    const cardConfig = (event?.payment_methods || []).find(pm => pm.method === 'credit_card');
 
-    if (res.error) {
-      setStripeErrorMessage(res.error);
+    try {
+      const res = await createMercadoPagoCheckout({
+        event_id: id,
+        batch_index: selectedBatch,
+        batch_name: priceBatches[selectedBatch]?.name || `Lote ${selectedBatch + 1}`,
+        unit_price: currentUnitPrice,
+        quantity: quantity,
+        client_name: currentClientName,
+        client_phone: currentPhone,
+        client_email: currentClientEmail,
+        client_document: currentClientCpf || undefined,
+        existing_order_id: reusableOrderId || undefined,
+        payment_method: selectedPaymentMethod || undefined,
+        installments: selectedInstallments || 1,
+        max_installments: cardConfig?.max_installments || 12,
+        convenience_fee: currentFeeAmount,
+        convenience_fee_percentage: currentFeePercentage
+      });
+
+      if (res.error) {
+        setStripeErrorMessage(res.error);
+        setStripeCheckoutLoading(false);
+        return;
+      }
+
+      if (res.checkoutUrl) {
+        // Abrir checkout do Mercado Pago em nova aba
+        const paymentWin = window.open(res.checkoutUrl, '_blank');
+        setPaymentWindowRef(paymentWin);
+
+        // Armazenar o orderId para polling de status
+        if (res.orderId) {
+          setAwaitingPaymentOrderId(res.orderId);
+        }
+
+        setStripeCheckoutLoading(false);
+      } else {
+        setStripeErrorMessage('Não foi possível obter o link de pagamento.');
+        setStripeCheckoutLoading(false);
+      }
+    } catch (err: any) {
+      console.error('Erro ao iniciar checkout do Mercado Pago:', err);
+      setStripeErrorMessage(err.message || 'Erro ao processar checkout.');
       setStripeCheckoutLoading(false);
     }
   };
 
-  const handlePurchase = () => {
+  // Polling de status do pedido para detectar pagamento aprovado
+  useEffect(() => {
+    if (!awaitingPaymentOrderId) return;
+
+    const checkStatus = async () => {
+      try {
+        const result = await checkMercadoPagoPaymentStatus(awaitingPaymentOrderId);
+        if (result.paid) {
+          setStripeSessionId(result.paymentId || awaitingPaymentOrderId);
+          setAwaitingPaymentOrderId(null);
+          setShowStripeCheckoutModal(false);
+          setShowPaymentSuccessModal(true);
+          toast.success('Pagamento aprovado com sucesso! Seus ingressos foram emitidos! 🎉');
+        }
+      } catch (err) {
+        // Silencioso - continua polling
+      }
+    };
+
+    // Executar imediatamente e depois a cada 4 segundos
+    checkStatus();
+    const pollInterval = setInterval(checkStatus, 4000);
+
+    return () => clearInterval(pollInterval);
+  }, [awaitingPaymentOrderId]);
+
+  // Verificar retorno via query params (quando o Mercado Pago redireciona de volta)
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment');
+    const orderId = searchParams.get('order_id');
+
+    if (paymentStatus === 'success' && orderId) {
+      setAwaitingPaymentOrderId(null);
+      setShowStripeCheckoutModal(false);
+      setShowPaymentSuccessModal(true);
+
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('payment');
+      newParams.delete('order_id');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams]);
+
+  const [attendeesList, setAttendeesList] = useState<CheckoutClientData[]>([]);
+
+  const handleCheckoutClientSubmit = async (buyerData: CheckoutClientData, allAttendees: CheckoutClientData[]) => {
+    // Validar preço em tempo real antes de avançar para pagamento
+    const isUpToDate = await verifyAndSyncEventData();
+    if (!isUpToDate) return;
+
+    setCurrentClientName(buyerData.nome);
+    setCurrentPhone(buyerData.whatsapp);
+    if (buyerData.email) setCurrentClientEmail(buyerData.email);
+    const doc = buyerData.cpf || buyerData.documento || '';
+    if (doc) setCurrentClientCpf(doc);
+    setAttendeesList(allAttendees);
+
+    setShowCheckoutClientModal(false);
+
+    // Verificar se já existe uma ordem pendente para o comprador/IP
+    try {
+      const clientIp = await getClientIpAddress();
+      const existingPending = await findPendingOrderForClient({
+        event_id: id || '',
+        client_document: doc,
+        client_phone: buyerData.whatsapp,
+        ip_address: clientIp,
+      });
+
+      if (existingPending) {
+        if (Number(existingPending.quantity) === quantity) {
+          // Quantidade é igual: abre o modal para o usuário escolher continuar ou desconsiderar
+          setPendingOrderFound(existingPending);
+          setShowPendingRecoveryModal(true);
+          return;
+        } else {
+          // Quantidade é diferente: cancela automaticamente a ordem anterior
+          await cancelPendingOrder(existingPending.id, 'quantidade_alterada');
+          setReusableOrderId(null);
+        }
+      } else {
+        setReusableOrderId(null);
+      }
+    } catch (err) {
+      console.warn('Erro ao verificar ordem pendente existente:', err);
+    }
+
+    // Se a forma selecionada for Pix Chave
+    if (selectedPaymentMethod === 'pix_chave') {
+      setShowPixChaveModal(true);
+      return;
+    }
+
+    // Para Boleto, Cartão de Crédito ou Pix
+    setStripeErrorMessage(null);
+    setShowStripeCheckoutModal(true);
+  };
+
+  const handleContinueExistingOrder = () => {
+    if (pendingOrderFound) {
+      setReusableOrderId(pendingOrderFound.id);
+    }
+    setShowPendingRecoveryModal(false);
+
+    if (selectedPaymentMethod === 'pix_chave') {
+      setShowPixChaveModal(true);
+    } else {
+      setStripeErrorMessage(null);
+      setShowStripeCheckoutModal(true);
+    }
+  };
+
+  const handleDiscardAndCreateNewOrder = async () => {
+    if (pendingOrderFound) {
+      await cancelPendingOrder(pendingOrderFound.id, 'cancelado_pelo_usuario_novo_pedido');
+    }
+    setReusableOrderId(null);
+    setShowPendingRecoveryModal(false);
+
+    if (selectedPaymentMethod === 'pix_chave') {
+      setShowPixChaveModal(true);
+    } else {
+      setStripeErrorMessage(null);
+      setShowStripeCheckoutModal(true);
+    }
+  };
+
+  const handlePurchase = async () => {
     if (!event || !priceBatches[selectedBatch]) return;
     
     // Verificar se é evento privado
@@ -410,14 +692,17 @@ const EventDetails: React.FC = () => {
       setShowPhoneModal(true);
       return;
     }
+
+    // Validar preço em tempo real antes de abrir o modal do comprador
+    const isUpToDate = await verifyAndSyncEventData();
+    if (!isUpToDate) return;
     
-    // Lógica de compra: abrir modal do Stripe
     const selectedBatchData = priceBatches[selectedBatch];
     const status = getBatchStatus(selectedBatchData);
-    if (selectedBatchData && status === 'active') {
-      setStripeErrorMessage(null);
-      setShowStripeCheckoutModal(true);
-    }
+    if (!selectedBatchData || status !== 'active') return;
+
+    // Abrir modal de identificação e preenchimento dos dados do comprador
+    setShowCheckoutClientModal(true);
   };
 
   const handleShare = () => {
@@ -482,7 +767,7 @@ const EventDetails: React.FC = () => {
     );
   }
 
-  // O processamento de priceBatches já é feito no useEffect
+  const pixChaveConfig = (event.payment_methods || []).find(pm => pm.method === 'pix_chave');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -521,7 +806,11 @@ const EventDetails: React.FC = () => {
         isOpen={showSuccessModal}
         onClose={() => {
           setShowSuccessModal(false);
-          setShowStripeCheckoutModal(true);
+          if (selectedPaymentMethod === 'pix_chave') {
+            setShowPixChaveModal(true);
+          } else {
+            setShowStripeCheckoutModal(true);
+          }
         }}
         title="Cliente Existente!"
         message="Verificação realizada com sucesso. Você pode prosseguir com a compra."
@@ -536,22 +825,78 @@ const EventDetails: React.FC = () => {
         buttonText="Entendi"
       />
 
-      {/* Modais de Pagamento do Stripe */}
+      {/* Modal de Identificação e Dados dos Participantes (Campos dinâmicos por evento e múltiplos ingressos) */}
+      <CheckoutClientModal
+        isOpen={showCheckoutClientModal}
+        onClose={() => setShowCheckoutClientModal(false)}
+        onSubmit={handleCheckoutClientSubmit}
+        checkoutFields={event?.checkout_fields || []}
+        quantity={quantity}
+        initialPhone={currentPhone}
+        initialName={currentClientName}
+        eventTitle={event?.title}
+      />
+
+      {/* Modal de Pagamento do Stripe / Mercado Pago (Boleto, Cartão, Pix) */}
       <StripeCheckoutModal
         isOpen={showStripeCheckoutModal}
         onClose={() => {
           setShowStripeCheckoutModal(false);
           setStripeErrorMessage(null);
+          setAwaitingPaymentOrderId(null);
         }}
         eventTitle={event?.title || 'Evento'}
         batchName={priceBatches[selectedBatch]?.name || `Lote ${selectedBatch + 1}`}
-        unitPrice={priceBatches[selectedBatch]?.price || 0}
+        unitPrice={currentUnitPrice}
         quantity={quantity}
+        paymentMethod={selectedPaymentMethod}
+        paymentMethodLabel={getPaymentMethodLabel(selectedPaymentMethod)}
+        feePercentage={currentFeePercentage}
         clientName={currentClientName}
         clientPhone={currentPhone}
+        clientEmail={currentClientEmail}
         onConfirmCheckout={handleConfirmStripeCheckout}
         loading={stripeCheckoutLoading}
         errorMessage={stripeErrorMessage}
+        awaitingPayment={!!awaitingPaymentOrderId}
+      />
+
+      {/* Modal de Pagamento Pix Chave (QR Code Próprio) */}
+      <PixChavePaymentModal
+        isOpen={showPixChaveModal}
+        onClose={() => setShowPixChaveModal(false)}
+        eventTitle={event?.title || 'Evento'}
+        batchName={priceBatches[selectedBatch]?.name || `Lote ${selectedBatch + 1}`}
+        unitPrice={currentUnitPrice}
+        quantity={quantity}
+        feePercentage={currentFeePercentage}
+        qrCodeUrl={pixChaveConfig?.qr_code_url}
+        pixKey={pixChaveConfig?.pix_key}
+        clientName={currentClientName}
+        clientPhone={currentPhone}
+        onProceedToProofUpload={() => {
+          setShowPixChaveModal(false);
+          setShowPaymentProofModal(true);
+        }}
+      />
+
+      {/* Modal de Upload de Comprovante de Pagamento */}
+      <PaymentProofUploadModal
+        isOpen={showPaymentProofModal}
+        onClose={() => setShowPaymentProofModal(false)}
+        eventId={id || ''}
+        eventTitle={event?.title || 'Evento'}
+        batchIndex={selectedBatch}
+        batchName={priceBatches[selectedBatch]?.name || `Lote ${selectedBatch + 1}`}
+        unitPrice={currentUnitPrice}
+        quantity={quantity}
+        feePercentage={currentFeePercentage}
+        clientName={currentClientName}
+        clientPhone={currentPhone}
+        onSuccess={() => {
+          setShowPaymentProofModal(false);
+          toast.success('Comprovante enviado com sucesso! Aguarde a validação.');
+        }}
       />
 
       <PaymentSuccessModal
@@ -559,6 +904,26 @@ const EventDetails: React.FC = () => {
         onClose={() => setShowPaymentSuccessModal(false)}
         sessionId={stripeSessionId}
         eventTitle={event?.title}
+      />
+
+      {/* Modal de Alerta de Preço Atualizado em Tempo Real */}
+      <PriceUpdatedModal
+        isOpen={showPriceUpdatedModal}
+        onClose={() => setShowPriceUpdatedModal(false)}
+        onConfirm={() => setShowPriceUpdatedModal(false)}
+        oldUnitPrice={priceMismatchDetails.oldPrice}
+        newUnitPrice={priceMismatchDetails.newPrice}
+        batchName={priceMismatchDetails.batchName}
+        reason={priceMismatchDetails.reason}
+      />
+
+      {/* Modal de Recuperação de Pedidos Pendentes Duplicados */}
+      <PendingOrderRecoveryModal
+        isOpen={showPendingRecoveryModal}
+        onClose={() => setShowPendingRecoveryModal(false)}
+        pendingOrder={pendingOrderFound}
+        onContinueExisting={handleContinueExistingOrder}
+        onDiscardAndCreateNew={handleDiscardAndCreateNewOrder}
       />
       
       <Header />
@@ -605,7 +970,7 @@ const EventDetails: React.FC = () => {
                       </span>
                     </div>
                     
-                    {/* Componente de Informações (renderiza a descrição no topo) */}
+                    {/* Componente de Informações */}
                     <EventInfo
                       title={event.title}
                       date={event.event_date}
@@ -618,7 +983,7 @@ const EventDetails: React.FC = () => {
                       description={event.description}
                     />
 
-                    {/* Componente de Descrição (apenas descrição detalhada e programação) */}
+                    {/* Componente de Descrição */}
                     <EventDescription
                       detailedDescription={event.detailed_description}
                       schedule={typeof event.schedule === 'string' ? JSON.parse(event.schedule) : event.schedule}
@@ -635,6 +1000,16 @@ const EventDetails: React.FC = () => {
                     priceBatches={priceBatches}
                     selectedBatch={selectedBatch}
                     quantity={quantity}
+                    paymentMethods={event.payment_methods || []}
+                    selectedPaymentMethod={selectedPaymentMethod}
+                    onPaymentMethodSelect={(method) => {
+                      setSelectedPaymentMethod(method);
+                      if (method !== 'credit_card') {
+                        setSelectedInstallments(null);
+                      }
+                    }}
+                    selectedInstallments={selectedInstallments || undefined}
+                    onInstallmentsSelect={(inst) => setSelectedInstallments(inst)}
                     onBatchSelect={setSelectedBatch}
                     onQuantityChange={handleQuantityChange}
                     onPurchase={handlePurchase}

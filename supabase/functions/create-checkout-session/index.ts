@@ -121,7 +121,7 @@ serve(async (req) => {
 
     // Criar registro de pedido pendente no Supabase
     const { data: order, error: orderError } = await supabase
-      .from("event_orders")
+      .from("app_event_orders")
       .insert({
         event_id,
         client_id: client_id || null,

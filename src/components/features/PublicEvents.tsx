@@ -287,7 +287,7 @@ const EventCard: React.FC<EventCardProps> = memo(({ event }) => {
             <img 
               src={event.image_url} 
               alt={event.title}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-fill"
               loading="lazy"
               onLoad={() => console.log('✅ Imagem carregada:', event.id)}
               onError={() => console.log('❌ Erro ao carregar imagem:', event.id, event.image_url)}
