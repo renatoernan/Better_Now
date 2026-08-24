@@ -25,6 +25,7 @@
     "@types/react-router-dom": "^5.3.3",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.16",
+    "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.544.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.1.1",
