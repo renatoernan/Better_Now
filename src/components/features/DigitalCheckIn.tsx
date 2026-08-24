@@ -28,8 +28,7 @@ import {
   Lock,
   HelpCircle,
   Volume2,
-  Image as ImageIcon,
-  Upload
+  AlertTriangle
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../../shared/services/lib/supabase';
@@ -194,13 +193,13 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
   
-  // Ingresso selecionado para confirmação
+  // Ingresso selecionado para conferência e ingresso confirmado com sucesso
   const [selectedTicket, setSelectedTicket] = useState<TicketWithOrder | null>(null);
+  const [checkInSuccessTicket, setCheckInSuccessTicket] = useState<TicketWithOrder | null>(null);
 
   const codeInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const fileCaptureInputRef = useRef<HTMLInputElement>(null);
-  const fileUploadInputRef = useRef<HTMLInputElement>(null);
+  const isProcessingScanRef = useRef(false);
 
   // Carregar ingressos reais do evento
   const loadEventTickets = async () => {
@@ -434,47 +433,33 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
   const validTickets = tickets.filter(t => t.status === 'valid' && !t.used_at).length;
   const checkInRate = totalTickets > 0 ? (checkedInTickets / totalTickets) * 100 : 0;
 
-  // Escanear arquivo de imagem / foto tirada na câmera nativa
-  const handleScanImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setCameraLoading(true);
-    setCameraError(null);
-
-    try {
-      // Se houver scanner ativo, limpa antes de ler o arquivo
-      if (qrScannerRef.current) {
-        try {
-          if (qrScannerRef.current.isScanning) {
-            await qrScannerRef.current.stop();
-          }
-          await qrScannerRef.current.clear();
-        } catch (_) {}
-      }
-
-      const html5QrCode = new Html5Qrcode('qr-camera-viewport', { verbose: false });
-      const decodedText = await html5QrCode.scanFile(file, true);
-      handleProcessScan(decodedText);
-      try {
-        await html5QrCode.clear();
-      } catch (_) {}
-    } catch (err: any) {
-      console.warn('Erro ao decodificar QR Code da imagem:', err);
-      playWarningBeep();
-      toast.error('Não foi possível identificar o QR Code na imagem. Aproxime a câmera e certifique-se de que a foto está nítida.');
-    } finally {
-      setCameraLoading(false);
-      if (e.target) {
-        e.target.value = '';
-      }
+  // Fechar Modal e reativar leitor se aplicável
+  const handleCloseModal = () => {
+    setSelectedTicket(null);
+    isProcessingScanRef.current = false;
+    if (checkInMode === 'camera') {
+      setTimeout(() => {
+        startCameraScanner(facingMode);
+      }, 250);
     }
   };
 
-  // Processar busca / leitura de código QR
-  const handleProcessScan = (codeToSearch: string) => {
+  // Processar busca / leitura de código QR (Prevenção de repetição em loop e som contínuo)
+  const handleProcessScan = async (codeToSearch: string) => {
     const clean = codeToSearch.trim();
-    if (!clean) return;
+    if (!clean || isProcessingScanRef.current) return;
+
+    isProcessingScanRef.current = true;
+
+    // Pausar imediatamente o leitor de vídeo para evitar looping de detecção a cada frame
+    if (qrScannerRef.current) {
+      try {
+        if (qrScannerRef.current.isScanning) {
+          await qrScannerRef.current.stop();
+        }
+      } catch (_) {}
+      setCameraActive(false);
+    }
 
     const found = tickets.find(t => 
       t.qr_code_hash.toLowerCase() === clean.toLowerCase() ||
@@ -496,6 +481,13 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
     } else {
       playWarningBeep();
       toast.error(`Nenhum ingresso localizado com o código: ${clean}`);
+      // Libera após 2s caso não localize
+      setTimeout(() => {
+        isProcessingScanRef.current = false;
+        if (checkInMode === 'camera') {
+          startCameraScanner(facingMode);
+        }
+      }, 2000);
     }
   };
 
@@ -530,6 +522,17 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
     );
   });
 
+  // Preparar próxima leitura pela câmera
+  const handlePrepareNextScan = () => {
+    setCheckInSuccessTicket(null);
+    setSelectedTicket(null);
+    isProcessingScanRef.current = false;
+    setCheckInMode('camera');
+    setTimeout(() => {
+      startCameraScanner(facingMode);
+    }, 250);
+  };
+
   // Realizar Check-in do Ingresso
   const handleConfirmCheckIn = async (ticketId: string) => {
     setLoading(true);
@@ -546,16 +549,21 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
       if (error) throw error;
 
       playSuccessBeep();
-      toast.success('🎉 Check-in confirmado com sucesso! Entrada autorizada!');
       
+      const updatedTicket: TicketWithOrder = selectedTicket && selectedTicket.id === ticketId
+        ? { ...selectedTicket, status: 'used', used_at: nowIso }
+        : tickets.find(t => t.id === ticketId)
+          ? { ...tickets.find(t => t.id === ticketId)!, status: 'used', used_at: nowIso }
+          : { id: ticketId, event_id: eventId, order_id: '', ticket_number: 1, qr_code_hash: '', status: 'used', used_at: nowIso, created_at: nowIso } as any;
+
       // Atualizar lista local
       setTickets(prev => prev.map(t => 
         t.id === ticketId ? { ...t, status: 'used', used_at: nowIso } : t
       ));
 
-      if (selectedTicket && selectedTicket.id === ticketId) {
-        setSelectedTicket({ ...selectedTicket, status: 'used', used_at: nowIso });
-      }
+      // Fecha o modal de conferência e abre o modal de sucesso com botão de próxima leitura
+      setSelectedTicket(null);
+      setCheckInSuccessTicket(updatedTicket);
     } catch (err) {
       console.error('Erro ao confirmar check-in:', err);
       toast.error('Não foi possível confirmar o check-in');
@@ -777,26 +785,9 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                 )}
               </div>
 
-              {/* Inputs ocultos para captura nativa da câmera do celular e upload de imagem */}
-              <input
-                ref={fileCaptureInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleScanImageFile}
-                className="hidden"
-              />
-              <input
-                ref={fileUploadInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleScanImageFile}
-                className="hidden"
-              />
-
               {/* Container do Leitor de Câmera (Sempre no DOM com dimensões reais) */}
               <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black max-w-[290px] sm:max-w-xs mx-auto border-2 border-slate-700 shadow-inner h-72 sm:h-80 flex items-center justify-center">
-                {/* Viewport onde o Html5Qrcode renderiza o stream de vídeo (SEMPRE visível com dimensões reais para cálculo correto) */}
+                {/* Viewport onde o Html5Qrcode renderiza o stream de vídeo */}
                 <div id="qr-camera-viewport" className="w-full h-full" />
 
                 {/* Laser de leitura animado quando a câmera estiver ativa */}
@@ -804,60 +795,38 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                   <div className="absolute inset-x-6 top-1/2 h-0.5 bg-emerald-400 shadow-lg shadow-emerald-400/90 animate-pulse pointer-events-none z-10" />
                 )}
 
-                {/* Card de opções / ativação inicial posicionado como Overlay Absoluto */}
+                {/* Card de ativação inicial (Overlay Absoluto) */}
                 {!cameraActive && (
-                  <div className="absolute inset-0 bg-slate-900/95 z-20 p-5 rounded-2xl flex flex-col items-center justify-center space-y-3 text-center">
-                    <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center border border-emerald-500/30 shadow-inner">
-                      <Camera className="w-6 h-6" />
+                  <div className="absolute inset-0 bg-slate-900/95 z-20 p-6 rounded-2xl flex flex-col items-center justify-center space-y-4 text-center">
+                    <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center border border-emerald-500/30 shadow-inner">
+                      <Camera className="w-7 h-7" />
                     </div>
 
-                    <div className="space-y-0.5">
-                      <h3 className="text-sm font-bold text-white">Leitura de Ingressos</h3>
-                      <p className="text-[11px] text-slate-300 max-w-[220px] mx-auto">
-                        Escolha como deseja escanear o QR Code:
+                    <div className="space-y-1">
+                      <h3 className="text-sm sm:text-base font-bold text-white">Leitor de QR Code</h3>
+                      <p className="text-xs text-slate-300 max-w-[220px] mx-auto">
+                        Toque no botão abaixo para abrir a câmera da portaria
                       </p>
                     </div>
 
-                    <div className="w-full space-y-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => startCameraScanner(facingMode)}
-                        disabled={cameraLoading}
-                        className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-emerald-600/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        {cameraLoading ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Iniciando Câmera...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Video className="w-3.5 h-3.5" />
-                            <span>1. Câmera de Vídeo ao Vivo</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => fileCaptureInputRef.current?.click()}
-                        disabled={cameraLoading}
-                        className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>2. Foto na Câmera do Celular</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => fileUploadInputRef.current?.click()}
-                        disabled={cameraLoading}
-                        className="w-full py-2 px-3 bg-slate-700/80 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <ImageIcon className="w-3.5 h-3.5" />
-                        <span>Carregar Foto da Galeria</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => startCameraScanner(facingMode)}
+                      disabled={cameraLoading}
+                      className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold rounded-xl text-xs sm:text-sm transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {cameraLoading ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Iniciando Câmera...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-4 h-4" />
+                          <span>Ativar Câmera da Portaria</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
               </div>
@@ -872,32 +841,21 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-amber-500/30 flex items-center justify-between flex-wrap gap-2">
+                  <div className="pt-2 border-t border-amber-500/30 flex items-center justify-between">
                     <button
                       type="button"
-                      onClick={() => fileCaptureInputRef.current?.click()}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[11px] cursor-pointer flex items-center gap-1"
+                      onClick={() => setCheckInMode('code')}
+                      className="text-amber-300 underline font-semibold text-[11px] cursor-pointer"
                     >
-                      <Camera className="w-3.5 h-3.5" />
-                      Tirar Foto do QR Code
+                      Digitar Código do Ingresso
                     </button>
-                    
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setCheckInMode('code')}
-                        className="text-amber-300 underline font-semibold text-[11px] cursor-pointer"
-                      >
-                        Digitar Código
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => startCameraScanner(facingMode)}
-                        className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-[11px] cursor-pointer"
-                      >
-                        Tentar Vídeo
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => startCameraScanner(facingMode)}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-[11px] cursor-pointer"
+                    >
+                      Tentar Novamente
+                    </button>
                   </div>
                 </div>
               )}
@@ -1037,124 +995,229 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
           </div>
         )}
 
-        {/* CARD DO INGRESSO IDENTIFICADO COM DADOS MASCARADOS */}
-        {selectedTicket && (
-          <div className="max-w-lg mx-auto mt-4 bg-white border-2 border-emerald-600 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold shrink-0">
-                  <Ticket className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">
-                    Ingresso #{selectedTicket.ticket_number}
-                  </span>
-                  <p className="text-xs text-gray-500 truncate">Lote: <strong>{selectedTicket.order?.batch_name || 'Lote Padrão'}</strong></p>
-                </div>
-              </div>
+        {/* MODAL DE CONFERÊNCIA DE TITULARIDADE NA PORTARIA (Centralizado em Tela Cheia) */}
+        {selectedTicket && (() => {
+          const isUsed = selectedTicket.status === 'used' || Boolean(selectedTicket.used_at);
 
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase flex items-center gap-1 ${
-                  selectedTicket.status === 'used'
-                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                }`}>
-                  {selectedTicket.status === 'used' ? (
-                    <>
-                      <AlertCircle className="w-3 h-3" />
-                      Já Utilizado
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-3 h-3" />
-                      Válido
-                    </>
-                  )}
-                </span>
+          return (
+            <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn">
+              <div className={`bg-white rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-w-md w-full animate-scaleIn border-2 ${
+                isUsed
+                  ? 'border-red-500 shadow-red-500/20'
+                  : 'border-emerald-500 shadow-emerald-500/20'
+              }`}>
+                {/* Cabeçalho do Ingresso */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 border shadow-inner ${
+                      isUsed
+                        ? 'bg-red-50 text-red-600 border-red-200'
+                        : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                    }`}>
+                      {isUsed ? <AlertTriangle className="w-5 h-5" /> : <Ticket className="w-5 h-5" />}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className={`text-sm sm:text-base font-extrabold uppercase tracking-tight ${
+                        isUsed ? 'text-red-950' : 'text-emerald-950'
+                      }`}>
+                        INGRESSO #{selectedTicket.ticket_number}
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Lote: <span className="font-bold text-gray-800">{selectedTicket.order?.batch_name || 'Lote Padrão'}</span>
+                      </p>
+                    </div>
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={() => setSelectedTicket(null)}
-                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-black uppercase flex items-center gap-1 border ${
+                      isUsed
+                        ? 'bg-red-600 text-white border-red-700 shadow-md shadow-red-600/30 animate-pulse'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                    }`}>
+                      {isUsed ? (
+                        <>
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          JÁ UTILIZADO
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          VÁLIDO
+                        </>
+                      )}
+                    </span>
 
-            {/* Dados do Comprador com Mascaramento */}
-            <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 border border-gray-200/80 space-y-2.5">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                Conferência de Titularidade na Portaria:
-              </span>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                {/* Nome Completo */}
-                <div className="sm:col-span-2 bg-white p-2.5 rounded-xl border border-gray-200/70 shadow-2xs">
-                  <p className="text-[10px] text-gray-500 font-semibold uppercase">Nome Completo</p>
-                  <p className="text-sm font-extrabold text-gray-900 mt-0.5 truncate">
-                    {selectedTicket.order?.client_name || 'Nome não informado'}
-                  </p>
-                </div>
-
-                {/* CPF Mascarado */}
-                <div className="bg-white p-2.5 rounded-xl border border-gray-200/70 shadow-2xs">
-                  <p className="text-[10px] text-gray-500 font-semibold uppercase">CPF (Mascarado)</p>
-                  <p className="text-xs font-mono font-bold text-gray-800 mt-0.5">
-                    {maskCpf(selectedTicket.order?.client_document)}
-                  </p>
+                    <button
+                      type="button"
+                      onClick={handleCloseModal}
+                      className="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
-                {/* Telefone Mascarado */}
-                <div className="bg-white p-2.5 rounded-xl border border-gray-200/70 shadow-2xs">
-                  <p className="text-[10px] text-gray-500 font-semibold uppercase">Telefone (Mascarado)</p>
-                  <p className="text-xs font-mono font-bold text-gray-800 mt-0.5">
-                    {maskPhone(selectedTicket.order?.client_phone)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="pt-1.5 text-[10px] text-gray-500 flex items-center justify-between border-t border-gray-200/60 flex-wrap gap-1">
-                <span className="font-mono text-gray-400 truncate max-w-[180px]">{selectedTicket.qr_code_hash}</span>
-                {selectedTicket.used_at && (
-                  <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded">
-                    Entrada às {new Date(selectedTicket.used_at).toLocaleTimeString('pt-BR')}
-                  </span>
+                {/* Banner de Alerta Vermelho Destacado quando já utilizado */}
+                {isUsed && (
+                  <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-3.5 flex items-start gap-3 text-red-900 shadow-xs">
+                    <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <AlertTriangle className="w-5 h-5 animate-bounce" />
+                    </div>
+                    <div className="space-y-0.5 text-xs min-w-0">
+                      <p className="font-black text-red-700 text-sm tracking-tight">ATENÇÃO: INGRESSO JÁ UTILIZADO!</p>
+                      <p className="text-red-800 font-medium leading-snug">
+                        Este ingresso já realizou check-in às{' '}
+                        <strong className="text-red-950 bg-red-200/60 px-1 py-0.5 rounded">
+                          {selectedTicket.used_at ? new Date(selectedTicket.used_at).toLocaleTimeString('pt-BR') : 'horário anterior'}
+                        </strong>
+                        . Não autorize entrada duplicada.
+                      </p>
+                    </div>
+                  </div>
                 )}
+
+                {/* Caixa de Conferência de Titularidade */}
+                <div className={`rounded-2xl p-3.5 sm:p-4 border space-y-2.5 ${
+                  isUsed
+                    ? 'bg-red-50/40 border-red-200/70'
+                    : 'bg-slate-50/90 border-gray-200/80'
+                }`}>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                    CONFERÊNCIA DE TITULARIDADE NA PORTARIA:
+                  </span>
+
+                  <div className="space-y-2">
+                    {/* Nome Completo */}
+                    <div className="bg-white p-3 rounded-xl border border-gray-200/70 shadow-2xs">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">NOME COMPLETO</p>
+                      <p className="text-sm sm:text-base font-extrabold text-gray-900 mt-0.5 truncate">
+                        {selectedTicket.order?.client_name || 'Nome não informado'}
+                      </p>
+                    </div>
+
+                    {/* Grid CPF e Telefone Mascarados */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-white p-2.5 rounded-xl border border-gray-200/70 shadow-2xs">
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">CPF (MASCARADO)</p>
+                        <p className="text-xs sm:text-sm font-mono font-bold text-gray-800 mt-0.5 truncate">
+                          {maskCpf(selectedTicket.order?.client_document)}
+                        </p>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-gray-200/70 shadow-2xs">
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">TELEFONE (MASCARADO)</p>
+                        <p className="text-xs sm:text-sm font-mono font-bold text-gray-800 mt-0.5 truncate">
+                          {maskPhone(selectedTicket.order?.client_phone)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-1.5 text-[10px] text-gray-400 flex items-center justify-between border-t border-gray-200/60 flex-wrap gap-1">
+                    <span className="font-mono truncate max-w-[200px]">{selectedTicket.qr_code_hash}</span>
+                    {selectedTicket.used_at && (
+                      <span className="text-red-800 font-bold bg-red-100/90 px-2 py-0.5 rounded-md">
+                        Entrada às {new Date(selectedTicket.used_at).toLocaleTimeString('pt-BR')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="flex gap-2.5 justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="px-5 py-2.5 border border-gray-300 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    Voltar
+                  </button>
+
+                  {isUsed ? (
+                    <button
+                      type="button"
+                      onClick={() => handleUndoCheckIn(selectedTicket.id)}
+                      disabled={loading}
+                      className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md shadow-red-600/20"
+                    >
+                      <UserX className="w-3.5 h-3.5" />
+                      Desfazer Check-in
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmCheckIn(selectedTicket.id)}
+                      disabled={loading}
+                      className="flex-1 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Liberar Entrada / Check-in
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
+          );
+        })()}
 
-            {/* Botões de Ação */}
-            <div className="flex gap-2 justify-end pt-1">
-              <button
-                type="button"
-                onClick={() => setSelectedTicket(null)}
-                className="px-3.5 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl text-xs hover:bg-gray-50 cursor-pointer"
-              >
-                Voltar
-              </button>
+        {/* MODAL DE SUCESSO DO CHECK-IN COM BOTÃO PARA PREPARAR PRÓXIMA LEITURA */}
+        {checkInSuccessTicket && (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn">
+            <div className="bg-white border-2 border-emerald-500 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 max-w-md w-full text-center animate-scaleIn">
+              {/* Ícone de Sucesso */}
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-50 text-emerald-600 rounded-full mx-auto flex items-center justify-center border-2 border-emerald-500/30 shadow-inner">
+                <CheckCircle2 className="w-9 h-9 sm:w-11 sm:h-11 text-emerald-600" />
+              </div>
 
-              {selectedTicket.status === 'used' ? (
+              <div className="space-y-1.5">
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-extrabold rounded-full uppercase tracking-wider">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  Entrada Autorizada
+                </span>
+                <h2 className="text-xl sm:text-2xl font-black text-gray-900">
+                  Check-in Confirmado!
+                </h2>
+              </div>
+
+              {/* Card Resumo do Participante */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-gray-200/80 text-left space-y-2">
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Titular do Ingresso</p>
+                  <p className="text-base font-black text-gray-900 mt-0.5 truncate">
+                    {checkInSuccessTicket.order?.client_name || 'Participante'}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-gray-200/60 text-xs text-gray-600 flex-wrap gap-1">
+                  <span>Ingresso <strong>#{checkInSuccessTicket.ticket_number}</strong> • {checkInSuccessTicket.order?.batch_name || 'Lote Padrão'}</span>
+                  <span className="text-emerald-800 font-bold bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                    Entrada às {checkInSuccessTicket.used_at ? new Date(checkInSuccessTicket.used_at).toLocaleTimeString('pt-BR') : 'Agora'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="space-y-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => handleUndoCheckIn(selectedTicket.id)}
-                  disabled={loading}
-                  className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  onClick={handlePrepareNextScan}
+                  className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold rounded-2xl text-sm sm:text-base transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <UserX className="w-3.5 h-3.5" />
-                  Desfazer
+                  <Camera className="w-5 h-5" />
+                  <span>Próxima Leitura (Câmera)</span>
                 </button>
-              ) : (
+
                 <button
                   type="button"
-                  onClick={() => handleConfirmCheckIn(selectedTicket.id)}
-                  disabled={loading}
-                  className="flex-1 sm:flex-initial px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  onClick={() => {
+                    setCheckInSuccessTicket(null);
+                    isProcessingScanRef.current = false;
+                  }}
+                  className="w-full py-2.5 px-4 text-gray-500 hover:text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
                 >
-                  <CheckCircle className="w-4 h-4" />
-                  Liberar Entrada / Check-in
+                  Concluir e Fechar
                 </button>
-              )}
+              </div>
             </div>
           </div>
         )}
