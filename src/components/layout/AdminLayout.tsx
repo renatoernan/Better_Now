@@ -75,13 +75,16 @@ const AdminLayout: React.FC = () => {
       <div className={`fixed inset-y-0 left-0 z-50 w-64 sm:w-72 bg-white shadow-lg transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
         <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 border-b border-gray-200">
-          <div className="flex items-center min-w-0">
+          <div className="flex items-center min-w-0 gap-2">
             <img
-              src="/images/logo_better_now.png"
+              src="/images/logo_simbolo_sombra.png"
               alt="Better Now"
-              className="h-6 sm:h-8 w-auto flex-shrink-0"
+              className="h-8 w-8 object-contain shrink-0"
             />
-            <span className="ml-2 text-lg sm:text-xl font-semibold text-gray-800 truncate">Admin</span>
+            <div className="flex items-baseline min-w-0">
+              <span className="text-base sm:text-lg font-bold text-gray-900 truncate">Better Now</span>
+              <span className="ml-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md uppercase shrink-0">Admin</span>
+            </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -139,13 +142,16 @@ const AdminLayout: React.FC = () => {
             >
               <Menu className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
-            <div className="flex items-center min-w-0">
+            <div className="flex items-center min-w-0 gap-2">
               <img
-                src="/images/logo_better_now.png"
+                src="/images/logo_simbolo_sombra.png"
                 alt="Better Now"
-                className="h-6 sm:h-8 w-auto flex-shrink-0"
+                className="h-7 w-7 object-contain shrink-0"
               />
-              <span className="ml-2 text-base sm:text-lg font-semibold text-gray-800 truncate">Admin</span>
+              <div className="flex items-baseline min-w-0">
+                <span className="text-sm sm:text-base font-bold text-gray-900 truncate">Better Now</span>
+                <span className="ml-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md uppercase shrink-0">Admin</span>
+              </div>
             </div>
             <div className="w-8 sm:w-10 flex-shrink-0"></div> {/* Spacer */}
           </div>

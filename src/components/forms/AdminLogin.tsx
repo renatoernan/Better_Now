@@ -71,9 +71,9 @@ const AdminLogin: React.FC = () => {
           {/* Logo */}
           <div className="text-center mb-8">
             <img
-              src="/images/logo_better_now.png"
+              src="/images/logo_simbolo_sombra.png"
               alt="Better Now - Logotipo da empresa"
-              className="mx-auto h-32 w-auto mb-4"
+              className="mx-auto h-20 w-20 object-contain mb-4"
             />
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
               Área Administrativa

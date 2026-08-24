@@ -27,7 +27,9 @@ import {
   X,
   Lock,
   HelpCircle,
-  Volume2
+  Volume2,
+  Image as ImageIcon,
+  Upload
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../../shared/services/lib/supabase';
@@ -194,9 +196,11 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
   
   // Ingresso selecionado para confirmação
   const [selectedTicket, setSelectedTicket] = useState<TicketWithOrder | null>(null);
-  
+
   const codeInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const fileCaptureInputRef = useRef<HTMLInputElement>(null);
+  const fileUploadInputRef = useRef<HTMLInputElement>(null);
 
   // Carregar ingressos reais do evento
   const loadEventTickets = async () => {
@@ -250,7 +254,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
 
   const currentEvent = events.find(e => e.id === eventId);
 
-  // Gerenciamento da Câmera com Html5Qrcode e Seleção de Câmera para Android/iOS
+  // Gerenciamento da Câmera com Html5Qrcode com Estratégia em Cascata Resiliente para Android/iOS
   const startCameraScanner = async (mode: 'environment' | 'user' = facingMode) => {
     setCameraError(null);
     setCameraLoading(true);
@@ -278,6 +282,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
       });
       qrScannerRef.current = scanner;
 
+      // Configuração sem forçar aspectRatio rígido para compatibilidade total com Android
       const config = {
         fps: 10,
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
@@ -287,47 +292,75 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
             width: Math.max(180, qrboxSize),
             height: Math.max(180, qrboxSize)
           };
-        },
-        aspectRatio: 1.0,
+        }
       };
 
-      // 3. Tentar identificar câmeras traseiras no Android (Chrome/Edge)
-      let cameraConfig: any = { facingMode: mode };
+      const qrCodeSuccessCallback = (decodedText: string) => {
+        handleProcessScan(decodedText);
+      };
+
+      // 3. Estratégia de Inicialização em Cascata (Previne NotReadableError)
+      let started = false;
+      let lastErr: any = null;
+
+      // Tentativa 1: facingMode direto (Padrão WebRTC recomendado)
       try {
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length > 0) {
-          if (mode === 'environment') {
-            const backCamera = devices.find(d => {
-              const label = (d.label || '').toLowerCase();
-              return label.includes('back') || label.includes('rear') || label.includes('traseira') || label.includes('environment');
-            }) || devices[devices.length - 1]; // Geralmente a última é a câmera traseira
-            if (backCamera) {
-              cameraConfig = backCamera.id;
-            }
-          } else {
-            const frontCamera = devices.find(d => {
-              const label = (d.label || '').toLowerCase();
-              return label.includes('front') || label.includes('frontal') || label.includes('user');
-            }) || devices[0];
-            if (frontCamera) {
-              cameraConfig = frontCamera.id;
-            }
-          }
-        }
-      } catch (listErr) {
-        console.warn('Enumeração de câmeras ignorada, usando facingMode direto:', listErr);
-        cameraConfig = { facingMode: mode };
+        await scanner.start(
+          { facingMode: mode },
+          config,
+          qrCodeSuccessCallback,
+          () => {}
+        );
+        started = true;
+      } catch (err1) {
+        console.warn('Tentativa 1 com facingMode falhou:', err1);
+        lastErr = err1;
       }
 
-      // 4. Iniciar scanner de vídeo
-      await scanner.start(
-        cameraConfig,
-        config,
-        (decodedText) => {
-          handleProcessScan(decodedText);
-        },
-        () => {} // Ignora frames sem detecção
-      );
+      // Tentativa 2: Se falhou e era environment, tenta enumerar câmeras traseiras
+      if (!started) {
+        try {
+          const devices = await Html5Qrcode.getCameras();
+          if (devices && devices.length > 0) {
+            const targetCam = mode === 'environment'
+              ? (devices.find(d => /back|rear|traseira|environment/i.test(d.label)) || devices[devices.length - 1])
+              : (devices.find(d => /front|user|frontal/i.test(d.label)) || devices[0]);
+
+            if (targetCam) {
+              await scanner.start(
+                targetCam.id,
+                config,
+                qrCodeSuccessCallback,
+                () => {}
+              );
+              started = true;
+            }
+          }
+        } catch (err2) {
+          console.warn('Tentativa 2 com deviceId falhou:', err2);
+          lastErr = err2;
+        }
+      }
+
+      // Tentativa 3: Fallback sem restrições de câmera
+      if (!started) {
+        try {
+          await scanner.start(
+            { facingMode: 'user' },
+            config,
+            qrCodeSuccessCallback,
+            () => {}
+          );
+          started = true;
+        } catch (err3) {
+          console.warn('Tentativa 3 frontal falhou:', err3);
+          lastErr = err3;
+        }
+      }
+
+      if (!started) {
+        throw lastErr || new Error('Não foi possível iniciar o feed de vídeo da câmera');
+      }
 
       setCameraActive(true);
       setCameraError(null);
@@ -340,10 +373,10 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
         setCameraError('Permissão de acesso à câmera negada. Toque no ícone de configurações 🔒 do navegador para autorizar a Câmera.');
       } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError' || errString.includes('NotFound')) {
         setCameraError('Nenhuma câmera foi encontrada neste dispositivo.');
-      } else if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError' || errString.includes('NotReadable')) {
-        setCameraError('A câmera está sendo utilizada por outro aplicativo ou aba.');
+      } else if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError' || errString.includes('NotReadable') || errString.includes('Could not start video source')) {
+        setCameraError('O sensor da câmera está ocupado ou não pôde ser iniciado diretamente pelo navegador. Você pode usar a opção "2. Foto na Câmera do Celular" abaixo.');
       } else {
-        setCameraError(`Não foi possível iniciar a câmera: ${err?.message || 'Verifique as permissões do seu navegador.'}`);
+        setCameraError(`Não foi possível iniciar a câmera: ${err?.message || 'Utilize a opção de foto do celular abaixo.'}`);
       }
     } finally {
       setCameraLoading(false);
@@ -400,6 +433,43 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
   const checkedInTickets = tickets.filter(t => t.status === 'used' || Boolean(t.used_at)).length;
   const validTickets = tickets.filter(t => t.status === 'valid' && !t.used_at).length;
   const checkInRate = totalTickets > 0 ? (checkedInTickets / totalTickets) * 100 : 0;
+
+  // Escanear arquivo de imagem / foto tirada na câmera nativa
+  const handleScanImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setCameraLoading(true);
+    setCameraError(null);
+
+    try {
+      // Se houver scanner ativo, limpa antes de ler o arquivo
+      if (qrScannerRef.current) {
+        try {
+          if (qrScannerRef.current.isScanning) {
+            await qrScannerRef.current.stop();
+          }
+          await qrScannerRef.current.clear();
+        } catch (_) {}
+      }
+
+      const html5QrCode = new Html5Qrcode('qr-camera-viewport', { verbose: false });
+      const decodedText = await html5QrCode.scanFile(file, true);
+      handleProcessScan(decodedText);
+      try {
+        await html5QrCode.clear();
+      } catch (_) {}
+    } catch (err: any) {
+      console.warn('Erro ao decodificar QR Code da imagem:', err);
+      playWarningBeep();
+      toast.error('Não foi possível identificar o QR Code na imagem. Aproxime a câmera e certifique-se de que a foto está nítida.');
+    } finally {
+      setCameraLoading(false);
+      if (e.target) {
+        e.target.value = '';
+      }
+    }
+  };
 
   // Processar busca / leitura de código QR
   const handleProcessScan = (codeToSearch: string) => {
@@ -707,6 +777,23 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                 )}
               </div>
 
+              {/* Inputs ocultos para captura nativa da câmera do celular e upload de imagem */}
+              <input
+                ref={fileCaptureInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleScanImageFile}
+                className="hidden"
+              />
+              <input
+                ref={fileUploadInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleScanImageFile}
+                className="hidden"
+              />
+
               {/* Container do Leitor de Câmera (Sempre no DOM) */}
               <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black max-w-[290px] sm:max-w-xs mx-auto border-2 border-slate-700 shadow-inner flex items-center justify-center min-h-[260px]">
                 {/* Viewport onde o Html5Qrcode renderiza o stream de vídeo */}
@@ -719,36 +806,58 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
 
                 {/* Card de ativação inicial (quando scanner está inativo) */}
                 {!cameraActive && (
-                  <div className="p-6 bg-slate-800/95 w-full h-full rounded-2xl flex flex-col items-center justify-center space-y-3.5 text-center">
-                    <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center border border-emerald-500/30 shadow-inner">
-                      <Camera className="w-7 h-7" />
+                  <div className="p-5 bg-slate-800/95 w-full h-full rounded-2xl flex flex-col items-center justify-center space-y-3 text-center">
+                    <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center border border-emerald-500/30 shadow-inner">
+                      <Camera className="w-6 h-6" />
                     </div>
 
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-bold text-white">Pronto para Ler Ingressos</h3>
-                      <p className="text-xs text-slate-300 max-w-[220px] mx-auto">
-                        Toque no botão abaixo para abrir a câmera no seu celular ou computador
+                    <div className="space-y-0.5">
+                      <h3 className="text-sm font-bold text-white">Leitura de Ingressos</h3>
+                      <p className="text-[11px] text-slate-300 max-w-[220px] mx-auto">
+                        Escolha como deseja escanear o QR Code:
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => startCameraScanner(facingMode)}
-                      disabled={cameraLoading}
-                      className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs sm:text-sm transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      {cameraLoading ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Abrindo Câmera...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Camera className="w-4 h-4" />
-                          <span>Ativar Câmera da Portaria</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="w-full space-y-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => startCameraScanner(facingMode)}
+                        disabled={cameraLoading}
+                        className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-emerald-600/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {cameraLoading ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Iniciando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Video className="w-3.5 h-3.5" />
+                            <span>1. Câmera de Vídeo ao Vivo</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => fileCaptureInputRef.current?.click()}
+                        disabled={cameraLoading}
+                        className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>2. Foto na Câmera do Celular</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => fileUploadInputRef.current?.click()}
+                        disabled={cameraLoading}
+                        className="w-full py-2 px-3 bg-slate-700/80 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span>Carregar Foto da Galeria</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -758,26 +867,37 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                   <div className="flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-amber-300">Acesso à câmera bloqueado:</p>
+                      <p className="font-bold text-amber-300">Aviso sobre o acesso à câmera:</p>
                       <p className="text-amber-200/90 mt-0.5 leading-relaxed">{cameraError}</p>
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-amber-500/30 flex items-center justify-between">
+                  <div className="pt-2 border-t border-amber-500/30 flex items-center justify-between flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setCheckInMode('code')}
-                      className="text-amber-300 underline font-semibold text-[11px] cursor-pointer"
+                      onClick={() => fileCaptureInputRef.current?.click()}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[11px] cursor-pointer flex items-center gap-1"
                     >
-                      Usar Digitação de Código
+                      <Camera className="w-3.5 h-3.5" />
+                      Tirar Foto do QR Code
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => startCameraScanner(facingMode)}
-                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-[11px] cursor-pointer"
-                    >
-                      Tentar Novamente
-                    </button>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCheckInMode('code')}
+                        className="text-amber-300 underline font-semibold text-[11px] cursor-pointer"
+                      >
+                        Digitar Código
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startCameraScanner(facingMode)}
+                        className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-[11px] cursor-pointer"
+                      >
+                        Tentar Vídeo
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
