@@ -794,19 +794,19 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                 className="hidden"
               />
 
-              {/* Container do Leitor de Câmera (Sempre no DOM) */}
-              <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black max-w-[290px] sm:max-w-xs mx-auto border-2 border-slate-700 shadow-inner flex items-center justify-center min-h-[260px]">
-                {/* Viewport onde o Html5Qrcode renderiza o stream de vídeo */}
-                <div id="qr-camera-viewport" className={`w-full h-full ${cameraActive ? 'block' : 'hidden'}`} />
+              {/* Container do Leitor de Câmera (Sempre no DOM com dimensões reais) */}
+              <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black max-w-[290px] sm:max-w-xs mx-auto border-2 border-slate-700 shadow-inner h-72 sm:h-80 flex items-center justify-center">
+                {/* Viewport onde o Html5Qrcode renderiza o stream de vídeo (SEMPRE visível com dimensões reais para cálculo correto) */}
+                <div id="qr-camera-viewport" className="w-full h-full" />
 
-                {/* Laser de leitura animado quando ativo */}
+                {/* Laser de leitura animado quando a câmera estiver ativa */}
                 {cameraActive && (
-                  <div className="absolute inset-x-6 top-1/2 h-0.5 bg-emerald-400 shadow-lg shadow-emerald-400/90 animate-pulse pointer-events-none" />
+                  <div className="absolute inset-x-6 top-1/2 h-0.5 bg-emerald-400 shadow-lg shadow-emerald-400/90 animate-pulse pointer-events-none z-10" />
                 )}
 
-                {/* Card de ativação inicial (quando scanner está inativo) */}
+                {/* Card de opções / ativação inicial posicionado como Overlay Absoluto */}
                 {!cameraActive && (
-                  <div className="p-5 bg-slate-800/95 w-full h-full rounded-2xl flex flex-col items-center justify-center space-y-3 text-center">
+                  <div className="absolute inset-0 bg-slate-900/95 z-20 p-5 rounded-2xl flex flex-col items-center justify-center space-y-3 text-center">
                     <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center border border-emerald-500/30 shadow-inner">
                       <Camera className="w-6 h-6" />
                     </div>
@@ -828,7 +828,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                         {cameraLoading ? (
                           <>
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Iniciando...</span>
+                            <span>Iniciando Câmera...</span>
                           </>
                         ) : (
                           <>

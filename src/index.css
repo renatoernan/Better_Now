@@ -59,3 +59,26 @@
 [data-sonner-toast][data-type="info"] {
   border-left: 4px solid #3b82f6 !important;
 }
+
+/* Estilos para o leitor de câmera QR Code */
+#qr-camera-viewport {
+  width: 100% !important;
+  min-height: 280px !important;
+  position: relative !important;
+  overflow: hidden !important;
+  border-radius: 1rem !important;
+  background-color: #000 !important;
+}
+
+#qr-camera-viewport video {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 280px !important;
+  object-fit: cover !important;
+  border-radius: 1rem !important;
+  display: block !important;
+}
+
+#qr-camera-viewport canvas {
+  border-radius: 1rem !important;
+}
