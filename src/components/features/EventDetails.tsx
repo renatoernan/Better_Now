@@ -23,6 +23,7 @@ import CheckoutClientModal, { CheckoutClientData } from '../shared/CheckoutClien
 import PriceUpdatedModal from '../shared/PriceUpdatedModal';
 import PendingOrderRecoveryModal, { PendingOrderInfo } from '../shared/PendingOrderRecoveryModal';
 import { createMercadoPagoCheckout, checkMercadoPagoPaymentStatus, findPendingOrderForClient, cancelPendingOrder } from '../../shared/services/mercadoPagoService';
+import { createComplimentaryOrder } from '../../shared/services/complimentaryOrderService';
 import { getClientIpAddress } from '../../shared/utils/utils/ipUtils';
 import { supabase } from '../../shared/services/lib/supabase';
 import { toast } from 'sonner';
@@ -127,10 +128,15 @@ const EventDetails: React.FC = () => {
     }
   };
 
-  // Obter configurações do método de pagamento ativo
-  const currentPaymentMethodConfig = (event?.payment_methods || []).find(pm => pm.method === selectedPaymentMethod);
+  // Obter configurações do método de pagamento ativo baseado no lote selecionado
+  const selectedBatchData = priceBatches[selectedBatch];
+  const effectivePaymentMethods = (selectedBatchData?.use_custom_payment_methods && selectedBatchData?.payment_methods && selectedBatchData.payment_methods.length > 0)
+    ? selectedBatchData.payment_methods
+    : (event?.payment_methods || []);
+
+  const currentPaymentMethodConfig = effectivePaymentMethods.find(pm => pm.method === selectedPaymentMethod);
   const currentFeePercentage = currentPaymentMethodConfig?.fee_percentage || 0;
-  const currentUnitPrice = priceBatches[selectedBatch]?.price || 0;
+  const currentUnitPrice = selectedBatchData?.price || 0;
   const currentSubtotal = currentUnitPrice * quantity;
 
   // Cálculo de desconto do cupom
@@ -657,6 +663,40 @@ const EventDetails: React.FC = () => {
 
     setShowCheckoutClientModal(false);
 
+    // Se o valor for R$ 0,00 (Cortesia por Cupom de 100% ou Lote Gratuito), emite diretamente
+    if (currentSubtotalAfterDiscount === 0) {
+      try {
+        toast.info('Processando sua inscrição cortesia...');
+        const result = await createComplimentaryOrder({
+          event_id: id || '',
+          batch_index: selectedBatch,
+          batch_name: priceBatches[selectedBatch]?.name || 'Cortesia',
+          unit_price: currentUnitPrice,
+          quantity: quantity,
+          client_name: buyerData.nome,
+          client_phone: buyerData.whatsapp,
+          client_email: buyerData.email || undefined,
+          client_document: doc || undefined,
+          coupon_id: appliedCoupon?.coupon_id || undefined,
+          coupon_code: appliedCoupon?.code || undefined,
+          discount_amount: currentDiscountAmount || (currentUnitPrice * quantity),
+          attendees: allAttendees,
+          send_whatsapp: true,
+        });
+
+        if (result.success && result.orderId) {
+          setStripeSessionId(result.orderId);
+          setShowPaymentSuccessModal(true);
+          toast.success('Inscrição cortesia confirmada! Ingressos emitidos e enviados no seu WhatsApp! 🎉');
+        } else {
+          toast.error(result.error || 'Erro ao emitir inscrição cortesia.');
+        }
+      } catch (err: any) {
+        toast.error(err.message || 'Erro inesperado ao emitir cortesia.');
+      }
+      return;
+    }
+
     // Verificar se já existe uma ordem pendente para o comprador/IP
     try {
       const clientIp = await getClientIpAddress();
@@ -1041,7 +1081,7 @@ const EventDetails: React.FC = () => {
                     priceBatches={priceBatches}
                     selectedBatch={selectedBatch}
                     quantity={quantity}
-                    paymentMethods={event.payment_methods || []}
+                    paymentMethods={event?.payment_methods || []}
                     selectedPaymentMethod={selectedPaymentMethod}
                     onPaymentMethodSelect={(method) => {
                       setSelectedPaymentMethod(method);

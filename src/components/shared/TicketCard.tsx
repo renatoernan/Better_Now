@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   DollarSign, ShoppingCart, Minus, Plus, CreditCard, FileText, 
-  QrCode, ShieldCheck, ChevronDown, Ticket, Tag, X, Check, Loader2 
+  QrCode, ShieldCheck, ChevronDown, Ticket, Tag, X, Check, Loader2, Gift, Sparkles 
 } from 'lucide-react';
 import { TicketCardProps, PaymentMethodFee } from '../../shared/types';
 import { formatPrice, getBatchStatus, formatBatchPeriod, formatBrazilDate } from '../../shared/utils/utils/eventUtils';
@@ -23,7 +23,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
   eventId,
   appliedCoupon = null,
   onCouponApply,
-  clientDocument
+  clientDocument,
 }) => {
   const [couponInput, setCouponInput] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
@@ -36,10 +36,15 @@ const TicketCard: React.FC<TicketCardProps> = ({
   const selectedBatchData = priceBatches[selectedBatch];
   const selectedBatchStatus = getBatchStatus(selectedBatchData);
 
-  // Filtrar e normalizar métodos de pagamento habilitados para exibição pública
+  // Formas de pagamento efetivas do lote selecionado (se tiver customizado e ativo, usa o do lote; senão, herda do evento)
+  const effectiveBatchPaymentMethods = (selectedBatchData?.use_custom_payment_methods && selectedBatchData?.payment_methods && selectedBatchData.payment_methods.length > 0)
+    ? selectedBatchData.payment_methods
+    : (paymentMethods || []);
+
+  // Filtrar e normalizar métodos de pagamento habilitados para exibição pública no lote selecionado
   const activeMethods: { id: string; methodKey: 'boleto' | 'credit_card' | 'pix_stripe' | 'pix_chave'; label: string; icon: React.ReactNode; feePercentage: number }[] = [];
 
-  const boleto = paymentMethods.find(pm => pm.method === 'boleto' && pm.enabled);
+  const boleto = effectiveBatchPaymentMethods.find(pm => pm.method === 'boleto' && pm.enabled);
   if (boleto) {
     activeMethods.push({
       id: 'boleto',
@@ -50,7 +55,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
     });
   }
 
-  const card = paymentMethods.find(pm => pm.method === 'credit_card' && pm.enabled);
+  const card = effectiveBatchPaymentMethods.find(pm => pm.method === 'credit_card' && pm.enabled);
   if (card) {
     activeMethods.push({
       id: 'credit_card',
@@ -61,8 +66,8 @@ const TicketCard: React.FC<TicketCardProps> = ({
     });
   }
 
-  const pixStripe = paymentMethods.find(pm => pm.method === 'pix_stripe' && pm.enabled);
-  const pixChave = paymentMethods.find(pm => pm.method === 'pix_chave' && pm.enabled);
+  const pixStripe = effectiveBatchPaymentMethods.find(pm => pm.method === 'pix_stripe' && pm.enabled);
+  const pixChave = effectiveBatchPaymentMethods.find(pm => pm.method === 'pix_chave' && pm.enabled);
 
   if (pixStripe) {
     activeMethods.push({
@@ -82,7 +87,17 @@ const TicketCard: React.FC<TicketCardProps> = ({
     });
   }
 
-  // Identificar método selecionado ativo apenas entre os métodos habilitados no evento
+  // Auto-ajustar método selecionado se o lote mudar e o método atual não estiver ativo
+  useEffect(() => {
+    if (activeMethods.length > 0) {
+      const isCurrentActive = activeMethods.some(m => m.methodKey === selectedPaymentMethod || m.id === selectedPaymentMethod);
+      if (!isCurrentActive && onPaymentMethodSelect) {
+        onPaymentMethodSelect(activeMethods[0].methodKey);
+      }
+    }
+  }, [selectedBatch, selectedBatchData]);
+
+  // Identificar método selecionado ativo apenas entre os métodos habilitados no lote
   const hasPaymentMethodsConfigured = activeMethods.length > 0;
   const isMethodSelected = !hasPaymentMethodsConfigured || Boolean(selectedPaymentMethod);
   const currentActiveMethod = activeMethods.find(m => m.methodKey === selectedPaymentMethod || m.id === selectedPaymentMethod);
@@ -110,7 +125,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
 
   // Lógica de parcelamento para cartão de crédito
   const isCard = selectedPaymentMethod === 'credit_card';
-  const cardConfig = paymentMethods.find(pm => pm.method === 'credit_card');
+  const cardConfig = effectiveBatchPaymentMethods.find(pm => pm.method === 'credit_card');
   const configuredMaxInstallments = cardConfig?.max_installments || 12;
   const maxInstallments = Math.min(configuredMaxInstallments, Math.max(1, Math.floor(totalWithFee / 5)));
 
@@ -124,9 +139,11 @@ const TicketCard: React.FC<TicketCardProps> = ({
     };
   });
 
-  const isReadyToPurchase = isMethodSelected && (!isCard || Boolean(selectedInstallments));
+  const isFreeOrComplimentary = totalWithFee === 0;
+  const isReadyToPurchase = isFreeOrComplimentary || (isMethodSelected && (!isCard || Boolean(selectedInstallments)));
 
   const getButtonText = () => {
+    if (isFreeOrComplimentary) return 'Garantir Ingresso Cortesia • Grátis';
     if (!isMethodSelected) return 'Selecione a forma de pagamento';
     if (isCard && !selectedInstallments) return 'Selecione o número de parcelas';
     if (isCard && selectedInstallments) {
@@ -214,7 +231,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
       </div>
     
       {/* Lista de Lotes de Preço */}
-      <div className="space-y-3">
+      <div className="space-y-3.5">
         {priceBatches.map((batch, index) => {
           const status = getBatchStatus(batch);
           const period = formatBatchPeriod(batch);
@@ -226,77 +243,108 @@ const TicketCard: React.FC<TicketCardProps> = ({
             ? Math.max(0, batch.quantity - (batch.sold_quantity || 0)) 
             : null;
           const isSoldOut = remainingTickets === 0 || isExpired;
-          
+          const isBatchActive = isActive && !isSoldOut;
+
+          // Verificar se o lote possui apenas 1 forma de pagamento habilitada com taxa 0%
+          const batchMethods = (batch.use_custom_payment_methods && batch.payment_methods && batch.payment_methods.length > 0)
+            ? batch.payment_methods
+            : (paymentMethods || []);
+          const activeBatchMethods = batchMethods.filter(m => m.enabled);
+          const isSingleMethodZeroFee = activeBatchMethods.length === 1 && (Number(activeBatchMethods[0].fee_percentage) || 0) === 0;
+
           return (
             <div 
               key={index}
-              className={`border-2 rounded-xl p-4 transition-all relative overflow-hidden ${
-                isSoldOut 
-                  ? 'border-red-200 bg-red-50/50 opacity-60 cursor-not-allowed'
-                  : isUpcoming
-                  ? 'border-blue-200 bg-blue-50/60 cursor-not-allowed'
-                  : isSelected
-                  ? 'border-indigo-600 bg-indigo-50/40 shadow-sm cursor-pointer'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer'
+              className={`border-2 rounded-2xl p-4 sm:p-5 transition-all relative overflow-hidden ${
+                isBatchActive
+                  ? isSelected
+                    ? 'border-indigo-600 bg-white shadow-xs cursor-pointer'
+                    : 'border-indigo-300 bg-white hover:border-indigo-500 cursor-pointer'
+                  : 'border-amber-300 bg-amber-50/20 cursor-not-allowed'
               }`}
               onClick={() => {
-                if (isActive && !isSoldOut) {
+                if (isBatchActive) {
                   onBatchSelect(index);
                 }
               }}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold text-gray-900 text-sm">{batch.name}</h3>
-                    {isSelected && isActive && !isSoldOut && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-600 text-white shadow-xs">
-                        Selecionado
-                      </span>
-                    )}
-                    {isSoldOut && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
-                        Esgotado
-                      </span>
-                    )}
-                    {!isSoldOut && isUpcoming && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                        Em breve
-                      </span>
-                    )}
-                    {!isSoldOut && remainingTickets !== null && remainingTickets <= 5 && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
-                        Últimos {remainingTickets} ingressos!
-                      </span>
-                    )}
+              {isBatchActive ? (
+                /* Lote Ativo (Estilo Azul / Índigo conforme anexo) */
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-indigo-950 text-base">{batch.name}</h3>
+                    <div className="w-5 h-5 rounded-full bg-indigo-50 border-2 border-indigo-600 flex items-center justify-center shrink-0">
+                      {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />}
+                    </div>
                   </div>
-                  
+
+                  <div className="flex items-baseline mt-1.5">
+                    <span className="text-2xl sm:text-3xl font-black text-indigo-600">
+                      {formatPrice(batch.price)}
+                    </span>
+                    <span className="text-xs text-gray-500 font-normal ml-1.5">/ ingresso</span>
+                  </div>
+
+                  {period && (
+                    <p className="text-[11px] text-gray-500 font-normal mt-1.5 whitespace-nowrap overflow-hidden text-ellipsis">{period}</p>
+                  )}
+
+                  {isSingleMethodZeroFee && (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <Sparkles className="w-3 h-3 text-emerald-600" />
+                        Sem taxa de conveniência
+                      </span>
+                    </div>
+                  )}
+
                   {batch.description && (
                     <p className="text-xs text-gray-500 mt-1">{batch.description}</p>
                   )}
-                  
-                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 flex-wrap">
-                    <span>{period}</span>
-                    {batch.quantity !== undefined && batch.quantity !== null && batch.quantity > 0 && (
-                      <span className="font-medium text-gray-700">
-                        {batch.sold_quantity || 0}/{batch.quantity} vendidos
-                        {remainingTickets !== null && remainingTickets > 0 && (
-                          <span className="text-emerald-600 font-semibold ml-1.5">
-                            ({remainingTickets} disponíveis)
-                          </span>
-                        )}
+
+                  {remainingTickets !== null && remainingTickets <= 5 && remainingTickets > 0 && (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                        Últimos {remainingTickets} ingressos!
                       </span>
-                    )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Lote Inativo (Estilo Amarelo / Âmbar conforme anexo) */
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-amber-800 text-base">{batch.name}</h3>
+                    <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-lg shrink-0">
+                      {isSoldOut ? 'Esgotado' : isExpired ? 'Encerrado' : 'Em Breve'}
+                    </span>
                   </div>
+
+                  <div className="flex items-baseline mt-1.5">
+                    <span className="text-2xl sm:text-3xl font-black text-amber-600">
+                      {formatPrice(batch.price)}
+                    </span>
+                    <span className="text-xs text-gray-500 font-normal ml-1.5">/ ingresso</span>
+                  </div>
+
+                  {period && (
+                    <p className="text-[11px] text-amber-700 font-normal mt-1.5 whitespace-nowrap overflow-hidden text-ellipsis">{period}</p>
+                  )}
+
+                  {isSingleMethodZeroFee && (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-amber-200/70 text-amber-900 border border-amber-300/80">
+                        <Sparkles className="w-3 h-3 text-amber-700" />
+                        Sem taxa de conveniência
+                      </span>
+                    </div>
+                  )}
+
+                  {batch.description && (
+                    <p className="text-xs text-amber-700/80 mt-1">{batch.description}</p>
+                  )}
                 </div>
-                
-                <div className="text-right">
-                  <span className="text-xl font-bold text-indigo-600 block">
-                    {formatPrice(batch.price)}
-                  </span>
-                  <span className="text-xs text-gray-500">por pessoa</span>
-                </div>
-              </div>
+              )}
             </div>
           );
         })}
@@ -351,90 +399,104 @@ const TicketCard: React.FC<TicketCardProps> = ({
             );
           })()}
 
-          {/* Formas de Pagamento Disponíveis */}
-          {hasPaymentMethodsConfigured && (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
-                  Forma de Pagamento
-                </label>
-                <span className="text-[11px] text-gray-400">Escolha uma opção</span>
+          {/* Formas de Pagamento ou Indicação de Cortesia */}
+          {isFreeOrComplimentary ? (
+            <div className="p-3.5 bg-emerald-50/90 rounded-xl border border-emerald-200/80 flex items-center gap-3 shadow-xs animate-in fade-in">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Gift className="w-5 h-5" />
               </div>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {activeMethods.map((m) => {
-                  const isSelected = selectedPaymentMethod === m.methodKey || selectedPaymentMethod === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => onPaymentMethodSelect && onPaymentMethodSelect(m.methodKey)}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs font-semibold transition-all relative ${
-                        isSelected
-                          ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 shadow-sm ring-1 ring-indigo-600'
-                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className={`mb-1.5 p-1.5 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                        {m.icon}
-                      </div>
-                      <span>{m.label}</span>
-                      {m.feePercentage > 0 ? (
-                        <span className="text-[10px] text-amber-700 font-normal mt-0.5">
-                          +{m.feePercentage}% taxa
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-emerald-600 font-normal mt-0.5">
-                          Sem taxa
+              <div className="flex-1">
+                <span className="text-xs font-bold text-emerald-950 block">Inscrição Gratuita / Cortesia</span>
+                <span className="text-[11px] text-emerald-700 leading-tight block">
+                  Total de R$ 0,00. Nenhuma cobrança ou dados bancários serão solicitados.
+                </span>
+              </div>
+            </div>
+          ) : (
+            hasPaymentMethodsConfigured && (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                    Forma de Pagamento
+                  </label>
+                  <span className="text-[11px] text-gray-400">Escolha uma opção</span>
+                </div>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {activeMethods.map((m) => {
+                    const isSelected = selectedPaymentMethod === m.methodKey || selectedPaymentMethod === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => onPaymentMethodSelect && onPaymentMethodSelect(m.methodKey)}
+                        className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs font-semibold transition-all relative ${
+                          isSelected
+                            ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 shadow-sm ring-1 ring-indigo-600'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className={`mb-1.5 p-1.5 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                          {m.icon}
+                        </div>
+                        <span>{m.label}</span>
+                        {m.feePercentage > 0 ? (
+                          <span className="text-[10px] text-amber-700 font-normal mt-0.5">
+                            +{m.feePercentage}% taxa
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-emerald-600 font-normal mt-0.5">
+                            Sem taxa
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Seção de Parcelamento de Cartão */}
+                {isCard && (
+                  <div className="mt-3 p-3.5 bg-indigo-50/60 rounded-xl border border-indigo-100 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                        <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Parcelas no Cartão:</span>
+                        <span className="text-red-500 font-bold">*</span>
+                      </label>
+                      {!selectedInstallments && (
+                        <span className="text-[11px] text-indigo-600 font-semibold animate-pulse">
+                          Escolha uma opção
                         </span>
                       )}
-                    </button>
-                  );
-                })}
-              </div>
+                    </div>
 
-              {/* Seção de Parcelamento de Cartão */}
-              {isCard && (
-                <div className="mt-3 p-3.5 bg-indigo-50/60 rounded-xl border border-indigo-100 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                      <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Parcelas no Cartão:</span>
-                      <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    {!selectedInstallments && (
-                      <span className="text-[11px] text-indigo-600 font-semibold animate-pulse">
-                        Escolha uma opção
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="relative">
-                    <select
-                      value={selectedInstallments || ''}
-                      onChange={(e) => onInstallmentsSelect && onInstallmentsSelect(Number(e.target.value))}
-                      className={`w-full pl-3 pr-8 py-2.5 text-xs font-semibold rounded-lg border appearance-none transition-all cursor-pointer bg-white shadow-sm ${
-                        selectedInstallments
-                          ? 'border-indigo-600 ring-2 ring-indigo-500/20 text-indigo-950 font-bold'
-                          : 'border-gray-300 text-gray-700 hover:border-indigo-400'
-                      }`}
-                    >
-                      <option value="" disabled>
-                        Selecione em quantas vezes quer pagar...
-                      </option>
-                      {installmentOptions.map(opt => (
-                        <option key={opt.count} value={opt.count}>
-                          {opt.label}
+                    <div className="relative">
+                      <select
+                        value={selectedInstallments || ''}
+                        onChange={(e) => onInstallmentsSelect && onInstallmentsSelect(Number(e.target.value))}
+                        className={`w-full pl-3 pr-8 py-2.5 text-xs font-semibold rounded-lg border appearance-none transition-all cursor-pointer bg-white shadow-sm ${
+                          selectedInstallments
+                            ? 'border-indigo-600 ring-2 ring-indigo-500/20 text-indigo-950 font-bold'
+                            : 'border-gray-300 text-gray-700 hover:border-indigo-400'
+                        }`}
+                      >
+                        <option value="" disabled>
+                          Selecione em quantas vezes quer pagar...
                         </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-indigo-700">
-                      <ChevronDown className="w-4 h-4" />
+                        {installmentOptions.map(opt => (
+                          <option key={opt.count} value={opt.count}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-indigo-700">
+                        <ChevronDown className="w-4 h-4" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )
           )}
 
           {/* Campo de Cupom de Desconto */}

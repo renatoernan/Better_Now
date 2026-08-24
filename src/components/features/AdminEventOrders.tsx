@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   ArrowLeft, Search, Filter, Download, Ticket, DollarSign, Clock, 
   CheckCircle2, XCircle, Eye, FileText, Globe, RefreshCw, User, Phone, 
-  Calendar, Layers, CreditCard, ChevronRight, AlertCircle, Ban, Trash2, RotateCcw, Zap, MessageSquare
+  Calendar, Layers, CreditCard, ChevronRight, AlertCircle, Ban, Trash2, RotateCcw, Zap, MessageSquare, Gift
 } from 'lucide-react';
 import { Event } from '../../shared/types/types/event';
 import { useEventOrders, EventOrderRecord } from '../../shared/hooks/hooks/useEventOrders';
@@ -11,6 +11,7 @@ import AdminOrderDetailModal from '../shared/AdminOrderDetailModal';
 import AdminPaymentProofAuditModal from '../shared/AdminPaymentProofAuditModal';
 import AdminCancelOrderConfirmModal from '../shared/AdminCancelOrderConfirmModal';
 import AdminRestoreOrderConfirmModal from '../shared/AdminRestoreOrderConfirmModal';
+import AdminIssueComplimentaryModal from '../shared/AdminIssueComplimentaryModal';
 import { toast } from 'sonner';
 
 interface AdminEventOrdersProps {
@@ -45,6 +46,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
   const [selectedOrderForProof, setSelectedOrderForProof] = useState<EventOrderRecord | null>(null);
   const [orderToCancel, setOrderToCancel] = useState<EventOrderRecord | null>(null);
   const [orderToRestore, setOrderToRestore] = useState<EventOrderRecord | null>(null);
+  const [showComplimentaryModal, setShowComplimentaryModal] = useState<boolean>(false);
 
   // Alternar status selecionado (múltipla escolha)
   const toggleStatus = (statusKey: string) => {
@@ -180,6 +182,11 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
   };
 
   const getPaymentBadge = (method?: string) => {
+    if (method === 'cortesia' || method === 'free') return (
+      <span className="text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300 text-xs font-bold flex items-center gap-1">
+        <Gift className="w-3 h-3" /> Cortesia
+      </span>
+    );
     if (method === 'credit_card') return <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 text-xs font-medium">Cartão</span>;
     if (method === 'pix' || method === 'pix_stripe') return <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-xs font-medium">Pix</span>;
     if (method === 'pix_chave') return <span className="text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 text-xs font-medium">Pix Chave</span>;
@@ -212,9 +219,19 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            type="button"
+            onClick={() => setShowComplimentaryModal(true)}
+            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 flex items-center gap-2 transition-all cursor-pointer"
+            title="Emitir ingressos cortesia manualmente para convidados VIP, palestrantes ou parceiros"
+          >
+            <Gift className="w-4 h-4" />
+            <span>+ Emitir Cortesia</span>
+          </button>
+
+          <button
             onClick={() => syncAllPendingWithMercadoPago()}
             disabled={loading || syncing}
-            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/20 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
             title="Consulta todos os pedidos pendentes na API do Mercado Pago e confirma os pagos"
           >
             <Zap className={`w-4 h-4 ${syncing ? 'animate-bounce' : ''}`} />
@@ -594,6 +611,14 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
           await restoreOrder(orderId, targetStatus);
           setOrderToRestore(null);
         }}
+      />
+
+      {/* Modal de Emissão de Cortesia VIP */}
+      <AdminIssueComplimentaryModal
+        isOpen={showComplimentaryModal}
+        onClose={() => setShowComplimentaryModal(false)}
+        event={event}
+        onSuccess={() => refetch()}
       />
     </div>
   );
