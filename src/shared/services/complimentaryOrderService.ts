@@ -173,7 +173,7 @@ export const createComplimentaryOrder = async (
         order_id: orderId,
         event_id: params.event_id,
         client_id: params.client_id || null,
-        ticket_number: ticketNumber,
+        ticket_number: i + 1,
         qr_code_hash: qrHash,
         status: 'valid',
         created_at: new Date().toISOString(),

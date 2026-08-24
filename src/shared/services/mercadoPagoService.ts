@@ -429,14 +429,13 @@ export const checkMercadoPagoPaymentStatus = async (
         const ticketsToInsert = [];
 
         for (let i = 0; i < qty; i++) {
-          const ticketNumber = `${orderId.substring(0, 6).toUpperCase()}-${i + 1}`;
-          const qrHash = `MP-${paymentId}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
+          const qrHash = `MP-${paymentId.slice(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
 
           ticketsToInsert.push({
             order_id: orderId,
             event_id: currentOrder.event_id,
             client_id: currentOrder.client_id || null,
-            ticket_number: ticketNumber,
+            ticket_number: i + 1,
             qr_code_hash: qrHash,
             status: 'valid',
             created_at: new Date().toISOString(),

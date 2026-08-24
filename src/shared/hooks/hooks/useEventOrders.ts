@@ -246,14 +246,13 @@ export const useEventOrders = (eventId?: string) => {
         const ticketsToInsert = [];
 
         for (let i = 0; i < qty; i++) {
-          const ticketNumber = `${orderId.substring(0, 6).toUpperCase()}-${i + 1}`;
           const qrHash = `PIX-${orderId.substring(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
 
           ticketsToInsert.push({
             order_id: orderId,
             event_id: order.event_id,
             client_id: order.client_id || null,
-            ticket_number: ticketNumber,
+            ticket_number: i + 1,
             qr_code_hash: qrHash,
             status: 'valid',
             created_at: new Date().toISOString(),
@@ -420,14 +419,13 @@ export const useEventOrders = (eventId?: string) => {
           const ticketsToInsert = [];
 
           for (let i = 0; i < qty; i++) {
-            const ticketNumber = `${orderId.substring(0, 6).toUpperCase()}-${i + 1}`;
             const qrHash = `RESTORED-${orderId.substring(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
 
             ticketsToInsert.push({
               order_id: orderId,
               event_id: order.event_id,
               client_id: order.client_id || null,
-              ticket_number: ticketNumber,
+              ticket_number: i + 1,
               qr_code_hash: qrHash,
               status: 'valid',
               created_at: new Date().toISOString(),
