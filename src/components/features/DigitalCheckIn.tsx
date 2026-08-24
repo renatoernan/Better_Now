@@ -250,31 +250,13 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
 
   const currentEvent = events.find(e => e.id === eventId);
 
-  // Gerenciamento da Câmera com Html5Qrcode e Solicitação de Permissão Explícita
+  // Gerenciamento da Câmera com Html5Qrcode e Seleção de Câmera para Android/iOS
   const startCameraScanner = async (mode: 'environment' | 'user' = facingMode) => {
     setCameraError(null);
     setCameraLoading(true);
 
     try {
-      // 1. Solicitação explícita de permissão do navegador para evitar bloqueio silencioso em mobile
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const testStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: mode }
-          });
-          // Libera o stream de teste antes de repassar ao Html5Qrcode
-          testStream.getTracks().forEach(track => track.stop());
-        } catch (permErr: any) {
-          console.warn('Erro de permissão explícita de mídia:', permErr);
-          if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
-            setCameraError('Permissão negada. Toque no ícone de cadeado/configurações da barra de navegação do seu navegador e autorize a Câmera.');
-            setCameraLoading(false);
-            return;
-          }
-        }
-      }
-
-      // 2. Parar scanner prévio se existir
+      // 1. Limpar scanner prévio se existir
       if (qrScannerRef.current) {
         try {
           if (qrScannerRef.current.isScanning) {
@@ -282,25 +264,64 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
           }
           await qrScannerRef.current.clear();
         } catch (_) {}
+        qrScannerRef.current = null;
       }
 
+      // 2. Garantir elemento do viewport no DOM
       const viewportEl = document.getElementById('qr-camera-viewport');
       if (!viewportEl) {
-        setCameraLoading(false);
-        return;
+        throw new Error('Elemento de visualização da câmera não encontrado');
       }
 
-      const scanner = new Html5Qrcode('qr-camera-viewport');
+      const scanner = new Html5Qrcode('qr-camera-viewport', {
+        verbose: false
+      });
       qrScannerRef.current = scanner;
 
       const config = {
         fps: 10,
-        qrbox: { width: 220, height: 220 },
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const qrboxSize = Math.floor(minEdge * 0.75);
+          return {
+            width: Math.max(180, qrboxSize),
+            height: Math.max(180, qrboxSize)
+          };
+        },
         aspectRatio: 1.0,
       };
 
+      // 3. Tentar identificar câmeras traseiras no Android (Chrome/Edge)
+      let cameraConfig: any = { facingMode: mode };
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          if (mode === 'environment') {
+            const backCamera = devices.find(d => {
+              const label = (d.label || '').toLowerCase();
+              return label.includes('back') || label.includes('rear') || label.includes('traseira') || label.includes('environment');
+            }) || devices[devices.length - 1]; // Geralmente a última é a câmera traseira
+            if (backCamera) {
+              cameraConfig = backCamera.id;
+            }
+          } else {
+            const frontCamera = devices.find(d => {
+              const label = (d.label || '').toLowerCase();
+              return label.includes('front') || label.includes('frontal') || label.includes('user');
+            }) || devices[0];
+            if (frontCamera) {
+              cameraConfig = frontCamera.id;
+            }
+          }
+        }
+      } catch (listErr) {
+        console.warn('Enumeração de câmeras ignorada, usando facingMode direto:', listErr);
+        cameraConfig = { facingMode: mode };
+      }
+
+      // 4. Iniciar scanner de vídeo
       await scanner.start(
-        { facingMode: mode },
+        cameraConfig,
         config,
         (decodedText) => {
           handleProcessScan(decodedText);
@@ -314,14 +335,15 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
       console.error('Erro ao iniciar câmera:', err);
       setCameraActive(false);
       
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setCameraError('Permissão de câmera negada. Habilite o acesso à câmera nas configurações do navegador.');
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      const errString = String(err?.message || err || '');
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || errString.includes('Permission') || errString.includes('NotAllowed')) {
+        setCameraError('Permissão de acesso à câmera negada. Toque no ícone de configurações 🔒 do navegador para autorizar a Câmera.');
+      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError' || errString.includes('NotFound')) {
         setCameraError('Nenhuma câmera foi encontrada neste dispositivo.');
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+      } else if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError' || errString.includes('NotReadable')) {
         setCameraError('A câmera está sendo utilizada por outro aplicativo ou aba.');
       } else {
-        setCameraError('Não foi possível acessar a câmera. Você também pode digitar o código ou nome do titular.');
+        setCameraError(`Não foi possível iniciar a câmera: ${err?.message || 'Verifique as permissões do seu navegador.'}`);
       }
     } finally {
       setCameraLoading(false);
@@ -685,47 +707,51 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                 )}
               </div>
 
-              {/* Viewport ou Card de Ativação Explícita da Câmera */}
-              {!cameraActive ? (
-                <div className="p-6 sm:p-8 bg-slate-800/80 rounded-2xl border border-slate-700 space-y-4 text-center">
-                  <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto border border-emerald-500/30 shadow-inner">
-                    <Camera className="w-8 h-8" />
-                  </div>
+              {/* Container do Leitor de Câmera (Sempre no DOM) */}
+              <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black max-w-[290px] sm:max-w-xs mx-auto border-2 border-slate-700 shadow-inner flex items-center justify-center min-h-[260px]">
+                {/* Viewport onde o Html5Qrcode renderiza o stream de vídeo */}
+                <div id="qr-camera-viewport" className={`w-full h-full ${cameraActive ? 'block' : 'hidden'}`} />
 
-                  <div className="space-y-1">
-                    <h3 className="text-sm sm:text-base font-bold text-white">Pronto para Ler Ingressos</h3>
-                    <p className="text-xs text-slate-300 max-w-xs mx-auto">
-                      Toque no botão abaixo para permitir e abrir a câmera do seu dispositivo móvel
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => startCameraScanner(facingMode)}
-                    disabled={cameraLoading}
-                    className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {cameraLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Solicitando Permissão...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Camera className="w-4 h-4" />
-                        <span>Ativar Câmera da Portaria</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <div className="relative rounded-2xl overflow-hidden bg-black aspect-square max-w-[280px] sm:max-w-xs mx-auto border-2 border-emerald-500/50 shadow-inner flex items-center justify-center">
-                  <div id="qr-camera-viewport" className="w-full h-full" />
-                  
-                  {/* Linha laser de scan animada */}
+                {/* Laser de leitura animado quando ativo */}
+                {cameraActive && (
                   <div className="absolute inset-x-6 top-1/2 h-0.5 bg-emerald-400 shadow-lg shadow-emerald-400/90 animate-pulse pointer-events-none" />
-                </div>
-              )}
+                )}
+
+                {/* Card de ativação inicial (quando scanner está inativo) */}
+                {!cameraActive && (
+                  <div className="p-6 bg-slate-800/95 w-full h-full rounded-2xl flex flex-col items-center justify-center space-y-3.5 text-center">
+                    <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center border border-emerald-500/30 shadow-inner">
+                      <Camera className="w-7 h-7" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-white">Pronto para Ler Ingressos</h3>
+                      <p className="text-xs text-slate-300 max-w-[220px] mx-auto">
+                        Toque no botão abaixo para abrir a câmera no seu celular ou computador
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => startCameraScanner(facingMode)}
+                      disabled={cameraLoading}
+                      className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs sm:text-sm transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {cameraLoading ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Abrindo Câmera...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-4 h-4" />
+                          <span>Ativar Câmera da Portaria</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {cameraError && (
                 <div className="p-3.5 bg-amber-500/20 border border-amber-500/40 rounded-xl text-xs text-amber-200 text-left space-y-2">
@@ -741,14 +767,14 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                     <button
                       type="button"
                       onClick={() => setCheckInMode('code')}
-                      className="text-amber-300 underline font-semibold text-[11px]"
+                      className="text-amber-300 underline font-semibold text-[11px] cursor-pointer"
                     >
                       Usar Digitação de Código
                     </button>
                     <button
                       type="button"
                       onClick={() => startCameraScanner(facingMode)}
-                      className="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg text-[11px]"
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-[11px] cursor-pointer"
                     >
                       Tentar Novamente
                     </button>
