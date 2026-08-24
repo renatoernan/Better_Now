@@ -1,5 +1,6 @@
 import { supabase } from './lib/supabase';
 import { loadStripe } from '@stripe/stripe-js';
+import { sendOrderWhatsAppNotification } from './orderNotificationService';
 
 // Chave pública do Stripe obtida das variáveis de ambiente
 // @ts-ignore
@@ -199,6 +200,15 @@ export const createPixChaveOrder = async (orderData: {
     if (error) {
       console.error('Erro ao registrar pedido Pix Chave:', error);
       return { error: error.message || 'Erro ao registrar pedido.' };
+    }
+
+    if (data?.id) {
+      // Disparar notificação automática de Pedido Criado (Aguardando Pagamento/Aprovação)
+      sendOrderWhatsAppNotification({
+        type: 'created',
+        orderId: data.id,
+        orderData: data,
+      }).catch(() => {});
     }
 
     return { data: data as EventOrder };

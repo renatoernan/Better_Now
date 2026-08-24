@@ -7,6 +7,7 @@
 export * from './types/event';
 export * from './types/core';
 export * from './types/eventTypes';
+export * from './types/coupon';
 
 // Export schemas
 export * from './schemas/validationSchemas';

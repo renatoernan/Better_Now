@@ -16,6 +16,8 @@ interface LocalPriceBatch {
   id: string;
   name: string;
   price: number;
+  quantity?: number;
+  sold_quantity?: number;
   start_date: string;
   end_date?: string;
 }
@@ -133,7 +135,15 @@ const EventForm: React.FC<EventFormProps> = ({
       setValue('waha_msg_order_cancelled', event.waha_msg_order_cancelled || DEFAULT_WAHA_MSG_CANCELLED, { shouldValidate: true });
       
       if (event.price_batches && Array.isArray(event.price_batches)) {
-        setPriceBatches(event.price_batches);
+        setPriceBatches(event.price_batches.map((b, idx) => ({
+          id: b.id || `batch-${idx}-${Date.now()}`,
+          name: b.name || `Lote ${idx + 1}`,
+          price: Number(b.price) || 0,
+          quantity: b.quantity,
+          sold_quantity: b.sold_quantity,
+          start_date: b.start_date || '',
+          end_date: b.end_date || ''
+        })));
       }
 
       if (event.payment_methods && Array.isArray(event.payment_methods)) {
@@ -859,6 +869,35 @@ const EventForm: React.FC<EventFormProps> = ({
                                   className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
                                   disabled={isSubmitting}
                                 />
+                              </div>
+
+                              <div className="sm:col-span-2 pt-1 border-t border-gray-100">
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="block text-[11px] font-medium text-gray-600">
+                                    Quantidade de Ingressos (Limite do Lote)
+                                  </label>
+                                  {Boolean(batch.sold_quantity && batch.sold_quantity > 0) && (
+                                    <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                                      {batch.sold_quantity} {batch.sold_quantity === 1 ? 'ingresso vendido' : 'ingressos vendidos'}
+                                    </span>
+                                  )}
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={batch.quantity !== undefined && batch.quantity !== null && batch.quantity > 0 ? batch.quantity : ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? undefined : parseInt(e.target.value, 10);
+                                    updatePriceBatch(batch.id, 'quantity', isNaN(val as number) ? undefined : val);
+                                  }}
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500 font-medium"
+                                  placeholder="Opcional (0 ou em branco = Ilimitado)"
+                                  disabled={isSubmitting}
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1">
+                                  Ao esgotar a quantidade definida, o sistema bloqueará novas vendas colocando o lote como esgotado.
+                                </p>
                               </div>
                             </div>
                           </div>

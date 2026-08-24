@@ -118,6 +118,33 @@ const enrichEventArrayFromDb = (items: any[]): Event[] => {
   return (items || []).map(enrichEventFromDb);
 };
 
+// Função auxiliar para buscar a contagem de ingressos vendidos por lote
+const fetchSoldQuantitiesForEvents = async (eventIds: string[]): Promise<Record<string, Record<number, number>>> => {
+  if (!eventIds || eventIds.length === 0) return {};
+  try {
+    const { data: orders, error } = await supabase
+      .from('app_event_orders')
+      .select('event_id, batch_index, quantity, status')
+      .in('event_id', eventIds)
+      .in('status', ['approved', 'paid', 'completed']);
+
+    if (error || !orders) return {};
+
+    const eventSoldMap: Record<string, Record<number, number>> = {};
+    orders.forEach((ord: any) => {
+      const eId = ord.event_id;
+      if (!eventSoldMap[eId]) eventSoldMap[eId] = {};
+      const bIdx = ord.batch_index ?? 0;
+      const q = Number(ord.quantity) || 1;
+      eventSoldMap[eId][bIdx] = (eventSoldMap[eId][bIdx] || 0) + q;
+    });
+
+    return eventSoldMap;
+  } catch {
+    return {};
+  }
+};
+
 export const usePublicEvents = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(false);
@@ -150,12 +177,26 @@ export const usePublicEvents = () => {
       }
 
       const enriched = enrichEventArrayFromDb(data || []);
-      // Filtrar apenas eventos públicos e com status Ativo
       const publicEvents = enriched.filter(
         e => e.is_public !== false && isEventActive(e.status)
       );
 
-      setEvents(publicEvents);
+      // Enriquecer com ingressos vendidos por lote
+      const eventIds = publicEvents.map(e => e.id);
+      const soldMap = await fetchSoldQuantitiesForEvents(eventIds);
+
+      const finalizedEvents = publicEvents.map(ev => {
+        if (ev.price_batches && Array.isArray(ev.price_batches)) {
+          const evSold = soldMap[ev.id] || {};
+          ev.price_batches = ev.price_batches.map((batch: any, index: number) => ({
+            ...batch,
+            sold_quantity: evSold[index] || 0
+          }));
+        }
+        return ev;
+      });
+
+      setEvents(finalizedEvents);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar eventos');
       console.error('Erro ao carregar eventos públicos:', err);
@@ -193,6 +234,17 @@ export const usePublicEvents = () => {
       if (!event || event.is_public === false || !isEventActive(event.status)) {
         return null;
       }
+
+      // Enriquecer os lotes com as vendas reais
+      if (event.price_batches && Array.isArray(event.price_batches) && event.price_batches.length > 0) {
+        const soldMap = await fetchSoldQuantitiesForEvents([event.id]);
+        const evSold = soldMap[event.id] || {};
+        event.price_batches = event.price_batches.map((batch: any, index: number) => ({
+          ...batch,
+          sold_quantity: evSold[index] || 0
+        }));
+      }
+
       return event;
     } catch (err: any) {
       const errorMessage = err.message || 'Erro ao carregar evento';

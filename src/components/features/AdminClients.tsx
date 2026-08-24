@@ -9,6 +9,7 @@ import { useLanguage } from '../../shared/contexts/contexts/LanguageContext';
 import { clientFormDataSchema, type ClientFormData } from '../../shared/types/schemas/validationSchemas';
 import { Client as BaseClient } from '../../shared/types/types/core';
 import { ActivityLogger } from '../../shared/utils/utils/activityLogger';
+import { formatBrazilDate } from '../../shared/utils/utils/eventUtils';
 import { toast } from 'sonner';
 import Loading from '../ui/Loading';
 import { PhoneInput } from '../ui/PhoneInput';
@@ -1333,7 +1334,7 @@ const AdminClients: React.FC = () => {
                             <span className="flex items-center gap-1">
                               <Calendar className="h-4 w-4" />
                               {clientEvent.event?.event_date &&
-                                new Date(clientEvent.event.event_date).toLocaleDateString('pt-BR')
+                                formatBrazilDate(clientEvent.event.event_date)
                               }
                             </span>
                             <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs capitalize">
@@ -1396,7 +1397,7 @@ const AdminClients: React.FC = () => {
                     <option value="">Selecione um evento</option>
                     {events.map((event) => (
                       <option key={event.id} value={event.id}>
-                        {event.title} - {new Date(event.event_date).toLocaleDateString('pt-BR')}
+                        {event.title} - {formatBrazilDate(event.event_date)}
                       </option>
                     ))}
                   </select>

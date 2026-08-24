@@ -160,6 +160,33 @@ const enrichEventArrayFromDb = (items: any[]): Event[] => {
   return (items || []).map(enrichEventFromDb);
 };
 
+// Função auxiliar para buscar a contagem de ingressos vendidos por lote
+const fetchSoldQuantitiesForEvents = async (eventIds: string[]): Promise<Record<string, Record<number, number>>> => {
+  if (!eventIds || eventIds.length === 0) return {};
+  try {
+    const { data: orders, error } = await supabase
+      .from('app_event_orders')
+      .select('event_id, batch_index, quantity, status')
+      .in('event_id', eventIds)
+      .in('status', ['approved', 'paid', 'completed']);
+
+    if (error || !orders) return {};
+
+    const eventSoldMap: Record<string, Record<number, number>> = {};
+    orders.forEach((ord: any) => {
+      const eId = ord.event_id;
+      if (!eventSoldMap[eId]) eventSoldMap[eId] = {};
+      const bIdx = ord.batch_index ?? 0;
+      const q = Number(ord.quantity) || 1;
+      eventSoldMap[eId][bIdx] = (eventSoldMap[eId][bIdx] || 0) + q;
+    });
+
+    return eventSoldMap;
+  } catch {
+    return {};
+  }
+};
+
 const toEventDbPayload = (eventData: Partial<Event>): any => {
   const payload: any = {};
 
@@ -366,9 +393,22 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
         }
 
         const { data, error: fetchErr, count } = await query;
-        if (fetchErr) throw fetchErr;
+        const enriched = enrichEventArrayFromDb(data || []);
+        const eventIds = enriched.map(e => e.id);
+        const soldMap = await fetchSoldQuantitiesForEvents(eventIds);
 
-        return { data: enrichEventArrayFromDb(data || []), count: count || 0 };
+        const finalized = enriched.map(ev => {
+          if (ev.price_batches && Array.isArray(ev.price_batches)) {
+            const evSold = soldMap[ev.id] || {};
+            ev.price_batches = ev.price_batches.map((batch: any, index: number) => ({
+              ...batch,
+              sold_quantity: evSold[index] || 0
+            }));
+          }
+          return ev;
+        });
+
+        return { data: finalized, count: count || 0 };
       }, 2 * 60 * 1000);
 
       setEvents(cachedResult.data);

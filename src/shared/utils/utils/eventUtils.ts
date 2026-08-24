@@ -96,13 +96,37 @@ export const isExpired = (deadline: string): boolean => {
 };
 
 /**
- * Verificar o status do lote baseado nas datas de início e fim considerando BRT (UTC-3)
+ * Verificar se o lote está esgotado por quantidade de ingressos definida
+ */
+export const isBatchSoldOut = (batch: PriceBatch): boolean => {
+  if (!batch || !batch.quantity || batch.quantity <= 0) return false;
+  const sold = Number(batch.sold_quantity) || 0;
+  return sold >= batch.quantity;
+};
+
+/**
+ * Retorna a quantidade de ingressos restantes no lote (ou null se for ilimitado)
+ */
+export const getBatchRemainingTickets = (batch: PriceBatch): number | null => {
+  if (!batch || !batch.quantity || batch.quantity <= 0) return null;
+  const sold = Number(batch.sold_quantity) || 0;
+  return Math.max(0, batch.quantity - sold);
+};
+
+/**
+ * Verificar o status do lote baseado em esgotamento de quantidade e datas (UTC-3 BRT)
  */
 export const getBatchStatus = (batch: PriceBatch): 'active' | 'expired' | 'upcoming' => {
   if (!batch) return 'active';
 
+  // 1. Bloquear se a quantidade limite foi atingida (Lote Esgotado)
+  if (isBatchSoldOut(batch)) {
+    return 'expired';
+  }
+
   const now = new Date();
 
+  // 2. Bloquear se a data de término expirou
   if (batch.end_date) {
     let endDate: Date;
     if (typeof batch.end_date === 'string' && batch.end_date.includes('T')) {
@@ -118,6 +142,7 @@ export const getBatchStatus = (batch: PriceBatch): 'active' | 'expired' | 'upcom
     }
   }
 
+  // 3. Bloquear se a data de início ainda não chegou
   if (batch.start_date) {
     let startDate: Date;
     if (typeof batch.start_date === 'string' && batch.start_date.includes('T')) {
@@ -184,4 +209,80 @@ export const processPriceBatches = (priceBatches: any): PriceBatch[] => {
     console.error('❌ Erro ao processar price_batches:', error);
     return [];
   }
+};
+
+/**
+ * Converte uma data (Date, ISO string ou timestamp) para o formato YYYY-MM-DDTHH:mm
+ * exatamente no fuso horário do Brasil (UTC-3 / America/Sao_Paulo) para inputs datetime-local
+ */
+export const toBrtDateTimeInput = (dateInput?: Date | string | null): string => {
+  const date = dateInput ? new Date(dateInput) : new Date();
+  if (isNaN(date.getTime())) return '';
+
+  // Obter partes da data formatadas no timezone America/Sao_Paulo (UTC-3)
+  const formatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const findPart = (type: string) => parts.find(p => p.type === type)?.value || '00';
+
+  const year = findPart('year');
+  const month = findPart('month');
+  const day = findPart('day');
+  let hour = findPart('hour');
+  // Ajuste para caso retorne '24'
+  if (hour === '24') hour = '00';
+  const minute = findPart('minute');
+
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+};
+
+/**
+ * Converte o valor retornado de um input datetime-local (YYYY-MM-DDTHH:mm)
+ * considerando explicitamente o fuso horário BRT (UTC-3) para formato ISO UTC padronizado
+ */
+export const fromBrtDateTimeInputToIso = (dateTimeLocalStr: string): string => {
+  if (!dateTimeLocalStr) return new Date().toISOString();
+
+  // Se já tiver offset ou 'Z', passar direto para Date
+  if (dateTimeLocalStr.includes('Z') || dateTimeLocalStr.includes('+') || (dateTimeLocalStr.length > 19 && dateTimeLocalStr.slice(19).includes('-'))) {
+    return new Date(dateTimeLocalStr).toISOString();
+  }
+
+  // Se for YYYY-MM-DDTHH:mm ou YYYY-MM-DDTHH:mm:ss, fixar offset -03:00
+  const normalized = dateTimeLocalStr.length === 16 ? `${dateTimeLocalStr}:00` : dateTimeLocalStr;
+  const withBrtOffset = `${normalized}-03:00`;
+  const parsed = new Date(withBrtOffset);
+
+  if (isNaN(parsed.getTime())) {
+    return new Date(dateTimeLocalStr).toISOString();
+  }
+
+  return parsed.toISOString();
+};
+
+/**
+ * Formata data e hora para exibição amigável considerando o fuso horário BRT (UTC-3)
+ */
+export const formatBrtDateTime = (dateInput: Date | string | null | undefined): string => {
+  if (!dateInput) return '-';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return String(dateInput);
+
+  return date.toLocaleDateString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 };

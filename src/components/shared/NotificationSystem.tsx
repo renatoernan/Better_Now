@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, Send, Eye, Trash2, Users, Calendar, Mail, MessageSquare, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { useSupabaseClients } from '../../shared/hooks/hooks/useSupabaseClients';
+import { formatBrazilDate } from '../../shared/utils/utils/eventUtils';
 import { toast } from 'sonner';
 
 interface NotificationSystemProps {
@@ -146,15 +147,16 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
     const selectedEventData = events.find(e => e.id === selectedEvent);
     
     if (selectedEventData) {
+      const formattedDate = formatBrazilDate(selectedEventData.event_date);
       const title = template.title
         .replace('{event_title}', selectedEventData.title)
-        .replace('{event_date}', new Date(selectedEventData.event_date).toLocaleDateString('pt-BR'))
+        .replace('{event_date}', formattedDate)
         .replace('{event_time}', selectedEventData.event_time || '')
         .replace('{event_location}', selectedEventData.location || '');
       
       const message = template.message
         .replace('{event_title}', selectedEventData.title)
-        .replace('{event_date}', new Date(selectedEventData.event_date).toLocaleDateString('pt-BR'))
+        .replace('{event_date}', formattedDate)
         .replace('{event_time}', selectedEventData.event_time || '')
         .replace('{event_location}', selectedEventData.location || '');
       
@@ -216,7 +218,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
                 <option value="">Selecione um evento</option>
                 {events.map(event => (
                   <option key={event.id} value={event.id}>
-                    {event.title} - {new Date(event.event_date).toLocaleDateString('pt-BR')}
+                    {event.title} - {formatBrazilDate(event.event_date)}
                   </option>
                 ))}
               </select>
@@ -418,7 +420,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({ eventId }) => {
                   <option value="">Todos os eventos</option>
                   {events.map(event => (
                     <option key={event.id} value={event.id}>
-                      {event.title} - {new Date(event.event_date).toLocaleDateString('pt-BR')}
+                      {event.title} - {formatBrazilDate(event.event_date)}
                     </option>
                   ))}
                 </select>

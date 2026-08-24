@@ -31,16 +31,20 @@ export interface PaginatedResponse<T = any> {
 
 
 
-export interface PriceBatch extends BaseEntity {
-  event_id: string;
+export interface PriceBatch {
+  id?: string;
+  event_id?: string;
   name: string;
   price: number;
-  quantity: number;
-  sold_quantity: number;
-  start_date: string;
-  end_date: string;
-  is_active: boolean;
+  quantity?: number;
+  sold_quantity?: number;
+  start_date?: string;
+  end_date?: string;
+  is_active?: boolean;
   description?: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
 }
 
 export interface ScheduleItem {

@@ -17,7 +17,7 @@ const IMAGE_HEIGHT = 192; // h-48 = 12rem = 192px
 // Tipos
 interface PriceBatch {
   price: number;
-  end_date: string;
+  end_date?: string;
 }
 
 type PriceBatchesData = string | PriceBatch[] | PriceBatch | null;

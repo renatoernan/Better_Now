@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   ArrowLeft, Search, Filter, Download, Ticket, DollarSign, Clock, 
   CheckCircle2, XCircle, Eye, FileText, Globe, RefreshCw, User, Phone, 
-  Calendar, Layers, CreditCard, ChevronRight, AlertCircle, Ban, Trash2, RotateCcw, Zap
+  Calendar, Layers, CreditCard, ChevronRight, AlertCircle, Ban, Trash2, RotateCcw, Zap, MessageSquare
 } from 'lucide-react';
 import { Event } from '../../shared/types/types/event';
 import { useEventOrders, EventOrderRecord } from '../../shared/hooks/hooks/useEventOrders';
@@ -30,7 +30,8 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
     cancelOrder, 
     restoreOrder, 
     syncOrderWithMercadoPago, 
-    syncAllPendingWithMercadoPago 
+    syncAllPendingWithMercadoPago,
+    sendManualOrderNotification,
   } = useEventOrders(event.id);
 
   // Estados de busca e filtros (Padrão: Pagos e Pendentes selecionados)
@@ -500,6 +501,25 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                           </button>
                         )}
 
+                        {/* Botão de Enviar / Reenviar Notificação WhatsApp */}
+                        {order.client_phone && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const notifType = (order.status === 'paid' || (order.status as string) === 'approved')
+                                ? 'confirmed'
+                                : order.status === 'cancelled'
+                                ? 'cancelled'
+                                : 'created';
+                              sendManualOrderNotification(order.id, notifType);
+                            }}
+                            className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                            title="Enviar / Reenviar mensagem no WhatsApp do comprador"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                        )}
+
                         {/* Botão de Recuperar / Reativar Pedido (para cancelados) */}
                         {(order.status === 'cancelled' || order.status === 'refunded' || order.status === 'failed') && (
                           <button
@@ -542,6 +562,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
           const target = orders.find(o => o.id === orderId);
           if (target) setOrderToCancel(target);
         }}
+        onSendWhatsApp={(orderId, type) => sendManualOrderNotification(orderId, type)}
       />
 
       {/* Modal de Auditoria de Comprovante */}

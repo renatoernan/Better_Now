@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, Download, FileText, Users, Calendar, TrendingUp, PieChart, Filter, RefreshCw } from 'lucide-react';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { useSupabaseClients } from '../../shared/hooks/hooks/useSupabaseClients';
+import { formatBrazilDate } from '../../shared/utils/utils/eventUtils';
 import { toast } from 'sonner';
 
 interface EventReportsProps {
@@ -228,7 +229,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
               <option value="">Selecione um evento</option>
               {events.map(event => (
                 <option key={event.id} value={event.id}>
-                  {event.title} - {new Date(event.event_date).toLocaleDateString('pt-BR')}
+                  {event.title} - {formatBrazilDate(event.event_date)}
                 </option>
               ))}
             </select>
@@ -308,7 +309,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-purple-100">
                   <div>
                     <p className="text-sm">Data do Evento</p>
-                    <p className="font-medium">{new Date(currentEvent.event_date).toLocaleDateString('pt-BR')}</p>
+                    <p className="font-medium">{formatBrazilDate(currentEvent.event_date)}</p>
                   </div>
                   <div>
                     <p className="text-sm">Local</p>

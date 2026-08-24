@@ -1,7 +1,11 @@
-import React from 'react';
-import { DollarSign, ShoppingCart, Minus, Plus, CreditCard, FileText, QrCode, ShieldCheck, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  DollarSign, ShoppingCart, Minus, Plus, CreditCard, FileText, 
+  QrCode, ShieldCheck, ChevronDown, Ticket, Tag, X, Check, Loader2 
+} from 'lucide-react';
 import { TicketCardProps, PaymentMethodFee } from '../../shared/types';
-import { formatPrice, getBatchStatus, formatBatchPeriod } from '../../shared/utils/utils/eventUtils';
+import { formatPrice, getBatchStatus, formatBatchPeriod, formatBrazilDate } from '../../shared/utils/utils/eventUtils';
+import { validateCouponPreview } from '../../shared/services/couponService';
 
 const TicketCard: React.FC<TicketCardProps> = ({
   priceBatches,
@@ -15,8 +19,16 @@ const TicketCard: React.FC<TicketCardProps> = ({
   onBatchSelect,
   onQuantityChange,
   onPurchase,
-  registrationDeadline
+  registrationDeadline,
+  eventId,
+  appliedCoupon = null,
+  onCouponApply,
+  clientDocument
 }) => {
+  const [couponInput, setCouponInput] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
   if (priceBatches.length === 0) {
     return null;
   }
@@ -78,9 +90,23 @@ const TicketCard: React.FC<TicketCardProps> = ({
     ? currentActiveMethod.feePercentage 
     : 0;
 
-  const subtotal = (selectedBatchData?.price || 0) * quantity;
-  const feeAmount = subtotal * (feePercentage / 100);
-  const totalWithFee = subtotal + feeAmount;
+  // Cálculo financeiro com suporte a cupom de desconto
+  const rawSubtotal = (selectedBatchData?.price || 0) * quantity;
+  
+  // Calcular desconto aplicado
+  let discountAmount = 0;
+  if (appliedCoupon && appliedCoupon.valid) {
+    if (appliedCoupon.discount_type === 'percentage') {
+      const pct = Math.min(appliedCoupon.discount_value || 0, 100);
+      discountAmount = Number(((rawSubtotal * pct) / 100).toFixed(2));
+    } else {
+      discountAmount = Math.min(Number(appliedCoupon.discount_value || 0), rawSubtotal);
+    }
+  }
+
+  const subtotalAfterDiscount = Math.max(0, Number((rawSubtotal - discountAmount).toFixed(2)));
+  const feeAmount = subtotalAfterDiscount * (feePercentage / 100);
+  const totalWithFee = subtotalAfterDiscount + feeAmount;
 
   // Lógica de parcelamento para cartão de crédito
   const isCard = selectedPaymentMethod === 'credit_card';
@@ -110,6 +136,71 @@ const TicketCard: React.FC<TicketCardProps> = ({
     return `Comprar Ingresso • ${formatPrice(totalWithFee)}`;
   };
 
+  // Manipulador de aplicação de cupom
+  const handleApplyCoupon = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!couponInput.trim()) {
+      setCouponError('Digite o código do cupom.');
+      return;
+    }
+    if (!eventId) {
+      setCouponError('Evento não identificado.');
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError(null);
+
+    try {
+      const result = await validateCouponPreview({
+        eventId,
+        code: couponInput.trim(),
+        batchIndex: selectedBatch,
+        originalAmount: rawSubtotal,
+        clientDocument
+      });
+
+      if (!result.valid) {
+        setCouponError(result.error || 'Cupom inválido.');
+        if (onCouponApply) onCouponApply(null);
+      } else {
+        setCouponError(null);
+        if (onCouponApply) onCouponApply(result);
+      }
+    } catch {
+      setCouponError('Erro ao validar cupom.');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  // Remover cupom
+  const handleRemoveCoupon = () => {
+    setCouponInput('');
+    setCouponError(null);
+    if (onCouponApply) onCouponApply(null);
+  };
+
+  // Revalidar cupom se mudar quantidade ou lote
+  useEffect(() => {
+    if (appliedCoupon && eventId) {
+      validateCouponPreview({
+        eventId,
+        code: appliedCoupon.code || '',
+        batchIndex: selectedBatch,
+        originalAmount: rawSubtotal,
+        clientDocument
+      }).then(res => {
+        if (!res.valid && onCouponApply) {
+          onCouponApply(null);
+          setCouponError(res.error || 'Cupom não aplicável a esta alteração.');
+        } else if (onCouponApply) {
+          onCouponApply(res);
+        }
+      });
+    }
+  }, [selectedBatch, quantity, rawSubtotal]);
+
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 space-y-6">
       <div className="flex items-center justify-between border-b border-gray-100 pb-4">
@@ -131,170 +222,180 @@ const TicketCard: React.FC<TicketCardProps> = ({
           const isExpired = status === 'expired';
           const isUpcoming = status === 'upcoming';
           const isSelected = selectedBatch === index;
+          const remainingTickets = batch.quantity && batch.quantity > 0 
+            ? Math.max(0, batch.quantity - (batch.sold_quantity || 0)) 
+            : null;
+          const isSoldOut = remainingTickets === 0 || isExpired;
           
           return (
             <div 
               key={index}
               className={`border-2 rounded-xl p-4 transition-all relative overflow-hidden ${
-                isExpired 
-                  ? 'border-red-200 bg-red-50/60 opacity-50 cursor-not-allowed'
+                isSoldOut 
+                  ? 'border-red-200 bg-red-50/50 opacity-60 cursor-not-allowed'
                   : isUpcoming
-                    ? 'border-amber-200 bg-amber-50/60 opacity-75 cursor-not-allowed'
-                    : isSelected 
-                      ? 'border-indigo-600 bg-indigo-50/40 shadow-sm cursor-pointer' 
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50 cursor-pointer'
+                  ? 'border-blue-200 bg-blue-50/60 cursor-not-allowed'
+                  : isSelected
+                  ? 'border-indigo-600 bg-indigo-50/40 shadow-sm cursor-pointer'
+                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer'
               }`}
-              onClick={() => isActive && onBatchSelect(index)}
+              onClick={() => {
+                if (isActive && !isSoldOut) {
+                  onBatchSelect(index);
+                }
+              }}
             >
-              {/* Marca d'água "Esgotado" */}
-              {isExpired && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                  <div className="transform rotate-[-15deg] bg-red-600/90 text-white font-bold text-sm px-6 py-1.5 rounded-md shadow-md">
-                    ESGOTADO
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-gray-900 text-sm">{batch.name}</h3>
+                    {isSelected && isActive && !isSoldOut && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-600 text-white shadow-xs">
+                        Selecionado
+                      </span>
+                    )}
+                    {isSoldOut && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
+                        Esgotado
+                      </span>
+                    )}
+                    {!isSoldOut && isUpcoming && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                        Em breve
+                      </span>
+                    )}
+                    {!isSoldOut && remainingTickets !== null && remainingTickets <= 5 && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                        Últimos {remainingTickets} ingressos!
+                      </span>
+                    )}
+                  </div>
+                  
+                  {batch.description && (
+                    <p className="text-xs text-gray-500 mt-1">{batch.description}</p>
+                  )}
+                  
+                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 flex-wrap">
+                    <span>{period}</span>
+                    {batch.quantity !== undefined && batch.quantity !== null && batch.quantity > 0 && (
+                      <span className="font-medium text-gray-700">
+                        {batch.sold_quantity || 0}/{batch.quantity} vendidos
+                        {remainingTickets !== null && remainingTickets > 0 && (
+                          <span className="text-emerald-600 font-semibold ml-1.5">
+                            ({remainingTickets} disponíveis)
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </div>
                 </div>
-              )}
-              
-              {/* Marca d'água "Em Breve" */}
-              {isUpcoming && (
-                <div className="absolute top-2 right-2 pointer-events-none">
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                    Em Breve
-                  </span>
-                </div>
-              )}
-              
-              <div className="relative z-10">
-                <div className="flex justify-between items-start mb-1">
-                  <h3 className={`font-bold text-sm ${
-                    isExpired ? 'text-red-700' : isUpcoming ? 'text-amber-700' : isSelected ? 'text-indigo-900' : 'text-gray-800'
-                  }`}>
-                    {batch.name}
-                  </h3>
-                  {isSelected && isActive && (
-                    <span className="w-2 h-2 rounded-full bg-indigo-600 ring-4 ring-indigo-100" />
-                  )}
-                </div>
                 
-                {/* Preço */}
-                <div className="my-1">
-                  <span className={`text-2xl font-extrabold ${
-                    isExpired ? 'text-red-600' : isUpcoming ? 'text-amber-600' : isSelected ? 'text-indigo-600' : 'text-gray-900'
-                  }`}>
+                <div className="text-right">
+                  <span className="text-xl font-bold text-indigo-600 block">
                     {formatPrice(batch.price)}
                   </span>
-                  <span className="text-xs text-gray-500 font-normal ml-1">/ ingresso</span>
+                  <span className="text-xs text-gray-500">por pessoa</span>
                 </div>
-                
-                {/* Período de validade */}
-                {period && (
-                  <p className={`text-xs ${
-                    isExpired ? 'text-red-500' : isUpcoming ? 'text-amber-600' : 'text-gray-500'
-                  }`}>
-                    {period}
-                  </p>
-                )}
-                
-                {/* Descrição do lote */}
-                {batch.description && (
-                  <p className="text-xs text-gray-600 mt-2 bg-white/70 p-1.5 rounded border border-gray-100">
-                    {batch.description}
-                  </p>
-                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Controles de quantidade e seleção de pagamento */}
-      {selectedBatchStatus === 'active' && (
-        <div className="space-y-5 pt-4 border-t border-gray-100">
-          {/* Seletor de Quantidade */}
-          <div className="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100">
-            <span className="text-sm font-semibold text-gray-700">Quantidade:</span>
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => onQuantityChange(false)}
-                className="w-8 h-8 rounded-lg bg-white border border-gray-300 shadow-sm flex items-center justify-center hover:bg-gray-50 transition-colors disabled:opacity-40"
-                disabled={quantity <= 1}
-              >
-                <Minus className="w-3.5 h-3.5 text-gray-700" />
-              </button>
-              <span className="w-8 text-center font-bold text-gray-900">{quantity}</span>
-              <button
-                type="button"
-                onClick={() => onQuantityChange(true)}
-                className="w-8 h-8 rounded-lg bg-white border border-gray-300 shadow-sm flex items-center justify-center hover:bg-gray-50 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5 text-gray-700" />
-              </button>
-            </div>
-          </div>
-
-          {/* Seleção de Formas de Pagamento (somente as cadastradas no evento) */}
-          {hasPaymentMethodsConfigured && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
-                  <span>Forma de Pagamento</span>
-                  <span className="text-red-500 font-bold">*</span>
-                </label>
-                {!isMethodSelected && (
-                  <span className="text-[11px] text-indigo-600 font-medium animate-pulse">
-                    Selecione para prosseguir
-                  </span>
+      {/* Seção de Compra (Quantidade + Formas de Pagamento + Cupom) */}
+      {selectedBatchData && selectedBatchStatus === 'active' && (
+        <div className="space-y-4 pt-4 border-t border-gray-100">
+          {/* Controle de Quantidade */}
+          {(() => {
+            const batchRemaining = selectedBatchData.quantity && selectedBatchData.quantity > 0 
+              ? Math.max(0, selectedBatchData.quantity - (selectedBatchData.sold_quantity || 0)) 
+              : null;
+            const maxAllowed = batchRemaining !== null ? Math.min(10, batchRemaining) : 10;
+            
+            return (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between bg-gray-50 p-3.5 rounded-xl border border-gray-200/60">
+                  <div>
+                    <span className="text-xs font-bold text-gray-700 block">Quantidade de Ingressos</span>
+                    <span className="text-[11px] text-gray-500">
+                      {batchRemaining !== null ? `Máximo de ${maxAllowed} neste lote` : 'Limite de compra por pedido'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => onQuantityChange(false)}
+                      disabled={quantity <= 1}
+                      className="w-9 h-9 rounded-lg border border-gray-300 bg-white flex items-center justify-center text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="w-8 text-center font-bold text-gray-900 text-base">{quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => onQuantityChange(true)}
+                      disabled={quantity >= maxAllowed}
+                      className="w-9 h-9 rounded-lg border border-gray-300 bg-white flex items-center justify-center text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs"
+                      title={quantity >= maxAllowed ? 'Limite disponível atingido' : 'Adicionar mais 1'}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                {batchRemaining !== null && batchRemaining <= 5 && batchRemaining > 0 && (
+                  <p className="text-xs text-amber-700 font-medium px-1">
+                    ⚠️ Restam apenas {batchRemaining} ingressos para o {selectedBatchData.name}!
+                  </p>
                 )}
               </div>
+            );
+          })()}
 
-              <div className={`grid gap-2 ${activeMethods.length === 3 ? 'grid-cols-3' : activeMethods.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {activeMethods.map((method) => {
-                  const isSelected = selectedPaymentMethod === method.methodKey || selectedPaymentMethod === method.id;
-
+          {/* Formas de Pagamento Disponíveis */}
+          {hasPaymentMethodsConfigured && (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                  Forma de Pagamento
+                </label>
+                <span className="text-[11px] text-gray-400">Escolha uma opção</span>
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {activeMethods.map((m) => {
+                  const isSelected = selectedPaymentMethod === m.methodKey || selectedPaymentMethod === m.id;
                   return (
                     <button
-                      key={method.id}
+                      key={m.id}
                       type="button"
-                      onClick={() => onPaymentMethodSelect && onPaymentMethodSelect(method.methodKey)}
-                      className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all duration-200 relative ${
+                      onClick={() => onPaymentMethodSelect && onPaymentMethodSelect(m.methodKey)}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs font-semibold transition-all relative ${
                         isSelected
-                          ? 'border-indigo-600 bg-indigo-50/80 text-indigo-950 shadow-md ring-2 ring-indigo-500'
-                          : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-gray-50/70 text-gray-700'
+                          ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 shadow-sm ring-1 ring-indigo-600'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      {isSelected && (
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-600" />
+                      <div className={`mb-1.5 p-1.5 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                        {m.icon}
+                      </div>
+                      <span>{m.label}</span>
+                      {m.feePercentage > 0 ? (
+                        <span className="text-[10px] text-amber-700 font-normal mt-0.5">
+                          +{m.feePercentage}% taxa
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-emerald-600 font-normal mt-0.5">
+                          Sem taxa
+                        </span>
                       )}
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className={isSelected ? 'text-indigo-600' : 'text-gray-500'}>
-                            {method.icon}
-                          </span>
-                          <span className="text-xs font-bold">{method.label}</span>
-                        </div>
-                      </div>
-                      <div className="text-[11px]">
-                        {method.feePercentage > 0 ? (
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                            isSelected ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-50 text-amber-700 border border-amber-200/60'
-                          }`}>
-                            +{method.feePercentage}% taxa
-                          </span>
-                        ) : (
-                          <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[10px] font-medium">
-                            Sem taxa
-                          </span>
-                        )}
-                      </div>
                     </button>
                   );
                 })}
               </div>
 
-              {/* Seletor de Parcelamento (Exibido quando Cartão for selecionado) */}
+              {/* Seção de Parcelamento de Cartão */}
               {isCard && (
-                <div className="bg-indigo-50/60 border border-indigo-200/80 rounded-xl p-3 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="mt-3 p-3.5 bg-indigo-50/60 rounded-xl border border-indigo-100 space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
                       <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
@@ -335,13 +436,94 @@ const TicketCard: React.FC<TicketCardProps> = ({
               )}
             </div>
           )}
+
+          {/* Campo de Cupom de Desconto */}
+          <div className="bg-gray-50/80 rounded-xl p-3.5 border border-gray-200/70 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Ticket className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Possui Cupom de Desconto?</span>
+              </label>
+            </div>
+
+            {appliedCoupon && appliedCoupon.valid ? (
+              /* Cupom Ativo Aplicado */
+              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-emerald-950 font-mono tracking-wider">
+                      {appliedCoupon.code}
+                    </span>
+                    <span className="text-[11px] text-emerald-700 block font-medium">
+                      {appliedCoupon.discount_type === 'percentage'
+                        ? `${appliedCoupon.discount_value}% de desconto aplicado`
+                        : `${formatPrice(appliedCoupon.discount_value || 0)} de desconto aplicado`}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRemoveCoupon}
+                  className="text-xs text-red-600 hover:text-red-800 font-semibold p-1 hover:bg-red-50 rounded flex items-center gap-0.5"
+                  title="Remover cupom"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Remover</span>
+                </button>
+              </div>
+            ) : (
+              /* Formulário de Inserção do Cupom */
+              <form onSubmit={handleApplyCoupon} className="space-y-1.5">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="CÓDIGO DO CUPOM"
+                      value={couponInput}
+                      onChange={(e) => {
+                        setCouponInput(e.target.value.toUpperCase());
+                        setCouponError(null);
+                      }}
+                      className="w-full pl-9 pr-3 py-2 text-xs font-mono font-bold uppercase tracking-wider rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={couponLoading || !couponInput.trim()}
+                    className="px-3.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                  >
+                    {couponLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <span>Aplicar</span>
+                    )}
+                  </button>
+                </div>
+                {couponError && (
+                  <p className="text-[11px] text-red-600 font-medium">{couponError}</p>
+                )}
+              </form>
+            )}
+          </div>
           
           {/* Discriminação do Resumo Financeiro */}
           <div className="bg-gray-50/90 rounded-xl p-4 border border-gray-200/70 space-y-2 text-sm">
             <div className="flex justify-between text-gray-600 text-xs">
               <span>Subtotal ({quantity}x {formatPrice(selectedBatchData.price)})</span>
-              <span className="font-medium text-gray-900">{formatPrice(subtotal)}</span>
+              <span className="font-medium text-gray-900">{formatPrice(rawSubtotal)}</span>
             </div>
+
+            {/* Linha de Desconto do Cupom */}
+            {appliedCoupon && appliedCoupon.valid && discountAmount > 0 && (
+              <div className="flex justify-between text-emerald-700 text-xs font-semibold animate-in fade-in duration-200 bg-emerald-50/80 px-2 py-1 rounded">
+                <span>Cupom ({appliedCoupon.code})</span>
+                <span>-{formatPrice(discountAmount)}</span>
+              </div>
+            )}
 
             {isMethodSelected && feeAmount > 0 && (
               <div className="flex justify-between text-amber-700 text-xs animate-in fade-in duration-200">
@@ -364,7 +546,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
             )}
           </div>
           
-          {/* Botão de Compra - Habilitado somente quando tudo estiver selecionado */}
+          {/* Botão de Compra */}
           <button
             type="button"
             onClick={onPurchase}
@@ -390,7 +572,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
       {registrationDeadline && (
         <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl">
           <p className="text-xs text-amber-900">
-            <strong>Prazo limite:</strong> {new Date(registrationDeadline).toLocaleDateString('pt-BR')}
+            <strong>Prazo limite:</strong> {formatBrazilDate(registrationDeadline)}
           </p>
         </div>
       )}

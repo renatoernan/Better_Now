@@ -1,6 +1,6 @@
 import { supabase } from './lib/supabase';
-import { EventOrder } from './stripeService';
 import { getClientIpAddress } from '../utils/utils/ipUtils';
+import { sendOrderWhatsAppNotification } from './orderNotificationService';
 
 export interface CreateMercadoPagoCheckoutParams {
   event_id: string;
@@ -20,6 +20,9 @@ export interface CreateMercadoPagoCheckoutParams {
   client_id?: string;
   ip_address?: string;
   existing_order_id?: string;
+  coupon_id?: string;
+  coupon_code?: string;
+  discount_amount?: number;
   success_url?: string;
   failure_url?: string;
   pending_url?: string;
@@ -93,6 +96,11 @@ export const cancelPendingOrder = async (orderId: string, reason: string = 'canc
       .eq('id', orderId)
       .eq('status', 'pending');
 
+    if (!error) {
+      // Disparar notificação automática de Pedido Cancelado
+      sendOrderWhatsAppNotification({ type: 'cancelled', orderId }).catch(() => {});
+    }
+
     return !error;
   } catch (err) {
     console.warn('Erro ao cancelar ordem pendente:', err);
@@ -115,7 +123,49 @@ export const createMercadoPagoCheckout = async (
     const clientIp = params.ip_address || await getClientIpAddress();
     const cleanDoc = params.client_document?.replace(/\D/g, '');
 
-    const subtotal = params.unit_price * params.quantity;
+    // 1. Validar se o lote do evento possui estoque disponível
+    const { data: eventRow } = await supabase
+      .from('app_events')
+      .select('price_batches, observations')
+      .eq('id', params.event_id)
+      .single();
+
+    if (eventRow) {
+      let batches: any[] = Array.isArray(eventRow.price_batches) ? eventRow.price_batches : [];
+      if (batches.length === 0 && eventRow.observations) {
+        try {
+          const parsed = JSON.parse(eventRow.observations);
+          if (Array.isArray(parsed.price_batches)) batches = parsed.price_batches;
+        } catch {
+          // Ignora erro de parse
+        }
+      }
+
+      const targetBatch = batches[params.batch_index || 0];
+      if (targetBatch && targetBatch.quantity && targetBatch.quantity > 0) {
+        const { data: approvedOrders } = await supabase
+          .from('app_event_orders')
+          .select('quantity')
+          .eq('event_id', params.event_id)
+          .eq('batch_index', params.batch_index || 0)
+          .in('status', ['approved', 'paid', 'completed']);
+
+        const totalSold = (approvedOrders || []).reduce((acc: number, curr: any) => acc + (Number(curr.quantity) || 1), 0);
+        const remaining = Math.max(0, targetBatch.quantity - totalSold);
+
+        if (remaining <= 0) {
+          return { error: `O lote "${targetBatch.name || 'selecionado'}" está esgotado.` };
+        }
+
+        if (params.quantity > remaining) {
+          return { error: `Restam apenas ${remaining} ingressos disponíveis para o lote "${targetBatch.name}". Por favor, ajuste a quantidade.` };
+        }
+      }
+    }
+
+    const rawSubtotal = params.unit_price * params.quantity;
+    const discount = params.discount_amount || 0;
+    const subtotal = Math.max(0, rawSubtotal - discount);
     const fee = params.convenience_fee || (subtotal * ((params.convenience_fee_percentage || 0) / 100));
     const totalAmount = subtotal + fee;
     const itemUnitPrice = Number((totalAmount / params.quantity).toFixed(2));
@@ -138,6 +188,9 @@ export const createMercadoPagoCheckout = async (
           payment_method: params.payment_method || 'mercadopago',
           convenience_fee: fee,
           convenience_fee_percentage: params.convenience_fee_percentage || 0,
+          coupon_id: params.coupon_id || null,
+          coupon_code: params.coupon_code || null,
+          discount_amount: discount,
           ip_address: clientIp,
           updated_at: new Date().toISOString(),
         })
@@ -171,6 +224,9 @@ export const createMercadoPagoCheckout = async (
           payment_method: params.payment_method || 'mercadopago',
           convenience_fee: fee,
           convenience_fee_percentage: params.convenience_fee_percentage || 0,
+          coupon_id: params.coupon_id || null,
+          coupon_code: params.coupon_code || null,
+          discount_amount: discount,
         })
         .select()
         .single();
@@ -291,6 +347,13 @@ export const createMercadoPagoCheckout = async (
           updated_at: new Date().toISOString(),
         })
         .eq('id', order.id);
+
+      // Disparar notificação automática de Pedido Criado (Aguardando Pagamento)
+      sendOrderWhatsAppNotification({
+        type: 'created',
+        orderId: order.id,
+        orderData: { ...order, stripe_session_id: mpData.id },
+      }).catch(() => {});
     }
 
     const checkoutUrl = mpData.init_point || mpData.sandbox_init_point;
@@ -382,6 +445,34 @@ export const checkMercadoPagoPaymentStatus = async (
 
         await supabase.from('app_event_tickets').insert(ticketsToInsert);
       }
+
+      // Se a ordem usou cupom de desconto, registrar utilização definitiva
+      if (currentOrder.coupon_code || currentOrder.coupon_id) {
+        try {
+          const { applyCouponOnOrder } = await import('./couponService');
+          await applyCouponOnOrder({
+            couponId: currentOrder.coupon_id || '',
+            code: currentOrder.coupon_code || '',
+            eventId: currentOrder.event_id,
+            orderId: orderId,
+            batchIndex: currentOrder.batch_index || 0,
+            originalAmount: Number(currentOrder.amount_total || 0) + Number(currentOrder.discount_amount || 0),
+            clientName: currentOrder.client_name || undefined,
+            clientDocument: currentOrder.client_document || undefined,
+            clientPhone: currentOrder.client_phone || undefined,
+            clientEmail: currentOrder.client_email || undefined,
+          });
+        } catch (couponErr) {
+          console.warn('Aviso ao registrar uso do cupom no pedido aprovado:', couponErr);
+        }
+      }
+
+      // Disparar notificação automática de Pagamento Confirmado (Ingressos Emitidos)
+      sendOrderWhatsAppNotification({
+        type: 'confirmed',
+        orderId: orderId,
+        orderData: { ...currentOrder, status: 'paid' },
+      }).catch(() => {});
 
       return { paid: true, paymentId, status: 'approved' };
     }

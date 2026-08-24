@@ -20,8 +20,12 @@ export interface ServiceItem {
 export interface PriceBatch {
   id?: string;
   name: string;
-  value: number;
+  price?: number;
+  value?: number;
+  quantity?: number;
+  sold_quantity?: number;
   start_date: string;
+  end_date?: string;
 }
 
 export interface Event {

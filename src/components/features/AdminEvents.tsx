@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt } from 'lucide-react';
+import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket } from 'lucide-react';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { Event } from '../../shared/types/types/event';
 import { toast } from 'sonner';
@@ -12,9 +12,10 @@ const DigitalCheckIn = React.lazy(() => import('./DigitalCheckIn'));
 const EventReports = React.lazy(() => import('./EventReports'));
 const AdminEventTypes = React.lazy(() => import('../AdminEventTypes'));
 const AdminEventOrders = React.lazy(() => import('./AdminEventOrders'));
+const AdminEventCoupons = React.lazy(() => import('./AdminEventCoupons'));
 const ConfirmModal = React.lazy(() => import('../shared/ConfirmModal'));
 
-type ViewMode = 'list' | 'form' | 'gallery' | 'checkin' | 'reports' | 'event-types' | 'orders';
+type ViewMode = 'list' | 'form' | 'gallery' | 'checkin' | 'reports' | 'event-types' | 'orders' | 'coupons';
 
 const AdminEvents: React.FC = () => {
   console.log('🚀 AdminEvents component loaded');
@@ -334,6 +335,18 @@ const AdminEvents: React.FC = () => {
     );
   }
 
+  if (viewMode === 'coupons') {
+    return (
+      <AdminEventCoupons
+        onBack={() => {
+          setViewMode('list');
+          setSelectedEvent(null);
+        }}
+        initialEventId={selectedEvent?.id}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -349,6 +362,16 @@ const AdminEvents: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <button 
+              onClick={() => {
+                setSelectedEvent(null);
+                setViewMode('coupons');
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm shadow-sm"
+            >
+              <Ticket className="h-4 w-4" />
+              <span>Cupons de Desconto</span>
+            </button>
             <button 
               onClick={() => setViewMode('event-types')}
               className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
@@ -569,6 +592,16 @@ const AdminEvents: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedEvent(event);
+                              setViewMode('coupons');
+                            }}
+                            className="text-indigo-600 hover:text-indigo-800 p-1 rounded transition-colors"
+                            title="Cupons de Desconto"
+                          >
+                            <Ticket className="h-4 w-4" />
+                          </button>
                           <button
                             onClick={() => {
                               setSelectedEvent(event);

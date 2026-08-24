@@ -1,7 +1,9 @@
 import { PriceBatch, ScheduleItem, PaymentMethodFee, CheckoutFieldConfig } from './core';
+import { CouponValidationResult } from './coupon';
 
 // Re-export PriceBatch, ScheduleItem, PaymentMethodFee and CheckoutFieldConfig for external use
 export type { PriceBatch, ScheduleItem, PaymentMethodFee, CheckoutFieldConfig } from './core';
+export type { CouponValidationResult } from './coupon';
 
 export interface Event {
   id: string;
@@ -88,6 +90,10 @@ export interface TicketCardProps {
   onQuantityChange: (increment: boolean) => void;
   onPurchase: () => void;
   registrationDeadline?: string;
+  eventId?: string;
+  appliedCoupon?: CouponValidationResult | null;
+  onCouponApply?: (couponResult: CouponValidationResult | null) => void;
+  clientDocument?: string;
 }
 
 export type BatchStatus = 'active' | 'expired' | 'upcoming';

@@ -9,6 +9,7 @@ import TicketCard from '../shared/TicketCard';
 import { usePublicEvents } from '../../shared/hooks/hooks/usePublicEvents';
 import { ArrowLeft } from 'lucide-react';
 import { Event as EventType, PriceBatch, ScheduleItem, PaymentMethodFee } from '../../shared/types/types/event';
+import { CouponValidationResult } from '../../shared/types/types/coupon';
 import { processPriceBatches, getBatchStatus, formatPrice } from '../../shared/utils/utils/eventUtils';
 import PhoneLoginModal from '../shared/PhoneLoginModal';
 import TokenVerificationModal from '../shared/TokenVerificationModal';
@@ -40,6 +41,7 @@ const EventDetails: React.FC = () => {
   const [priceBatches, setPriceBatches] = useState<PriceBatch[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   const [selectedInstallments, setSelectedInstallments] = useState<number | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponValidationResult | null>(null);
   
   // Estados para autenticação e captura de dados do comprador
   const [showPhoneModal, setShowPhoneModal] = useState(false);
@@ -130,7 +132,20 @@ const EventDetails: React.FC = () => {
   const currentFeePercentage = currentPaymentMethodConfig?.fee_percentage || 0;
   const currentUnitPrice = priceBatches[selectedBatch]?.price || 0;
   const currentSubtotal = currentUnitPrice * quantity;
-  const currentFeeAmount = currentSubtotal * (currentFeePercentage / 100);
+
+  // Cálculo de desconto do cupom
+  let currentDiscountAmount = 0;
+  if (appliedCoupon && appliedCoupon.valid) {
+    if (appliedCoupon.discount_type === 'percentage') {
+      const pct = Math.min(appliedCoupon.discount_value || 0, 100);
+      currentDiscountAmount = Number(((currentSubtotal * pct) / 100).toFixed(2));
+    } else {
+      currentDiscountAmount = Math.min(Number(appliedCoupon.discount_value || 0), currentSubtotal);
+    }
+  }
+
+  const currentSubtotalAfterDiscount = Math.max(0, Number((currentSubtotal - currentDiscountAmount).toFixed(2)));
+  const currentFeeAmount = currentSubtotalAfterDiscount * (currentFeePercentage / 100);
 
   const getPaymentMethodLabel = (methodKey?: string) => {
     if (methodKey === 'boleto') return 'Boleto Bancário';
@@ -474,7 +489,30 @@ const EventDetails: React.FC = () => {
         return false;
       }
 
-      // 2. Checar se o valor do lote foi alterado no admin
+      // 2. Checar se a quantidade solicitada excede o estoque restante do lote
+      if (freshBatchData.quantity && freshBatchData.quantity > 0) {
+        const remaining = Math.max(0, freshBatchData.quantity - (freshBatchData.sold_quantity || 0));
+        if (remaining === 0) {
+          setPriceMismatchDetails({
+            oldPrice: Number(currentBatchData?.price || 0),
+            newPrice: Number(freshBatchData.price || 0),
+            batchName: freshBatchData.name || `Lote ${selectedBatch + 1}`,
+            reason: 'batch_sold_out',
+          });
+          setShowPriceUpdatedModal(true);
+          setShowCheckoutClientModal(false);
+          setShowStripeCheckoutModal(false);
+          return false;
+        }
+
+        if (quantity > remaining) {
+          toast.error(`Restam apenas ${remaining} ingressos disponíveis para o lote "${freshBatchData.name}". Ajustamos a quantidade para você.`);
+          setQuantity(remaining);
+          return false;
+        }
+      }
+
+      // 3. Checar se o valor do lote foi alterado no admin
       const oldPrice = Number(currentBatchData?.price || 0);
       const newPrice = Number(freshBatchData.price || 0);
 
@@ -526,7 +564,10 @@ const EventDetails: React.FC = () => {
         installments: selectedInstallments || 1,
         max_installments: cardConfig?.max_installments || 12,
         convenience_fee: currentFeeAmount,
-        convenience_fee_percentage: currentFeePercentage
+        convenience_fee_percentage: currentFeePercentage,
+        coupon_id: appliedCoupon?.coupon_id || undefined,
+        coupon_code: appliedCoupon?.code || undefined,
+        discount_amount: currentDiscountAmount,
       });
 
       if (res.error) {
@@ -1014,6 +1055,10 @@ const EventDetails: React.FC = () => {
                     onQuantityChange={handleQuantityChange}
                     onPurchase={handlePurchase}
                     registrationDeadline={event.registration_deadline}
+                    eventId={id}
+                    appliedCoupon={appliedCoupon}
+                    onCouponApply={setAppliedCoupon}
+                    clientDocument={currentClientCpf}
                   />
                 </div>
               </div>

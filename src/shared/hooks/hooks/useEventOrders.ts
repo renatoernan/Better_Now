@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/lib/supabase';
 import { checkMercadoPagoPaymentStatus } from '../../services/mercadoPagoService';
+import { sendOrderWhatsAppNotification, OrderNotificationType } from '../../services/orderNotificationService';
 import { toast } from 'sonner';
 
 export interface EventOrderRecord {
@@ -24,6 +25,9 @@ export interface EventOrderRecord {
   payment_proof_url?: string;
   cancellation_reason?: string;
   stripe_session_id?: string;
+  coupon_id?: string;
+  coupon_code?: string;
+  discount_amount?: number;
   created_at: string;
   updated_at?: string;
   tickets?: EventTicketRecord[];
@@ -259,6 +263,34 @@ export const useEventOrders = (eventId?: string) => {
         await supabase.from('app_event_tickets').insert(ticketsToInsert);
       }
 
+      // Se a ordem possuir cupom de desconto, registrar uso definitivo
+      if (order.coupon_code || order.coupon_id) {
+        try {
+          const { applyCouponOnOrder } = await import('../../services/couponService');
+          await applyCouponOnOrder({
+            couponId: order.coupon_id || '',
+            code: order.coupon_code || '',
+            eventId: order.event_id,
+            orderId: orderId,
+            batchIndex: order.batch_index || 0,
+            originalAmount: Number(order.amount_total || 0) + Number(order.discount_amount || 0),
+            clientName: order.client_name || undefined,
+            clientDocument: order.client_document || undefined,
+            clientPhone: order.client_phone || undefined,
+            clientEmail: order.client_email || undefined,
+          });
+        } catch (couponErr) {
+          console.warn('Aviso ao registrar uso do cupom na aprovação Pix:', couponErr);
+        }
+      }
+
+      // Disparar notificação automática de Pagamento Confirmado (Ingressos Emitidos)
+      sendOrderWhatsAppNotification({
+        type: 'confirmed',
+        orderId: orderId,
+        orderData: { ...order, status: 'paid' },
+      }).catch(() => {});
+
       toast.success('Comprovante aprovado e ingressos emitidos com sucesso!');
       await fetchOrders();
       return true;
@@ -282,6 +314,12 @@ export const useEventOrders = (eventId?: string) => {
         .eq('id', orderId);
 
       if (error) throw error;
+
+      // Disparar notificação automática de Pedido Cancelado
+      sendOrderWhatsAppNotification({
+        type: 'cancelled',
+        orderId: orderId,
+      }).catch(() => {});
 
       toast.success('Comprovante recusado e pedido cancelado.');
       await fetchOrders();
@@ -313,12 +351,37 @@ export const useEventOrders = (eventId?: string) => {
         .update({ status: 'cancelled' })
         .eq('order_id', orderId);
 
+      // Disparar notificação automática de Pedido Cancelado
+      sendOrderWhatsAppNotification({
+        type: 'cancelled',
+        orderId: orderId,
+      }).catch(() => {});
+
       toast.success('Pedido cancelado com sucesso.');
       await fetchOrders();
       return true;
     } catch (err: any) {
       console.error('Erro ao cancelar pedido:', err);
       toast.error('Erro ao cancelar pedido.');
+      return false;
+    }
+  };
+
+  // Reenviar notificação de WhatsApp manualmente
+  const sendManualOrderNotification = async (orderId: string, type: OrderNotificationType) => {
+    try {
+      const typeLabel = type === 'created' ? 'Pedido Criado' : type === 'confirmed' ? 'Pagamento Confirmado' : 'Pedido Cancelado';
+      toast.info(`Enviando mensagem de ${typeLabel} via WhatsApp...`);
+      const res = await sendOrderWhatsAppNotification({ type, orderId });
+      if (res.success) {
+        toast.success(`Mensagem de ${typeLabel} enviada no WhatsApp com sucesso! 📱`);
+        return true;
+      } else {
+        toast.error(`Falha no envio do WhatsApp: ${res.message}`);
+        return false;
+      }
+    } catch (err: any) {
+      toast.error(`Erro ao enviar mensagem: ${err.message || 'Erro inesperado'}`);
       return false;
     }
   };
@@ -403,6 +466,7 @@ export const useEventOrders = (eventId?: string) => {
     rejectPixProof,
     cancelOrder,
     restoreOrder,
+    sendManualOrderNotification,
   };
 };
 

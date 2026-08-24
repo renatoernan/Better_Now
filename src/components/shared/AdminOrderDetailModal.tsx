@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Ticket, User, Phone, Mail, CreditCard, Calendar, Globe, QrCode, CheckCircle2, AlertCircle, Ban, ArrowRight, ShieldCheck } from 'lucide-react';
+import { X, Ticket, User, Phone, Mail, CreditCard, Calendar, Globe, QrCode, CheckCircle2, AlertCircle, Ban, ArrowRight, ShieldCheck, MessageSquare } from 'lucide-react';
 import { EventOrderRecord } from '../../shared/hooks/hooks/useEventOrders';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
 
@@ -9,6 +9,7 @@ interface AdminOrderDetailModalProps {
   order: EventOrderRecord | null;
   onCancelOrder?: (orderId: string) => void;
   onApproveProof?: (orderId: string) => void;
+  onSendWhatsApp?: (orderId: string, type: 'created' | 'confirmed' | 'cancelled') => void;
 }
 
 export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
@@ -17,6 +18,7 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
   order,
   onCancelOrder,
   onApproveProof,
+  onSendWhatsApp,
 }) => {
   if (!isOpen || !order) return null;
 
@@ -211,8 +213,27 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
-          <div>
+        <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            {order.client_phone && onSendWhatsApp && (
+              <button
+                type="button"
+                onClick={() => {
+                  const notifType = (order.status === 'paid' || (order.status as string) === 'approved')
+                    ? 'confirmed'
+                    : order.status === 'cancelled'
+                    ? 'cancelled'
+                    : 'created';
+                  onSendWhatsApp(order.id, notifType);
+                }}
+                className="px-3.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Reenviar notificação de WhatsApp para o comprador"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Reenviar WhatsApp
+              </button>
+            )}
+
             {order.status === 'pending' && onCancelOrder && (
               <button
                 type="button"
