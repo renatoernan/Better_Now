@@ -70,10 +70,10 @@ const EventDetails: React.FC = () => {
   const [stripeErrorMessage, setStripeErrorMessage] = useState<string | null>(null);
   const [stripeSessionId, setStripeSessionId] = useState<string>('');
 
-  // Efeito para verificar parâmetros de retorno da Stripe (?payment=success&session_id=...)
+  // Efeito para verificar parâmetros de retorno de pagamento (?payment=success&order_id=... ou &session_id=...)
   useEffect(() => {
     const paymentStatus = searchParams.get('payment');
-    const sessionId = searchParams.get('session_id');
+    const sessionId = searchParams.get('session_id') || searchParams.get('order_id');
 
     if (paymentStatus === 'success' && sessionId) {
       setStripeSessionId(sessionId);
@@ -83,11 +83,14 @@ const EventDetails: React.FC = () => {
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('payment');
       newParams.delete('session_id');
+      newParams.delete('order_id');
       setSearchParams(newParams, { replace: true });
-    } else if (paymentStatus === 'cancel') {
-      toast.info('Pagamento cancelado.');
+    } else if (paymentStatus === 'cancel' || paymentStatus === 'failure') {
+      toast.info('Pagamento não concluído ou cancelado.');
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('payment');
+      newParams.delete('session_id');
+      newParams.delete('order_id');
       setSearchParams(newParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);

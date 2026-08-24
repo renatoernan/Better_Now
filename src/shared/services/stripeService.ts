@@ -110,18 +110,36 @@ export const createCheckoutSession = async (params: CreateCheckoutParams): Promi
 };
 
 /**
- * Busca os detalhes do pedido pelo stripe_session_id
+ * Busca os detalhes do pedido pelo id ou stripe_session_id ou mercadopago_preference_id
  */
-export const getOrderBySessionId = async (sessionId: string): Promise<EventOrder | null> => {
+export const getOrderBySessionId = async (idOrSessionId: string): Promise<EventOrder | null> => {
   try {
-    const { data, error } = await supabase
+    if (!idOrSessionId) return null;
+    const cleanId = idOrSessionId.trim();
+
+    // 1. Tenta buscar diretamente por ID (UUID da ordem)
+    let { data, error } = await supabase
       .from('app_event_orders')
       .select('*')
-      .eq('stripe_session_id', sessionId)
-      .single();
+      .eq('id', cleanId)
+      .maybeSingle();
 
-    if (error) {
-      console.error('Erro ao buscar pedido por session_id:', error);
+    // 2. Se não achou por ID, tenta pelos campos de sessão / preferência / pagamento
+    if (!data) {
+      const fallbackQuery = await supabase
+        .from('app_event_orders')
+        .select('*')
+        .or(`stripe_session_id.eq.${cleanId},mercadopago_preference_id.eq.${cleanId},mercadopago_payment_id.eq.${cleanId}`)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (fallbackQuery.data && fallbackQuery.data.length > 0) {
+        data = fallbackQuery.data[0];
+      }
+    }
+
+    if (!data) {
+      console.warn('Pedido não encontrado por ID ou SessionId:', cleanId);
       return null;
     }
 
@@ -133,24 +151,66 @@ export const getOrderBySessionId = async (sessionId: string): Promise<EventOrder
 };
 
 /**
- * Busca os ingressos gerados para um pedido
+ * Busca os ingressos gerados para um pedido (e gera caso ainda não existam)
  */
-export const getTicketsByOrderId = async (orderId: string): Promise<EventTicket[]> => {
+export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: EventOrder): Promise<EventTicket[]> => {
   try {
-    const { data, error } = await supabase
+    if (!orderId) return [];
+
+    // 1. Busca os tickets já cadastrados
+    const { data: tickets, error } = await supabase
       .from('app_event_tickets')
       .select('*')
       .eq('order_id', orderId)
-      .order('ticket_number', { ascending: true });
+      .order('created_at', { ascending: true });
 
-    if (error) {
-      console.error('Erro ao buscar ingressos por order_id:', error);
-      return [];
+    if (!error && tickets && tickets.length > 0) {
+      return tickets as EventTicket[];
     }
 
-    return data as EventTicket[];
+    // 2. Se ainda não existirem tickets, busca a ordem e gera automaticamente os ingressos
+    let order = orderFallbackData;
+    if (!order) {
+      const { data: ord } = await supabase
+        .from('app_event_orders')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle();
+      order = ord as EventOrder;
+    }
+
+    if (order) {
+      const qty = order.quantity || 1;
+      const ticketsToInsert = [];
+
+      for (let i = 0; i < qty; i++) {
+        const ticketNumber = `${order.id.slice(0, 6).toUpperCase()}-${i + 1}`;
+        const qrHash = `BN-${order.event_id?.slice(0, 8) || 'EV'}-${order.id.slice(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
+
+        ticketsToInsert.push({
+          order_id: order.id,
+          event_id: order.event_id,
+          client_id: order.client_id || null,
+          ticket_number: ticketNumber as any,
+          qr_code_hash: qrHash,
+          status: 'valid',
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      const { data: inserted, error: insertErr } = await supabase
+        .from('app_event_tickets')
+        .insert(ticketsToInsert)
+        .select();
+
+      if (!insertErr && inserted) {
+        return inserted as EventTicket[];
+      }
+    }
+
+    return [];
   } catch (err) {
-    console.error('Erro ao consultar ingressos:', err);
+    console.error('Erro ao consultar/gerar ingressos:', err);
     return [];
   }
 };

@@ -1,632 +1,622 @@
-import React, { useState, useEffect } from 'react';
-import { QrCode, UserCheck, UserX, Search, Clock, Users, CheckCircle, AlertCircle, Camera, Smartphone } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  QrCode,
+  UserCheck,
+  UserX,
+  Search,
+  Clock,
+  Users,
+  CheckCircle,
+  AlertCircle,
+  Camera,
+  Smartphone,
+  CheckCircle2,
+  XCircle,
+  RefreshCw,
+  Ticket,
+  ShieldCheck,
+  Phone,
+  CreditCard,
+  Hash,
+  Sparkles,
+  ArrowRight
+} from 'lucide-react';
+import { supabase } from '../../shared/services/lib/supabase';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
-import { useSupabaseClients } from '../../shared/hooks/hooks/useSupabaseClients';
-import { EventParticipant } from '../../types/participant';
 import { toast } from 'sonner';
 
 interface DigitalCheckInProps {
   eventId: string;
 }
 
+interface TicketWithOrder {
+  id: string;
+  order_id: string;
+  event_id: string;
+  ticket_number: string;
+  qr_code_hash: string;
+  status: 'valid' | 'used' | 'cancelled';
+  used_at?: string;
+  created_at: string;
+  order?: {
+    id: string;
+    client_name?: string;
+    client_document?: string;
+    client_phone?: string;
+    client_email?: string;
+    batch_name?: string;
+    amount_total?: number;
+    quantity?: number;
+    status?: string;
+  };
+}
+
+/**
+ * Mascara parcialmente o CPF: 123.***.***-45
+ */
+export const maskCpf = (cpf?: string): string => {
+  if (!cpf) return 'Não informado';
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length !== 11) return cpf;
+  return `${digits.slice(0, 3)}.***.***-${digits.slice(9, 11)}`;
+};
+
+/**
+ * Mascara parcialmente o Telefone: (11) 9****-4511
+ */
+export const maskPhone = (phone?: string): string => {
+  if (!phone) return 'Não informado';
+  let digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('55') && digits.length >= 12) {
+    digits = digits.slice(2);
+  }
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 3)}****-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ****-${digits.slice(6)}`;
+  }
+  return phone;
+};
+
 const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
-  const {
-    events,
-    fetchEvents
-  } = useSupabaseEvents();
+  const { events, fetchEvents } = useSupabaseEvents();
   
-  const { clients, fetchClients } = useSupabaseClients();
-  
-  // Simulated data for participants since these properties don't exist in useSupabaseEvents
-  const [participants, setParticipants] = useState<EventParticipant[]>([]);
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedParticipant, setSelectedParticipant] = useState<EventParticipant | null>(null);
+  const [tickets, setTickets] = useState<TicketWithOrder[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'checkin' | 'list' | 'stats'>('checkin');
-  const [qrScannerActive, setQrScannerActive] = useState(false);
-  const [manualCheckIn, setManualCheckIn] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [scannedCode, setScannedCode] = useState('');
+  const [selectedTicket, setSelectedTicket] = useState<TicketWithOrder | null>(null);
+  const [activeTab, setActiveTab] = useState<'scan' | 'list' | 'stats'>('scan');
+  
+  const scannerInputRef = useRef<HTMLInputElement>(null);
 
-  // Simulated functions for participant management
-  const fetchEventParticipants = async (eventId: string) => {
-    // Simulated data - in a real implementation, this would fetch from Supabase
-    setParticipants([]);
-  };
+  // Carregar ingressos reais do evento
+  const loadEventTickets = async () => {
+    if (!eventId) return;
+    setLoading(true);
+    try {
+      // 1. Buscar ingressos do evento
+      const { data: ticketsData, error: ticketsErr } = await supabase
+        .from('app_event_tickets')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
 
-  const checkInParticipant = async (participantId: string) => {
-    // Simulated function - in a real implementation, this would update Supabase
-    setParticipants(prev => prev.map(p => 
-      p.id === participantId 
-        ? { ...p, checked_in_at: new Date().toISOString() }
-        : p
-    ));
-  };
+      if (ticketsErr) throw ticketsErr;
 
-  const undoCheckIn = async (participantId: string) => {
-    // Simulated function - in a real implementation, this would update Supabase
-    setParticipants(prev => prev.map(p => 
-      p.id === participantId 
-        ? { ...p, checked_in_at: undefined }
-        : p
-    ));
+      // 2. Buscar ordens relacionadas para enriquecer com dados do comprador
+      const orderIds = Array.from(new Set((ticketsData || []).map(t => t.order_id).filter(Boolean)));
+      let ordersMap: Record<string, any> = {};
+
+      if (orderIds.length > 0) {
+        const { data: ordersData } = await supabase
+          .from('app_event_orders')
+          .select('id, client_name, client_document, client_phone, client_email, batch_name, amount_total, quantity, status')
+          .in('id', orderIds);
+
+        (ordersData || []).forEach(o => {
+          ordersMap[o.id] = o;
+        });
+      }
+
+      // 3. Montar lista de ingressos enriquecidos
+      const enriched: TicketWithOrder[] = (ticketsData || []).map(t => ({
+        ...t,
+        order: ordersMap[t.order_id] || undefined
+      }));
+
+      setTickets(enriched);
+    } catch (err) {
+      console.error('Erro ao carregar ingressos para check-in:', err);
+      toast.error('Erro ao carregar ingressos do evento');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
   useEffect(() => {
     fetchEvents();
-    fetchClients();
-    fetchEventParticipants(eventId);
+    loadEventTickets();
   }, [eventId]);
 
   const currentEvent = events.find(e => e.id === eventId);
-  const eventParticipants = participants.filter(p => p.event_id === eventId);
-  
-  const filteredParticipants = eventParticipants.filter(participant => {
-    const client = clients.find(c => c.id === participant.client_id);
-    if (!client) return false;
-    
-    const searchLower = searchTerm.toLowerCase();
+
+  // Foco automático no input de leitor de QR Code
+  useEffect(() => {
+    if (activeTab === 'scan' && scannerInputRef.current) {
+      scannerInputRef.current.focus();
+    }
+  }, [activeTab]);
+
+  // Estatísticas
+  const totalTickets = tickets.length;
+  const checkedInTickets = tickets.filter(t => t.status === 'used' || t.used_at).length;
+  const validTickets = tickets.filter(t => t.status === 'valid' && !t.used_at).length;
+  const checkInRate = totalTickets > 0 ? (checkedInTickets / totalTickets) * 100 : 0;
+
+  // Filtragem de busca na lista
+  const filteredTickets = tickets.filter(t => {
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) return true;
+
+    const buyerName = (t.order?.client_name || '').toLowerCase();
+    const buyerPhone = (t.order?.client_phone || '').toLowerCase();
+    const buyerDoc = (t.order?.client_document || '').toLowerCase();
+    const hash = (t.qr_code_hash || '').toLowerCase();
+    const num = (t.ticket_number || '').toLowerCase();
+    const batch = (t.order?.batch_name || '').toLowerCase();
+
     return (
-      client.name.toLowerCase().includes(searchLower) ||
-      client.email.toLowerCase().includes(searchLower) ||
-      client.phone?.toLowerCase().includes(searchLower) ||
-      participant.status.toLowerCase().includes(searchLower)
+      buyerName.includes(term) ||
+      buyerPhone.includes(term) ||
+      buyerDoc.includes(term) ||
+      hash.includes(term) ||
+      num.includes(term) ||
+      batch.includes(term)
     );
   });
 
-  const checkedInCount = eventParticipants.filter(p => p.checked_in_at).length;
-  const confirmedCount = eventParticipants.filter(p => p.status === 'confirmed').length;
-  const pendingCount = eventParticipants.filter(p => p.status === 'pending').length;
-  const checkInRate = eventParticipants.length > 0 ? (checkedInCount / eventParticipants.length) * 100 : 0;
+  // Processar leitura de QR Code / Busca direta
+  const handleProcessScan = (codeToSearch: string) => {
+    const clean = codeToSearch.trim();
+    if (!clean) return;
 
-  const handleCheckIn = async (participantId: string) => {
+    const found = tickets.find(t => 
+      t.qr_code_hash.toLowerCase() === clean.toLowerCase() ||
+      t.id.toLowerCase() === clean.toLowerCase() ||
+      t.ticket_number.toLowerCase() === clean.toLowerCase() ||
+      t.qr_code_hash.toLowerCase().includes(clean.toLowerCase())
+    );
+
+    if (found) {
+      setSelectedTicket(found);
+      setScannedCode('');
+      if (found.status === 'used') {
+        toast.warning('Atenção: Este ingresso já realizou check-in anteriormente!');
+      } else {
+        toast.success('Ingresso identificado com sucesso!');
+      }
+    } else {
+      toast.error(`Nenhum ingresso localizado com o código: ${clean}`);
+    }
+  };
+
+  // Realizar Check-in do Ingresso
+  const handleConfirmCheckIn = async (ticketId: string) => {
     setLoading(true);
+    const nowIso = new Date().toISOString();
     try {
-      await checkInParticipant(participantId);
-      toast.success('Check-in realizado com sucesso!');
-      fetchEventParticipants(eventId);
-      setSelectedParticipant(null);
-    } catch (error) {
-      console.error('Erro no check-in:', error);
-      toast.error('Erro ao realizar check-in');
+      const { error } = await supabase
+        .from('app_event_tickets')
+        .update({
+          status: 'used',
+          used_at: nowIso
+        })
+        .eq('id', ticketId);
+
+      if (error) throw error;
+
+      toast.success('🎉 Check-in confirmado com sucesso! Entrada autorizada!');
+      
+      // Atualizar lista local
+      setTickets(prev => prev.map(t => 
+        t.id === ticketId ? { ...t, status: 'used', used_at: nowIso } : t
+      ));
+
+      if (selectedTicket && selectedTicket.id === ticketId) {
+        setSelectedTicket({ ...selectedTicket, status: 'used', used_at: nowIso });
+      }
+    } catch (err) {
+      console.error('Erro ao confirmar check-in:', err);
+      toast.error('Não foi possível confirmar o check-in');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUndoCheckIn = async (participantId: string) => {
+  // Desfazer Check-in do Ingresso
+  const handleUndoCheckIn = async (ticketId: string) => {
     setLoading(true);
     try {
-      await undoCheckIn(participantId);
-      toast.success('Check-in desfeito com sucesso!');
-      fetchEventParticipants(eventId);
-    } catch (error) {
-      console.error('Erro ao desfazer check-in:', error);
+      const { error } = await supabase
+        .from('app_event_tickets')
+        .update({
+          status: 'valid',
+          used_at: null
+        })
+        .eq('id', ticketId);
+
+      if (error) throw error;
+
+      toast.info('Check-in desfeito. Ingresso revalidado.');
+      
+      // Atualizar lista local
+      setTickets(prev => prev.map(t => 
+        t.id === ticketId ? { ...t, status: 'valid', used_at: undefined } : t
+      ));
+
+      if (selectedTicket && selectedTicket.id === ticketId) {
+        setSelectedTicket({ ...selectedTicket, status: 'valid', used_at: undefined });
+      }
+    } catch (err) {
+      console.error('Erro ao desfazer check-in:', err);
       toast.error('Erro ao desfazer check-in');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleQRScan = (data: string) => {
-    // Assumindo que o QR code contém o ID do participante
-    const participant = eventParticipants.find(p => p.id === data);
-    if (participant) {
-      setSelectedParticipant(participant);
-      setQrScannerActive(false);
-    } else {
-      toast.error('Participante não encontrado');
-    }
-  };
-
-  const getStatusColor = (status: string, checkedIn: boolean) => {
-    if (checkedIn) return 'text-green-600 bg-green-100';
-    
-    switch (status) {
-      case 'confirmed': return 'text-blue-600 bg-blue-100';
-      case 'pending': return 'text-yellow-600 bg-yellow-100';
-      case 'cancelled': return 'text-red-600 bg-red-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
-
-  const getStatusText = (status: string, checkedIn: boolean) => {
-    if (checkedIn) return 'Check-in Realizado';
-    
-    switch (status) {
-      case 'confirmed': return 'Confirmado';
-      case 'pending': return 'Pendente';
-      case 'cancelled': return 'Cancelado';
-      default: return status;
-    }
-  };
-
-  const generateQRCode = (participantId: string) => {
-    // URL para gerar QR code (usando um serviço gratuito)
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${participantId}`;
-  };
-
   return (
-    <div className="bg-white rounded-lg shadow-sm">
-      {/* Header */}
-      <div className="p-6 border-b">
-        <div className="flex items-center justify-between mb-4">
+    <div className="bg-white rounded-3xl shadow-sm border border-gray-200/80 overflow-hidden">
+      {/* Header com Informações do Evento e Ações */}
+      <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white">
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-5">
           <div className="flex items-center gap-3">
-            <UserCheck className="w-6 h-6 text-green-600" />
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <UserCheck className="w-6 h-6" />
+            </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Check-in Digital</h2>
-              {currentEvent && (
-                <p className="text-sm text-gray-600">{currentEvent.title}</p>
-              )}
+              <h2 className="text-xl font-bold">Portaria & Check-in Digital</h2>
+              <p className="text-xs text-slate-300 mt-0.5">
+                {currentEvent?.title || 'Gerenciamento de Entrada'}
+              </p>
             </div>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveTab('checkin')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                activeTab === 'checkin'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              type="button"
+              onClick={() => {
+                setRefreshing(true);
+                loadEventTickets();
+              }}
+              disabled={loading || refreshing}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors cursor-pointer disabled:opacity-50"
+              title="Atualizar lista de ingressos"
             >
-              Check-in
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
-            <button
-              onClick={() => setActiveTab('list')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                activeTab === 'list'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Lista
-            </button>
-            <button
-              onClick={() => setActiveTab('stats')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                activeTab === 'stats'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Estatísticas
-            </button>
+
+            <div className="flex bg-white/10 p-1 rounded-xl border border-white/10">
+              <button
+                type="button"
+                onClick={() => setActiveTab('scan')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'scan'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Leitor QR Code
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('list')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'list'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Lista de Ingressos
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-green-50 p-3 rounded-lg">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <span className="text-sm font-medium text-green-800">Check-ins</span>
+        {/* Estatísticas Rápidas em Cards Modernos */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-2xl border border-white/10">
+            <div className="flex items-center gap-1.5 text-xs text-emerald-300 font-medium">
+              <CheckCircle className="w-4 h-4" />
+              <span>Check-ins Realizados</span>
             </div>
-            <p className="text-2xl font-bold text-green-600">{checkedInCount}</p>
+            <p className="text-2xl font-black text-white mt-1">{checkedInTickets}</p>
           </div>
           
-          <div className="bg-blue-50 p-3 rounded-lg">
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-600" />
-              <span className="text-sm font-medium text-blue-800">Confirmados</span>
+          <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-2xl border border-white/10">
+            <div className="flex items-center gap-1.5 text-xs text-blue-300 font-medium">
+              <Ticket className="w-4 h-4" />
+              <span>Aguardando Entrada</span>
             </div>
-            <p className="text-2xl font-bold text-blue-600">{confirmedCount}</p>
+            <p className="text-2xl font-black text-white mt-1">{validTickets}</p>
           </div>
           
-          <div className="bg-yellow-50 p-3 rounded-lg">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-yellow-600" />
-              <span className="text-sm font-medium text-yellow-800">Pendentes</span>
+          <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-2xl border border-white/10">
+            <div className="flex items-center gap-1.5 text-xs text-amber-300 font-medium">
+              <Users className="w-4 h-4" />
+              <span>Total Emitidos</span>
             </div>
-            <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
+            <p className="text-2xl font-black text-white mt-1">{totalTickets}</p>
           </div>
           
-          <div className="bg-purple-50 p-3 rounded-lg">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-purple-600" />
-              <span className="text-sm font-medium text-purple-800">Taxa</span>
+          <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-2xl border border-white/10">
+            <div className="flex items-center gap-1.5 text-xs text-purple-300 font-medium">
+              <Clock className="w-4 h-4" />
+              <span>Taxa de Presença</span>
             </div>
-            <p className="text-2xl font-bold text-purple-600">{checkInRate.toFixed(1)}%</p>
+            <p className="text-2xl font-black text-white mt-1">{checkInRate.toFixed(1)}%</p>
           </div>
         </div>
       </div>
 
       <div className="p-6">
-        {activeTab === 'checkin' && (
-          <div className="space-y-6">
-            {/* Check-in Methods */}
-            <div className="flex flex-wrap gap-4">
-              <button
-                onClick={() => {
-                  setQrScannerActive(!qrScannerActive);
-                  setManualCheckIn(false);
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  qrScannerActive
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <QrCode className="w-4 h-4" />
-                Scanner QR Code
-              </button>
-              
-              <button
-                onClick={() => {
-                  setManualCheckIn(!manualCheckIn);
-                  setQrScannerActive(false);
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  manualCheckIn
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <Smartphone className="w-4 h-4" />
-                Check-in Manual
-              </button>
-            </div>
+        {/* ABA 1: LEITOR DE QR CODE E VALIDAÇÃO */}
+        {activeTab === 'scan' && (
+          <div className="max-w-2xl mx-auto space-y-6">
+            {/* Input do Scanner de QR Code */}
+            <div className="bg-slate-50 p-6 rounded-3xl border border-gray-200 shadow-2xs text-center space-y-4">
+              <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-2xs">
+                <QrCode className="w-7 h-7" />
+              </div>
 
-            {/* QR Scanner */}
-            {qrScannerActive && (
-              <div className="bg-gray-50 p-6 rounded-lg text-center">
-                <Camera className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Scanner QR Code</h3>
-                <p className="text-gray-600 mb-4">
-                  Posicione o QR code do participante na frente da câmera
-                </p>
-                <div className="bg-white p-4 rounded-lg border-2 border-dashed border-gray-300 max-w-sm mx-auto">
-                  <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
-                    <p className="text-gray-500">Área de escaneamento</p>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-500 mt-2">
-                  Funcionalidade de câmera seria implementada aqui
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Leitor / Scanner de Ingressos</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Posicione o leitor de QR Code ou digite o código do ingresso e pressione Enter
                 </p>
               </div>
-            )}
 
-            {/* Manual Check-in */}
-            {manualCheckIn && (
-              <div className="space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleProcessScan(scannedCode);
+                }}
+                className="flex gap-2 max-w-md mx-auto"
+              >
+                <div className="relative flex-1">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                    <Search className="w-4 h-4" />
+                  </div>
                   <input
+                    ref={scannerInputRef}
                     type="text"
-                    placeholder="Buscar participante por nome, email ou telefone..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    aria-label="Buscar participante por nome, email ou telefone"
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Ex: BN-5BB8A2D1... ou #001"
+                    value={scannedCode}
+                    onChange={(e) => setScannedCode(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-2xl text-sm font-mono font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-2xs"
                   />
                 </div>
+                <button
+                  type="submit"
+                  disabled={!scannedCode.trim()}
+                  className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-2xl transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  Validar
+                </button>
+              </form>
+            </div>
 
-                <div className="grid gap-3 max-h-96 overflow-y-auto">
-                  {filteredParticipants.map(participant => {
-                    const client = clients.find(c => c.id === participant.client_id);
-                    if (!client) return null;
-
-                    return (
-                      <div
-                        key={participant.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                              <span className="text-sm font-medium text-gray-700">
-                                {client.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            
-                            <div>
-                              <h3 className="font-medium text-gray-900">{client.name}</h3>
-                              <p className="text-sm text-gray-600">{client.email}</p>
-                              {client.phone && (
-                                <p className="text-sm text-gray-600">{client.phone}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            getStatusColor(participant.status, !!participant.checked_in_at)
-                          }`}>
-                            {getStatusText(participant.status, !!participant.checked_in_at)}
-                          </span>
-                          
-                          {participant.checked_in_at ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500">
-                                {new Date(participant.checked_in_at).toLocaleString('pt-BR')}
-                              </span>
-                              <button
-                                onClick={() => handleUndoCheckIn(participant.id)}
-                                disabled={loading}
-                                className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Desfazer check-in"
-                                aria-label={`Desfazer check-in de ${client.name}`}
-                              >
-                                <UserX className="w-4 h-4" aria-hidden="true" />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleCheckIn(participant.id)}
-                              disabled={loading || participant.status !== 'confirmed'}
-                              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                              aria-label={`Fazer check-in de ${client.name}`}
-                            >
-                              <UserCheck className="w-4 h-4" aria-hidden="true" />
-                              Check-in
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Selected Participant for QR */}
-            {selectedParticipant && (
-              <div className="bg-blue-50 p-6 rounded-lg">
-                <h3 className="text-lg font-medium text-blue-900 mb-4">Participante Selecionado</h3>
-                {(() => {
-                  const client = clients.find(c => c.id === selectedParticipant.client_id);
-                  return client ? (
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-gray-900">{client.name}</h4>
-                        <p className="text-sm text-gray-600">{client.email}</p>
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-2 ${
-                          getStatusColor(selectedParticipant.status, !!selectedParticipant.checked_in_at)
-                        }`}>
-                          {getStatusText(selectedParticipant.status, !!selectedParticipant.checked_in_at)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        {selectedParticipant.checked_in_at ? (
-                          <div className="text-center">
-                            <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                            <p className="text-sm text-green-600 font-medium">Check-in Realizado</p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(selectedParticipant.checked_in_at).toLocaleString('pt-BR')}
-                            </p>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleCheckIn(selectedParticipant.id)}
-                            disabled={loading || selectedParticipant.status !== 'confirmed'}
-                            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                          >
-                            <UserCheck className="w-5 h-5" />
-                            Confirmar Check-in
-                          </button>
-                        )}
-                      </div>
+            {/* Cartão de Confirmação do Ingresso Escaneado com Mascaramento */}
+            {selectedTicket && (
+              <div className="bg-white border-2 border-indigo-600 rounded-3xl p-6 shadow-xl space-y-5 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+                      <Ticket className="w-5 h-5" />
                     </div>
-                  ) : null;
-                })()}
+                    <div>
+                      <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider block">
+                        Ingresso #{selectedTicket.ticket_number}
+                      </span>
+                      <p className="text-xs text-gray-500">Lote: <strong>{selectedTicket.order?.batch_name || 'Lote Padrão'}</strong></p>
+                    </div>
+                  </div>
+
+                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase flex items-center gap-1 ${
+                    selectedTicket.status === 'used'
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                      : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  }`}>
+                    {selectedTicket.status === 'used' ? (
+                      <>
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        Já Utilizado
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Válido
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                {/* Dados do Comprador com Mascaramento Conforme Solicitado */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-gray-200/80 space-y-3">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+                    Identificação do Comprador para Conferência:
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    {/* Nome Completo */}
+                    <div className="sm:col-span-2 bg-white p-3 rounded-xl border border-gray-200/70">
+                      <p className="text-[11px] text-gray-500 font-semibold uppercase">Nome Completo do Comprador</p>
+                      <p className="text-sm font-extrabold text-gray-900 mt-0.5">
+                        {selectedTicket.order?.client_name || 'Nome não informado'}
+                      </p>
+                    </div>
+
+                    {/* CPF Parcialmente Mascarado */}
+                    <div className="bg-white p-3 rounded-xl border border-gray-200/70">
+                      <p className="text-[11px] text-gray-500 font-semibold uppercase">CPF (Mascarado)</p>
+                      <p className="text-xs font-mono font-bold text-gray-800 mt-0.5">
+                        {maskCpf(selectedTicket.order?.client_document)}
+                      </p>
+                    </div>
+
+                    {/* Telefone Parcialmente Mascarado */}
+                    <div className="bg-white p-3 rounded-xl border border-gray-200/70">
+                      <p className="text-[11px] text-gray-500 font-semibold uppercase">Telefone (WhatsApp Mascarado)</p>
+                      <p className="text-xs font-mono font-bold text-gray-800 mt-0.5">
+                        {maskPhone(selectedTicket.order?.client_phone)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 text-[11px] text-gray-500 flex items-center justify-between border-t border-gray-200/60">
+                    <span className="font-mono text-gray-400 truncate max-w-xs">{selectedTicket.qr_code_hash}</span>
+                    {selectedTicket.used_at && (
+                      <span className="text-amber-800 font-semibold">
+                        Entrada às {new Date(selectedTicket.used_at).toLocaleTimeString('pt-BR')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="flex gap-3 justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTicket(null)}
+                    className="px-4 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl text-xs hover:bg-gray-50 cursor-pointer"
+                  >
+                    Fechar
+                  </button>
+
+                  {selectedTicket.status === 'used' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleUndoCheckIn(selectedTicket.id)}
+                      disabled={loading}
+                      className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <UserX className="w-4 h-4" />
+                      Desfazer Check-in
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmCheckIn(selectedTicket.id)}
+                      disabled={loading}
+                      className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Confirmar Entrada / Check-in
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
         )}
 
+        {/* ABA 2: LISTA DE TODOS OS INGRESSOS DO EVENTO */}
         {activeTab === 'list' && (
           <div className="space-y-4">
-            {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Buscar participante..."
+                placeholder="Buscar por nome do comprador, telefone, CPF ou código do ingresso..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-2 focus:ring-emerald-500 bg-slate-50/50"
               />
             </div>
 
-            {/* Participants Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Participante</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Check-in</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">QR Code</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Ações</th>
+            <div className="overflow-x-auto border border-gray-200 rounded-2xl">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="py-3 px-4">Ingresso / Lote</th>
+                    <th className="py-3 px-4">Comprador</th>
+                    <th className="py-3 px-4">CPF (Mascarado)</th>
+                    <th className="py-3 px-4">Telefone</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Ações</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {filteredParticipants.map(participant => {
-                    const client = clients.find(c => c.id === participant.client_id);
-                    if (!client) return null;
-
+                <tbody className="divide-y divide-gray-100">
+                  {filteredTickets.map(t => {
+                    const isChecked = t.status === 'used' || Boolean(t.used_at);
                     return (
-                      <tr key={participant.id} className="border-b hover:bg-gray-50">
+                      <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                              <span className="text-xs font-medium text-gray-700">
-                                {client.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{client.name}</p>
-                              <p className="text-sm text-gray-600">{client.email}</p>
-                            </div>
-                          </div>
+                          <span className="font-bold text-gray-900 block">#{t.ticket_number}</span>
+                          <span className="text-[11px] text-gray-500">{t.order?.batch_name || 'Lote Padrão'}</span>
                         </td>
-                        
+
+                        <td className="py-3 px-4 font-semibold text-gray-800">
+                          {t.order?.client_name || 'Não informado'}
+                        </td>
+
+                        <td className="py-3 px-4 font-mono text-gray-600">
+                          {maskCpf(t.order?.client_document)}
+                        </td>
+
+                        <td className="py-3 px-4 font-mono text-gray-600">
+                          {maskPhone(t.order?.client_phone)}
+                        </td>
+
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            getStatusColor(participant.status, !!participant.checked_in_at)
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                            isChecked
+                              ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                           }`}>
-                            {getStatusText(participant.status, !!participant.checked_in_at)}
+                            {isChecked ? 'Check-in Realizado' : 'Válido'}
                           </span>
                         </td>
-                        
-                        <td className="py-3 px-4">
-                          {participant.checked_in_at ? (
-                            <div>
-                              <CheckCircle className="w-5 h-5 text-green-600 mb-1" />
-                              <p className="text-xs text-gray-500">
-                                {new Date(participant.checked_in_at).toLocaleString('pt-BR')}
-                              </p>
-                            </div>
+
+                        <td className="py-3 px-4 text-right">
+                          {isChecked ? (
+                            <button
+                              type="button"
+                              onClick={() => handleUndoCheckIn(t.id)}
+                              disabled={loading}
+                              className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="Desfazer check-in"
+                            >
+                              <UserX className="w-4 h-4" />
+                            </button>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmCheckIn(t.id)}
+                              disabled={loading}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              Check-in
+                            </button>
                           )}
-                        </td>
-                        
-                        <td className="py-3 px-4">
-                          <img
-                            src={generateQRCode(participant.id)}
-                            alt="QR Code"
-                            className="w-12 h-12 border rounded"
-                          />
-                        </td>
-                        
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            {participant.checked_in_at ? (
-                              <button
-                                onClick={() => handleUndoCheckIn(participant.id)}
-                                disabled={loading}
-                                className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
-                                title="Desfazer check-in"
-                              >
-                                <UserX className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleCheckIn(participant.id)}
-                                disabled={loading || participant.status !== 'confirmed'}
-                                className="p-1 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
-                                title="Fazer check-in"
-                              >
-                                <UserCheck className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
 
-        {activeTab === 'stats' && (
-          <div className="space-y-6">
-            {/* Overview Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 rounded-lg text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-green-100">Taxa de Check-in</p>
-                    <p className="text-3xl font-bold">{checkInRate.toFixed(1)}%</p>
-                  </div>
-                  <CheckCircle className="w-12 h-12 text-green-200" />
+              {filteredTickets.length === 0 && (
+                <div className="text-center py-10 text-gray-400 space-y-2">
+                  <Ticket className="w-8 h-8 mx-auto text-gray-300" />
+                  <p className="text-xs font-semibold">Nenhum ingresso encontrado</p>
                 </div>
-              </div>
-              
-              <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-lg text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-100">Total de Participantes</p>
-                    <p className="text-3xl font-bold">{participants.length}</p>
-                  </div>
-                  <Users className="w-12 h-12 text-blue-200" />
-                </div>
-              </div>
-              
-              <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-lg text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-purple-100">Check-ins Realizados</p>
-                    <p className="text-3xl font-bold">{checkedInCount}</p>
-                  </div>
-                  <UserCheck className="w-12 h-12 text-purple-200" />
-                </div>
-              </div>
-            </div>
-
-            {/* Detailed Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gray-50 p-6 rounded-lg">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Status dos Participantes</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Confirmados</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full" 
-                          style={{ width: `${participants.length > 0 ? (confirmedCount / participants.length) * 100 : 0}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-sm font-medium">{confirmedCount}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Pendentes</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-yellow-600 h-2 rounded-full" 
-                          style={{ width: `${participants.length > 0 ? (pendingCount / participants.length) * 100 : 0}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-sm font-medium">{pendingCount}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Check-in Feito</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-green-600 h-2 rounded-full" 
-                          style={{ width: `${participants.length > 0 ? (checkedInCount / participants.length) * 100 : 0}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-sm font-medium">{checkedInCount}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 p-6 rounded-lg">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Horários de Check-in</h3>
-                <div className="space-y-2">
-                  {participants
-                    .filter(p => p.checked_in_at)
-                    .sort((a, b) => new Date(b.checked_in_at!).getTime() - new Date(a.checked_in_at!).getTime())
-                    .slice(0, 5)
-                    .map(participant => {
-                      const client = clients.find(c => c.id === participant.client_id);
-                      return client ? (
-                        <div key={participant.id} className="flex items-center justify-between text-sm">
-                          <span className="text-gray-900">{client.name}</span>
-                          <span className="text-gray-600">
-                            {new Date(participant.checked_in_at!).toLocaleTimeString('pt-BR', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </span>
-                        </div>
-                      ) : null;
-                    })}
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}
