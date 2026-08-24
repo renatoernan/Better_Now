@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle, CreditCard, FileText, QrCode, Percent, Upload, Image as ImageIcon, UserCheck, ClipboardList, CheckSquare, GripVertical, ArrowUp, ArrowDown, MessageSquare, Copy, Check, Sparkles, RefreshCw, Ticket } from 'lucide-react';
+import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle, CreditCard, FileText, QrCode, Percent, Upload, Image as ImageIcon, UserCheck, ClipboardList, CheckSquare, GripVertical, ArrowUp, ArrowDown, MessageSquare, Copy, Check, Sparkles, RefreshCw, Ticket, Send } from 'lucide-react';
 import { Event, PriceBatch, PaymentMethodFee, CheckoutFieldConfig } from '../../shared/types/types/event';
 import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEventTypes';
 import ImageUpload from '../shared/ImageUpload';
 import VideoUpload from '../shared/VideoUpload';
+import EventWahaTestModal from '../shared/EventWahaTestModal';
 import { toast } from 'sonner';
 import { PhoneInput } from '../ui/PhoneInput';
 
@@ -110,6 +111,7 @@ const EventForm: React.FC<EventFormProps> = ({
   const [checkoutFields, setCheckoutFields] = useState<CheckoutFieldConfig[]>(DEFAULT_CHECKOUT_FIELDS);
   const [draggedFieldIndex, setDraggedFieldIndex] = useState<number | null>(null);
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
+  const [showWahaTestModal, setShowWahaTestModal] = useState(false);
 
   useEffect(() => {
     if (event) {
@@ -1778,18 +1780,28 @@ const EventForm: React.FC<EventFormProps> = ({
             {activeTab === 'whatsapp' && (
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-2xs space-y-5">
-                  <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                      <MessageSquare className="w-5 h-5" />
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-4 flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                        <MessageSquare className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">
+                          Comunicação WhatsApp (WAHA) dos Ingressos
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                          Personalize as mensagens automáticas enviadas aos compradores deste evento
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-base font-bold text-gray-900">
-                        Comunicação WhatsApp (WAHA) dos Ingressos
-                      </h3>
-                      <p className="text-xs text-gray-500">
-                        Personalize as mensagens automáticas enviadas aos compradores deste evento
-                      </p>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowWahaTestModal(true)}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs hover:shadow-md transition-all cursor-pointer select-none"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      Testar Envio de Mensagem
+                    </button>
                   </div>
 
                   {/* Card de Tags Dinâmicas */}
@@ -1940,6 +1952,20 @@ const EventForm: React.FC<EventFormProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Modal de Teste de Envio de Mensagem WhatsApp */}
+      {showWahaTestModal && (
+        <EventWahaTestModal
+          isOpen={showWahaTestModal}
+          onClose={() => setShowWahaTestModal(false)}
+          eventTitle={watch('title')}
+          eventDate={watch('event_date')}
+          eventLocation={watch('location')}
+          wahaMsgCreated={watch('waha_msg_order_created')}
+          wahaMsgConfirmed={watch('waha_msg_order_confirmed')}
+          wahaMsgCancelled={watch('waha_msg_order_cancelled')}
+        />
+      )}
     </div>
   );
 };

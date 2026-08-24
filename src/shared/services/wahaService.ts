@@ -108,7 +108,16 @@ export const checkWahaSession = async (
     clearTimeout(timeoutId);
 
     if (response.ok) {
-      const data = await response.json();
+      let data: any = {};
+      try {
+        const textData = await response.text();
+        if (textData && textData.trim() !== '') {
+          data = JSON.parse(textData);
+        }
+      } catch {
+        // Ignora erro se for texto puro
+      }
+
       const status = (data.status || data.engine?.status || 'WORKING').toUpperCase();
       
       const isConnected = ['WORKING', 'CONNECTED', 'SCAN_QR_CODE', 'STARTING'].includes(status);
@@ -207,14 +216,28 @@ export const sendWahaTextMessage = async ({
     clearTimeout(timeoutId);
 
     if (response.ok) {
-      const data = await response.json();
+      let data: any = null;
+      try {
+        const textData = await response.text();
+        if (textData && textData.trim() !== '') {
+          data = JSON.parse(textData);
+        }
+      } catch {
+        // Se a resposta for vazia ou texto plano, o envio ainda foi bem sucedido (HTTP 2xx)
+      }
+
       return {
         success: true,
         message: 'Mensagem enviada com sucesso!',
         data,
       };
     } else {
-      const errorText = await response.text();
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {
+        errorText = response.statusText;
+      }
       return {
         success: false,
         message: `Falha no envio (HTTP ${response.status}): ${errorText || response.statusText}`,
