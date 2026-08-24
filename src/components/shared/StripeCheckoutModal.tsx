@@ -12,6 +12,8 @@ interface StripeCheckoutModalProps {
   paymentMethod?: string;
   paymentMethodLabel?: string;
   feePercentage?: number;
+  appliedCoupon?: any;
+  discountAmount?: number;
   clientName?: string;
   clientPhone?: string;
   clientEmail?: string;
@@ -31,6 +33,8 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
   paymentMethod,
   paymentMethodLabel,
   feePercentage = 0,
+  appliedCoupon,
+  discountAmount = 0,
   clientName,
   clientPhone,
   clientEmail,
@@ -42,8 +46,10 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
   if (!isOpen) return null;
 
   const subtotal = unitPrice * quantity;
-  const feeAmount = subtotal * (feePercentage / 100);
-  const totalPrice = subtotal + feeAmount;
+  const discount = discountAmount || (appliedCoupon?.discount_applied ?? 0);
+  const subtotalAfterDiscount = Math.max(0, subtotal - discount);
+  const feeAmount = subtotalAfterDiscount * (feePercentage / 100);
+  const totalPrice = subtotalAfterDiscount + feeAmount;
 
   const getMethodIcon = () => {
     if (paymentMethod === 'boleto') return <FileText className="w-4 h-4 text-indigo-600" />;
@@ -201,6 +207,14 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
                 <span>Subtotal ({quantity}x {formatPrice(unitPrice)})</span>
                 <span className="font-medium text-gray-900">{formatPrice(subtotal)}</span>
               </div>
+              {discount > 0 && (
+                <div className="flex justify-between items-center text-emerald-700 font-semibold bg-emerald-50 px-2 py-1 rounded-lg">
+                  <span className="flex items-center gap-1">
+                    🏷️ Desconto do Cupom {appliedCoupon?.code ? `(${appliedCoupon.code})` : ''}
+                  </span>
+                  <span>-{formatPrice(discount)}</span>
+                </div>
+              )}
               {feeAmount > 0 && (
                 <div className="flex justify-between items-center text-amber-700">
                   <span>Taxa de conveniência ({feePercentage}%)</span>

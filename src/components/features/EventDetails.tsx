@@ -933,6 +933,8 @@ const EventDetails: React.FC = () => {
         paymentMethod={selectedPaymentMethod}
         paymentMethodLabel={getPaymentMethodLabel(selectedPaymentMethod)}
         feePercentage={currentFeePercentage}
+        appliedCoupon={appliedCoupon}
+        discountAmount={currentDiscountAmount}
         clientName={currentClientName}
         clientPhone={currentPhone}
         clientEmail={currentClientEmail}
@@ -951,6 +953,8 @@ const EventDetails: React.FC = () => {
         unitPrice={currentUnitPrice}
         quantity={quantity}
         feePercentage={currentFeePercentage}
+        appliedCoupon={appliedCoupon}
+        discountAmount={currentDiscountAmount}
         qrCodeUrl={pixChaveConfig?.qr_code_url}
         pixKey={pixChaveConfig?.pix_key}
         clientName={currentClientName}
