@@ -178,6 +178,7 @@ export const createMercadoPagoCheckout = async (
       const { data: updatedOrder, error: updateErr } = await supabase
         .from('app_event_orders')
         .update({
+          client_id: params.client_id || null,
           client_name: params.client_name || '',
           client_email: params.client_email || '',
           client_phone: params.client_phone || '',
@@ -236,15 +237,6 @@ export const createMercadoPagoCheckout = async (
       }
       order = newOrder;
       orderId = newOrder?.id;
-
-      if (orderId && newOrder) {
-        // Disparar notificações de Pedido Criado (WhatsApp + E-mail)
-        sendOrderNotifications({
-          type: 'created',
-          orderId: orderId,
-          orderData: newOrder,
-        }).catch(() => {});
-      }
     }
 
     // 2. Fallback direto usando o token configurado no ambiente (.env com prefixo VITE_)
@@ -347,6 +339,8 @@ export const createMercadoPagoCheckout = async (
       };
     }
 
+    const checkoutUrl = mpData.init_point || mpData.sandbox_init_point;
+
     // Salvar preference ID no pedido
     if (order?.id && mpData.id) {
       await supabase
@@ -357,15 +351,13 @@ export const createMercadoPagoCheckout = async (
         })
         .eq('id', order.id);
 
-      // Disparar notificações automáticas de Pedido Criado (WhatsApp + E-mail)
+      // Disparar notificações automáticas de Pedido Criado (WhatsApp + E-mail) com link de pagamento
       sendOrderNotifications({
         type: 'created',
         orderId: order.id,
-        orderData: { ...order, stripe_session_id: mpData.id },
+        orderData: { ...order, stripe_session_id: mpData.id, payment_url: checkoutUrl },
       }).catch(() => {});
     }
-
-    const checkoutUrl = mpData.init_point || mpData.sandbox_init_point;
 
     return {
       checkoutUrl,
@@ -388,13 +380,17 @@ export const checkMercadoPagoPaymentStatus = async (
       (import.meta as any).env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
       (import.meta as any).env.MERCADOPAGO_ACCESS_TOKEN;
 
-    if (!accessToken || !orderId) return { paid: false, status: 'missing_token' };
+    if (!accessToken || !orderId || typeof orderId !== 'string' || orderId.trim() === '') {
+      return { paid: false, status: 'missing_token_or_order' };
+    }
+
+    const cleanOrderId = orderId.trim();
 
     // 1. Primeiro verificar se o pedido já foi marcado como pago no Supabase
     const { data: currentOrder } = await supabase
       .from('app_event_orders')
       .select('*')
-      .eq('id', orderId)
+      .eq('id', cleanOrderId)
       .maybeSingle();
 
     if (currentOrder && (currentOrder.status === 'paid' || currentOrder.status === 'approved')) {
@@ -402,7 +398,7 @@ export const checkMercadoPagoPaymentStatus = async (
     }
 
     // 2. Consultar pagamentos por external_reference na API do Mercado Pago
-    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${orderId}`, {
+    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(cleanOrderId)}&sort=date_created&criteria=desc`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -411,9 +407,17 @@ export const checkMercadoPagoPaymentStatus = async (
     if (!mpRes.ok) return { paid: false, status: 'api_error' };
 
     const mpData = await mpRes.json();
-    const paymentsList = mpData.results || [];
-    const approvedPayment = paymentsList.find((p: any) => p.status === 'approved');
-    const latestPayment = paymentsList[0];
+    const paymentsList: any[] = Array.isArray(mpData.results) ? mpData.results : [];
+
+    // Validar estritamente que o pagamento retornado tem o external_reference idêntico ao orderId
+    const matchingPayments = paymentsList.filter((p: any) => 
+      p && String(p.external_reference || '').trim() === cleanOrderId
+    );
+
+    const approvedPayment = matchingPayments.find((p: any) => 
+      p.status === 'approved' || p.status_detail === 'accredited'
+    );
+    const latestPayment = matchingPayments[0] || paymentsList[0];
 
     if (approvedPayment && currentOrder) {
       const paymentId = String(approvedPayment.id);
@@ -425,13 +429,13 @@ export const checkMercadoPagoPaymentStatus = async (
           status: 'paid',
           updated_at: new Date().toISOString(),
         })
-        .eq('id', orderId);
+        .eq('id', cleanOrderId);
 
       // Gerar ingressos na tabela app_event_tickets se ainda não existirem
       const { data: existingTickets } = await supabase
         .from('app_event_tickets')
         .select('id')
-        .eq('order_id', orderId);
+        .eq('order_id', cleanOrderId);
 
       if (!existingTickets || existingTickets.length === 0) {
         const qty = currentOrder.quantity || 1;
@@ -441,7 +445,7 @@ export const checkMercadoPagoPaymentStatus = async (
           const qrHash = `MP-${paymentId.slice(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
 
           ticketsToInsert.push({
-            order_id: orderId,
+            order_id: cleanOrderId,
             event_id: currentOrder.event_id,
             client_id: currentOrder.client_id || null,
             ticket_number: i + 1,
@@ -462,7 +466,7 @@ export const checkMercadoPagoPaymentStatus = async (
             couponId: currentOrder.coupon_id || '',
             code: currentOrder.coupon_code || '',
             eventId: currentOrder.event_id,
-            orderId: orderId,
+            orderId: cleanOrderId,
             batchIndex: currentOrder.batch_index || 0,
             originalAmount: Number(currentOrder.amount_total || 0) + Number(currentOrder.discount_amount || 0),
             clientName: currentOrder.client_name || undefined,
@@ -478,7 +482,7 @@ export const checkMercadoPagoPaymentStatus = async (
       // Disparar notificações automáticas de Pagamento Confirmado (WhatsApp + E-mail)
       sendOrderNotifications({
         type: 'confirmed',
-        orderId: orderId,
+        orderId: cleanOrderId,
         orderData: { ...currentOrder, status: 'paid' },
       }).catch(() => {});
 

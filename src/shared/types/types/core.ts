@@ -89,6 +89,7 @@ export interface Client extends BaseEntity {
   validated?: boolean;
   is_active: boolean;
   ativo?: boolean;
+  tipo?: string;
 }
 
 // Purchase related types

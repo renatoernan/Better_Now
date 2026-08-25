@@ -21,6 +21,7 @@ interface StripeCheckoutModalProps {
   loading: boolean;
   errorMessage?: string | null;
   awaitingPayment?: boolean;
+  checkoutUrl?: string | null;
 }
 
 const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
@@ -42,6 +43,7 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
   loading,
   errorMessage,
   awaitingPayment = false,
+  checkoutUrl,
 }) => {
   if (!isOpen) return null;
 
@@ -77,7 +79,7 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-white">Aguardando Pagamento</h2>
-                <p className="text-xs text-amber-100">Complete o pagamento na aba do Mercado Pago</p>
+                <p className="text-xs text-amber-100">Complete o pagamento na tela do Mercado Pago</p>
               </div>
             </div>
           </div>
@@ -85,27 +87,37 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
           {/* Body */}
           <div className="p-6 space-y-5">
             {/* Animação de Aguardando */}
-            <div className="text-center py-6 space-y-4">
-              <div className="relative mx-auto w-20 h-20">
+            <div className="text-center py-4 space-y-3">
+              <div className="relative mx-auto w-16 h-16">
                 <div className="absolute inset-0 rounded-full border-4 border-amber-200 animate-ping opacity-30"></div>
                 <div className="absolute inset-0 rounded-full border-4 border-amber-100"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/30">
-                    <CreditCard className="w-6 h-6 text-white" />
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/30">
+                    <CreditCard className="w-5 h-5 text-white" />
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <h3 className="text-lg font-bold text-gray-900">Pagamento em andamento</h3>
-                <p className="text-sm text-gray-600 max-w-xs mx-auto">
-                  Complete o pagamento na aba do <span className="font-semibold text-blue-600">Mercado Pago</span> que foi aberta.
-                </p>
-                <p className="text-xs text-gray-500">
-                  Esta tela será atualizada automaticamente quando o pagamento for confirmado.
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-gray-900">Pagamento em andamento</h3>
+                <p className="text-xs text-gray-600 max-w-xs mx-auto">
+                  Complete o pagamento no <span className="font-semibold text-blue-600">Mercado Pago</span>.
                 </p>
               </div>
             </div>
+
+            {/* Botão de Ação Direta para Abrir a Tela de Pagamento */}
+            {checkoutUrl && (
+              <a
+                href={checkoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full px-4 py-3.5 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-xl shadow-md shadow-blue-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer text-center no-underline"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Abrir Tela de Pagamento do Mercado Pago</span>
+              </a>
+            )}
 
             {/* Resumo do Pedido Compacto */}
             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200/80 space-y-2 text-sm">
@@ -121,21 +133,10 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
               </div>
             </div>
 
-            {/* Dica */}
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2.5 text-xs text-blue-800">
-              <ExternalLink className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold">Não encontrou a aba do Mercado Pago?</p>
-                <p className="mt-0.5 text-blue-700">
-                  Verifique se o navegador bloqueou pop-ups. Caso tenha fechado a aba sem querer, clique em "Cancelar" e refaça o processo.
-                </p>
-              </div>
-            </div>
-
             {/* Indicador Visual de Polling */}
             <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
-              <span>Verificando status do pagamento...</span>
+              <span>Verificando confirmação automaticamente...</span>
             </div>
           </div>
 

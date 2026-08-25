@@ -20,6 +20,7 @@ interface PaymentProofUploadModalProps {
   clientPhone?: string;
   clientEmail?: string;
   clientDocument?: string;
+  clientId?: string;
   onSuccess: () => void;
 }
 
@@ -39,6 +40,7 @@ const PaymentProofUploadModal: React.FC<PaymentProofUploadModalProps> = ({
   clientPhone = '',
   clientEmail = '',
   clientDocument = '',
+  clientId,
   onSuccess,
 }) => {
   const [file, setFile] = useState<File | null>(null);
@@ -101,6 +103,7 @@ const PaymentProofUploadModal: React.FC<PaymentProofUploadModalProps> = ({
       // 2. Registrar pedido no banco de dados com status 'pending_proof'
       const orderRes = await createPixChaveOrder({
         event_id: eventId,
+        client_id: clientId || undefined,
         batch_index: batchIndex,
         batch_name: batchName,
         quantity: quantity,

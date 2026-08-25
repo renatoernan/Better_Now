@@ -10,12 +10,12 @@ import EventEmailTestModal from '../shared/EventEmailTestModal';
 import { toast } from 'sonner';
 import { PhoneInput } from '../ui/PhoneInput';
 
-const DEFAULT_WAHA_MSG_CREATED = 'Olá, {cliente}! Recebemos seu pedido #{numero_pedido} para o evento *{evento}*.\n\n💰 *Total:* {total}\n⏳ *Status:* Aguardando Pagamento\n\nAssim que o pagamento for confirmado, você receberá seus ingressos por aqui!';
+const DEFAULT_WAHA_MSG_CREATED = 'Olá, {cliente}! Recebemos seu pedido #{numero_pedido} para o evento *{evento}*.\n\n💰 *Total:* {total}\n⏳ *Status:* Aguardando Pagamento\n\n💳 *Link para Pagamento:* {link_pagamento}\n\nAssim que o pagamento for confirmado, você receberá seus ingressos por aqui!';
 const DEFAULT_WAHA_MSG_CONFIRMED = '🎉 Parabéns, {cliente}! Seu pagamento para o evento *{evento}* foi confirmado com sucesso!\n\n🎟️ *Quantidade de Ingressos:* {quantidade}\n📅 *Data:* {data_evento}\n📍 *Local:* {local_evento}\n\nVocê pode acessar seus ingressos a qualquer momento através do link: {link_acesso}';
 const DEFAULT_WAHA_MSG_CANCELLED = 'Olá, {cliente}. Informamos que seu pedido #{numero_pedido} para o evento *{evento}* foi cancelado.\n\nSe você tiver alguma dúvida, entre em contato conosco.';
 
 const DEFAULT_EMAIL_MSG_CREATED_SUBJECT = 'Pedido Recebido #{numero_pedido} - {evento}';
-const DEFAULT_EMAIL_MSG_CREATED_BODY = 'Olá, {cliente}!\n\nRecebemos o seu pedido #{numero_pedido} para o evento {evento}.\n\nValor Total: {total}\nQuantidade de Ingressos: {quantidade}\n\nAssim que o pagamento for confirmado, você receberá seus ingressos com QR Code por aqui!';
+const DEFAULT_EMAIL_MSG_CREATED_BODY = 'Olá, {cliente}!\n\nRecebemos o seu pedido #{numero_pedido} para o evento {evento}.\n\nValor Total: {total}\nQuantidade de Ingressos: {quantidade}\n\nPara efetuar ou concluir o pagamento, acesse o link abaixo:\n{link_pagamento}\n\nAssim que o pagamento for confirmado, você receberá seus ingressos com QR Code por aqui!';
 
 const DEFAULT_EMAIL_MSG_CONFIRMED_SUBJECT = '🎉 Ingressos Confirmados! Pedido #{numero_pedido} - {evento}';
 const DEFAULT_EMAIL_MSG_CONFIRMED_BODY = 'Parabéns, {cliente}!\n\nSeu pagamento para o evento {evento} foi confirmado com sucesso!\n\nDetalhes do Evento:\n- Data: {data_evento}\n- Local: {local_evento}\n- Quantidade de Ingressos: {quantidade}\n\nVocê pode visualizar seus ingressos e QR Codes no link abaixo:\n{link_acesso}';
@@ -1921,6 +1921,7 @@ const EventForm: React.FC<EventFormProps> = ({
                         '{data_evento}',
                         '{local_evento}',
                         '{numero_pedido}',
+                        '{link_pagamento}',
                         '{link_acesso}'
                       ].map((tag) => (
                         <button
@@ -2079,6 +2080,7 @@ const EventForm: React.FC<EventFormProps> = ({
                         '{data_evento}',
                         '{local_evento}',
                         '{numero_pedido}',
+                        '{link_pagamento}',
                         '{link_acesso}'
                       ].map((tag) => (
                         <button

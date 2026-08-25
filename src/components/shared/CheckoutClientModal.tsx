@@ -37,7 +37,7 @@ export interface CheckoutClientData {
 interface CheckoutClientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (buyerData: CheckoutClientData, attendeesData: CheckoutClientData[]) => void;
+  onSubmit: (buyerData: CheckoutClientData, attendeesData: CheckoutClientData[], buyerPersonId?: string | null) => void;
   checkoutFields?: CheckoutFieldConfig[];
   quantity?: number;
   initialPhone?: string;
@@ -540,74 +540,140 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
     }
 
     try {
+      let buyerPersonId: string | null = null;
+
       // Salvar ou atualizar todos os participantes na tabela app_people
-      for (const att of attendees) {
-        const cleanPhone = att.whatsapp.replace(/\D/g, '');
+      for (let i = 0; i < attendees.length; i++) {
+        const att = attendees[i];
+        const cleanPhone = (att.whatsapp || att.telefone || '').replace(/\D/g, '');
         const docVal = att.documento || att.cpf || '';
         const cleanDoc = docVal ? docVal.replace(/\D/g, '') : null;
         const obsVal = att.observacoes || att.notes || '';
+        const formattedNotes = att.is_foreign 
+          ? `[Estrangeiro: ${att.foreign_document || 'Sim'}] ${obsVal}`.trim()
+          : obsVal.trim() || null;
 
+        let existingPersonId: string | null = null;
+
+        // 1. Tentar encontrar por documento (CPF)
+        if (cleanDoc) {
+          const { data: byDoc } = await supabase
+            .from('app_people')
+            .select('id')
+            .or(`documento.eq.${cleanDoc},documento.eq.${docVal}`)
+            .limit(1)
+            .maybeSingle();
+          if (byDoc?.id) existingPersonId = byDoc.id;
+        }
+
+        // 2. Se não encontrou, tentar por WhatsApp/Telefone
+        if (!existingPersonId && cleanPhone) {
+          const { data: byPhone } = await supabase
+            .from('app_people')
+            .select('id')
+            .or(`whatsapp.eq.${att.whatsapp},whatsapp.eq.${cleanPhone},whatsapp.eq.+55${cleanPhone},telefone.eq.${cleanPhone}`)
+            .limit(1)
+            .maybeSingle();
+          if (byPhone?.id) existingPersonId = byPhone.id;
+        }
+
+        // 3. Montar payload completo com todos os dados capturados no formulário
         const personPayload: any = {
           nome: att.nome.trim(),
-          whatsapp: att.whatsapp.trim(),
+          whatsapp: att.whatsapp?.trim() || cleanPhone,
           telefone: att.telefone?.trim() || null,
           email: att.email?.trim() || null,
-          documento: att.is_foreign ? null : cleanDoc,
+          documento: att.is_foreign ? null : cleanDoc || docVal || null,
           apelido: att.apelido?.trim() || null,
           data_nascimento: att.data_nascimento || null,
           profissao: att.profissao?.trim() || null,
           empresa: att.empresa?.trim() || null,
           cep: att.cep?.trim() || null,
           logradouro: att.logradouro?.trim() || null,
-          endereco: att.logradouro?.trim() || null,
           numero: att.numero?.trim() || null,
           complemento: att.complemento?.trim() || null,
           bairro: att.bairro?.trim() || null,
           cidade: att.cidade?.trim() || null,
           uf: att.uf?.trim() || null,
-          estado: att.uf?.trim() || null,
-          observacoes: att.is_foreign 
-            ? `[Estrangeiro: ${att.foreign_document || 'Sim'}] ${obsVal}`.trim()
-            : obsVal.trim() || null,
-          notes: att.is_foreign 
-            ? `[Estrangeiro: ${att.foreign_document || 'Sim'}] ${obsVal}`.trim()
-            : obsVal.trim() || null,
+          notes: formattedNotes,
+          observacoes: formattedNotes,
+          validated: true,
           is_active: true,
-          ativo: true
+          updated_at: new Date().toISOString(),
         };
 
-        let existingPersonId: string | null = null;
-
-        if (cleanDoc) {
-          const { data: byDoc } = await supabase
-            .from('app_people')
-            .select('id')
-            .or(`documento.eq.${cleanDoc},documento.eq.${docVal}`)
-            .maybeSingle();
-          if (byDoc) existingPersonId = byDoc.id;
-        }
-
-        if (!existingPersonId && cleanPhone) {
-          const { data: byPhone } = await supabase
-            .from('app_people')
-            .select('id')
-            .or(`whatsapp.eq.${att.whatsapp},whatsapp.eq.${cleanPhone},whatsapp.eq.+55${cleanPhone}`)
-            .maybeSingle();
-          if (byPhone) existingPersonId = byPhone.id;
-        }
+        let savedId = existingPersonId;
 
         if (existingPersonId) {
-          await supabase.from('app_people').update(personPayload).eq('id', existingPersonId);
+          const { data: updated, error: updateErr } = await supabase
+            .from('app_people')
+            .update(personPayload)
+            .eq('id', existingPersonId)
+            .select('id')
+            .maybeSingle();
+
+          if (!updateErr && updated?.id) {
+            savedId = updated.id;
+          } else if (updateErr) {
+            console.warn('Tentativa com payload simplificado de update em app_people:', updateErr.message);
+            const { data: simpleUpdated } = await supabase
+              .from('app_people')
+              .update({
+                nome: att.nome.trim(),
+                whatsapp: att.whatsapp?.trim() || cleanPhone,
+                email: att.email?.trim() || null,
+                documento: att.is_foreign ? null : cleanDoc || docVal,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existingPersonId)
+              .select('id')
+              .maybeSingle();
+            if (simpleUpdated?.id) savedId = simpleUpdated.id;
+          }
         } else {
-          await supabase.from('app_people').insert({ ...personPayload, validated: false });
+          const insertPayload = {
+            ...personPayload,
+            created_at: new Date().toISOString(),
+          };
+
+          const { data: inserted, error: insertErr } = await supabase
+            .from('app_people')
+            .insert(insertPayload)
+            .select('id')
+            .maybeSingle();
+
+          if (!insertErr && inserted?.id) {
+            savedId = inserted.id;
+          } else if (insertErr) {
+            console.warn('Tentativa com payload simplificado de insert em app_people:', insertErr.message);
+            const { data: simpleInserted } = await supabase
+              .from('app_people')
+              .insert({
+                nome: att.nome.trim(),
+                whatsapp: att.whatsapp?.trim() || cleanPhone,
+                email: att.email?.trim() || null,
+                documento: att.is_foreign ? null : cleanDoc || docVal,
+                validated: true,
+                is_active: true,
+                created_at: new Date().toISOString(),
+              })
+              .select('id')
+              .maybeSingle();
+
+            if (simpleInserted?.id) savedId = simpleInserted.id;
+          }
+        }
+
+        if (i === 0) {
+          buyerPersonId = savedId;
         }
       }
 
-      // Prosseguir com o checkout passando comprador e participantes
-      onSubmit(attendees[0], attendees);
+      // Prosseguir com o checkout passando comprador, participantes e id da pessoa na app_people
+      onSubmit(attendees[0], attendees, buyerPersonId);
     } catch (err) {
-      console.error('Erro ao salvar dados dos participantes:', err);
-      onSubmit(attendees[0], attendees);
+      console.error('Erro ao salvar dados dos participantes na tabela app_people:', err);
+      onSubmit(attendees[0], attendees, null);
     }
   };
 

@@ -47,7 +47,9 @@ export interface EventOrder {
   convenience_fee?: number;
   convenience_fee_percentage?: number;
   payment_proof_url?: string;
-  status: 'pending' | 'paid' | 'canceled' | 'failed' | 'pending_proof';
+  payment_url?: string;
+  checkout_url?: string;
+  status: 'pending' | 'paid' | 'canceled' | 'failed' | 'pending_proof' | 'approved' | string;
   created_at: string;
 }
 
@@ -168,7 +170,7 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
       return tickets as EventTicket[];
     }
 
-    // 2. Se ainda não existirem tickets, busca a ordem e gera automaticamente os ingressos
+    // 2. Se ainda não existirem tickets, busca a ordem e gera automaticamente os ingressos APENAS se estiver paga/aprovada
     let order = orderFallbackData;
     if (!order) {
       const { data: ord } = await supabase
@@ -179,7 +181,7 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
       order = ord as EventOrder;
     }
 
-    if (order) {
+    if (order && (order.status === 'paid' || order.status === 'approved')) {
       const qty = order.quantity || 1;
       const ticketsToInsert: any[] = [];
 

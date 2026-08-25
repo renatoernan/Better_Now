@@ -17,7 +17,7 @@ export interface SendOrderNotificationParams {
 }
 
 const DEFAULT_WAHA_TEMPLATES = {
-  created: 'Olá, {cliente}! Recebemos seu pedido #{numero_pedido} para o evento *{evento}*.\n\n💰 *Total:* {total}\n⏳ *Status:* Aguardando Pagamento\n\nAssim que o pagamento for confirmado, você receberá seus ingressos por aqui!',
+  created: 'Olá, {cliente}! Recebemos seu pedido #{numero_pedido} para o evento *{evento}*.\n\n💰 *Total:* {total}\n⏳ *Status:* Aguardando Pagamento\n\n💳 *Link para Pagamento:* {link_pagamento}\n\nAssim que o pagamento for confirmado, você receberá seus ingressos por aqui!',
   confirmed: '🎉 Parabéns, {cliente}! Seu pagamento para o evento *{evento}* foi confirmado com sucesso!\n\n🎟️ *Quantidade de Ingressos:* {quantidade}\n📅 *Data:* {data_evento}\n📍 *Local:* {local_evento}\n\nVocê pode acessar seus ingressos a qualquer momento através do link: {link_acesso}',
   cancelled: 'Olá, {cliente}. Informamos que seu pedido #{numero_pedido} para o evento *{evento}* foi cancelado.\n\nSe você tiver alguma dúvida, entre em contato conosco.',
 };
@@ -25,7 +25,7 @@ const DEFAULT_WAHA_TEMPLATES = {
 const DEFAULT_EMAIL_TEMPLATES = {
   created: {
     subject: 'Pedido Recebido #{numero_pedido} - {evento}',
-    body: 'Olá, {cliente}!\n\nRecebemos o seu pedido #{numero_pedido} para o evento {evento}.\n\nValor Total: {total}\nQuantidade de Ingressos: {quantidade}\n\nAssim que o pagamento for confirmado, você receberá seus ingressos com QR Code por aqui!',
+    body: 'Olá, {cliente}!\n\nRecebemos o seu pedido #{numero_pedido} para o evento {evento}.\n\nValor Total: {total}\nQuantidade de Ingressos: {quantidade}\n\nPara efetuar ou concluir o pagamento, acesse o link abaixo:\n{link_pagamento}\n\nAssim que o pagamento for confirmado, você receberá seus ingressos com QR Code por aqui!',
   },
   confirmed: {
     subject: '🎉 Ingressos Confirmados! Pedido #{numero_pedido} - {evento}',
@@ -188,9 +188,10 @@ export const generateEmailHtml = (params: {
   eventDate: string;
   eventLocation: string;
   accessLink: string;
+  paymentLink?: string;
   contentBody: string;
 }): string => {
-  const { type, clientName, orderNumber, eventTitle, total, quantity, eventDate, eventLocation, accessLink, contentBody } = params;
+  const { type, clientName, orderNumber, eventTitle, total, quantity, eventDate, eventLocation, accessLink, paymentLink, contentBody } = params;
 
   let statusBadge = {
     text: 'Aguardando Pagamento',
@@ -199,10 +200,21 @@ export const generateEmailHtml = (params: {
     borderColor: '#fde68a',
   };
 
-  let actionButtonText = 'Acompanhar Pedido';
+  let actionButtonText = '💳 Efetuar Pagamento no Mercado Pago';
   let headerColor = '#0284c7';
+  let targetLink = paymentLink || accessLink;
 
-  if (type === 'confirmed') {
+  if (type === 'created') {
+    statusBadge = {
+      text: 'Aguardando Pagamento',
+      bg: '#fef3c7',
+      color: '#92400e',
+      borderColor: '#fde68a',
+    };
+    actionButtonText = '💳 Efetuar Pagamento no Mercado Pago';
+    headerColor = '#0284c7';
+    targetLink = paymentLink || accessLink;
+  } else if (type === 'confirmed') {
     statusBadge = {
       text: 'Pagamento Confirmado',
       bg: '#dcfce7',
@@ -211,6 +223,7 @@ export const generateEmailHtml = (params: {
     };
     actionButtonText = '🎟️ Visualizar Ingressos e QR Code';
     headerColor = '#059669';
+    targetLink = accessLink;
   } else if (type === 'cancelled') {
     statusBadge = {
       text: 'Pedido Cancelado',
@@ -220,6 +233,7 @@ export const generateEmailHtml = (params: {
     };
     actionButtonText = 'Ver Outros Eventos';
     headerColor = '#dc2626';
+    targetLink = accessLink;
   }
 
   const formatTextToHtml = (text: string) => {
@@ -236,10 +250,10 @@ export const generateEmailHtml = (params: {
     .map(p => `<p style="margin: 0 0 12px 0; color: #334155; line-height: 1.6; font-size: 14px;">${formatTextToHtml(p)}</p>`)
     .join('');
 
-  const isLocalhost = accessLink.includes('localhost') || accessLink.includes('127.0.0.1');
-  const safeAccessLink = isLocalhost
-    ? accessLink.replace(/^http:\/\/localhost(:\d+)?/, 'https://betternow.cesire.com.br')
-    : accessLink;
+  const isLocalhost = targetLink.includes('localhost') || targetLink.includes('127.0.0.1');
+  const safeTargetLink = isLocalhost
+    ? targetLink.replace(/^http:\/\/localhost(:\d+)?/, 'https://betternow.cesire.com.br')
+    : targetLink;
 
   return `
 <!DOCTYPE html>
@@ -317,7 +331,7 @@ export const generateEmailHtml = (params: {
               <table role="presentation" width="100%" style="margin-bottom: 12px;">
                 <tr>
                   <td align="center">
-                    <a href="${safeAccessLink}" target="_blank" style="display: inline-block; background-color: ${headerColor}; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 28px; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); text-align: center;">
+                    <a href="${safeTargetLink}" target="_blank" style="display: inline-block; background-color: ${headerColor}; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 28px; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); text-align: center;">
                       ${actionButtonText}
                     </a>
                   </td>
@@ -326,7 +340,7 @@ export const generateEmailHtml = (params: {
 
               <p style="margin: 20px 0 0 0; text-align: center; font-size: 12px; color: #94a3b8;">
                 Caso o botão acima não funcione, copie e cole este link no seu navegador:<br>
-                <a href="${safeAccessLink}" style="color: #0284c7; word-break: break-all;">${safeAccessLink}</a>
+                <a href="${safeTargetLink}" style="color: #0284c7; word-break: break-all;">${safeTargetLink}</a>
               </p>
 
             </td>
@@ -414,6 +428,10 @@ export const sendOrderEmailNotification = async ({
     // 4. Montar variáveis dinâmicas
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const accessLink = `${origin}/eventos/${order.event_id}?payment=success&order_id=${currentOrderId}`;
+    const paymentLink = order.payment_url || 
+      order.checkout_url || 
+      (order.stripe_session_id && order.stripe_session_id.startsWith('http') ? order.stripe_session_id : '') ||
+      `${origin}/eventos/${order.event_id}?payment=awaiting&order_id=${currentOrderId}`;
     const orderNumber = currentOrderId.substring(0, 8).toUpperCase();
     const formattedTotal = formatPrice(Number(order.amount_total) || 0);
 
@@ -426,6 +444,7 @@ export const sendOrderEmailNotification = async ({
       data_evento: eventDate || 'A definir',
       local_evento: eventLocation,
       link_acesso: accessLink,
+      link_pagamento: paymentLink,
     };
 
     // Templates customizados do evento
@@ -481,6 +500,7 @@ export const sendOrderEmailNotification = async ({
       eventDate,
       eventLocation,
       accessLink,
+      paymentLink,
       contentBody: formattedBody,
     });
 
@@ -595,6 +615,10 @@ export const sendOrderWhatsAppNotification = async ({
     // 4. Montar variáveis dinâmicas
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const accessLink = `${origin}/eventos/${order.event_id}?payment=success&order_id=${currentOrderId}`;
+    const paymentLink = order.payment_url || 
+      order.checkout_url || 
+      (order.stripe_session_id && order.stripe_session_id.startsWith('http') ? order.stripe_session_id : '') ||
+      `${origin}/eventos/${order.event_id}?payment=awaiting&order_id=${currentOrderId}`;
 
     const formattedMessage = formatMessageTemplate(rawTemplate, {
       cliente: order.client_name || 'Cliente',
@@ -605,6 +629,7 @@ export const sendOrderWhatsAppNotification = async ({
       data_evento: eventDate || 'A definir',
       local_evento: eventLocation,
       link_acesso: accessLink,
+      link_pagamento: paymentLink,
     });
 
     // 5. Disparar via WAHA

@@ -2,14 +2,11 @@ import { useState, useCallback, useMemo } from 'react';
 import { supabase } from '../../services/lib/supabase';
 import { toast } from 'sonner';
 import { ActivityLogger } from '../../utils/utils/activityLogger';
-import { cacheService, CACHE_KEYS, cacheUtils } from '../../services/cache';
 import type {
   Client,
   ClientFilters,
   PaginationParams,
   UseAsyncState,
-  ApiResponse,
-  PaginatedResponse
 } from '../../types';
 
 // Client interaction interface
@@ -93,6 +90,54 @@ interface UseSupabaseClientsReturn extends UseAsyncState<Client[]> {
   clearError: () => void;
 }
 
+// Helper para normalizar linhas da tabela app_people para a interface Client
+const mapRowToClient = (row: any): Client => {
+  const nameVal = row.nome || row.name || 'Sem nome';
+  const phoneVal = row.whatsapp || row.telefone || row.phone || '';
+  const docVal = row.documento || row.cpf || '';
+  const streetVal = row.logradouro || '';
+  const cityVal = row.cidade || row.city || '';
+  const ufVal = row.uf || row.estado || row.state || '';
+  const notesVal = row.notes || row.observacoes || '';
+
+  return {
+    id: row.id,
+    name: nameVal,
+    nome: nameVal,
+    email: row.email || '',
+    phone: phoneVal,
+    telefone: phoneVal,
+    whatsapp: phoneVal,
+    cpf: docVal,
+    documento: docVal,
+    apelido: row.apelido || '',
+    data_nascimento: row.data_nascimento || '',
+    profissao: row.profissao || '',
+    empresa: row.empresa || '',
+    cep: row.cep || '',
+    address: streetVal,
+    endereco: streetVal,
+    logradouro: streetVal,
+    numero: row.numero || '',
+    complemento: row.complemento || '',
+    bairro: row.bairro || '',
+    city: cityVal,
+    cidade: cityVal,
+    state: ufVal,
+    estado: ufVal,
+    uf: ufVal,
+    zip_code: row.cep || '',
+    notes: notesVal,
+    observacoes: notesVal,
+    validated: row.validated !== false,
+    is_active: row.is_active !== false && row.ativo !== false,
+    tipo: row.tipo || row.type || '',
+    deleted_at: row.deleted_at || null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+};
+
 export const useSupabaseClients = (): UseSupabaseClientsReturn => {
   const [clients, setClients] = useState<Client[]>([]);
   const [deletedClients, setDeletedClients] = useState<Client[]>([]);
@@ -113,7 +158,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
   const handleError = useCallback((err: any, message: string) => {
     console.error(message, err);
-    const errorMessage = err.message || message;
+    const errorMessage = err?.message || message;
     setError(errorMessage);
     toast.error(message);
     ActivityLogger.log('error', message, 'system', 'error', { error: errorMessage });
@@ -134,12 +179,12 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
   const getClientsByCity = useCallback((city: string) => {
     return clients.filter(client =>
-      client.cidade?.toLowerCase().includes(city.toLowerCase())
+      (client.cidade || client.city || '')?.toLowerCase().includes(city.toLowerCase())
     );
   }, [clients]);
 
   const getClientsWithWhatsApp = useCallback(() => {
-    return clients.filter(client => client.whatsapp);
+    return clients.filter(client => client.whatsapp || client.phone);
   }, [clients]);
 
   const getClientsWithEmail = useCallback(() => {
@@ -148,7 +193,6 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
   const calculateStats = useCallback(async () => {
     try {
-      // Calcular estatísticas diretamente da tabela clients
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const startOfWeek = new Date(now);
@@ -156,51 +200,44 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       const sevenDaysAgo = new Date(now);
       sevenDaysAgo.setDate(now.getDate() - 7);
 
-      // Total de clientes (não deletados)
+      // Total de clientes na tabela app_people
       const { count: total } = await supabase
-        .from('app_clients')
-        .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null);
+        .from('app_people')
+        .select('*', { count: 'exact', head: true });
 
       // Clientes criados este mês
       const { count: thisMonth } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null)
         .gte('created_at', startOfMonth.toISOString());
 
       // Clientes criados esta semana
       const { count: thisWeek } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null)
         .gte('created_at', startOfWeek.toISOString());
 
-      // Clientes com WhatsApp
+      // Clientes com WhatsApp / Telefone
       const { count: withWhatsApp } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null)
         .not('whatsapp', 'is', null)
         .neq('whatsapp', '');
 
       // Clientes com email
       const { count: withEmail } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null)
         .not('email', 'is', null)
         .neq('email', '');
 
       // Clientes adicionados nos últimos 7 dias
       const { count: recentlyAdded } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null)
         .gte('created_at', sevenDaysAgo.toISOString());
 
-      // Clientes ativos (não deletados) - mesmo que total
-      const activeClients = total;
+      const activeClients = total || 0;
 
       setStats({
         total: total || 0,
@@ -212,7 +249,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         activeClients: activeClients || 0
       });
     } catch (err: any) {
-      handleError(err, 'Erro ao calcular estatísticas');
+      console.warn('Erro ao calcular estatísticas de app_people:', err);
     }
   }, []);
 
@@ -223,19 +260,20 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const page = pagination?.page || 1;
-      const limit = pagination?.limit || 50;
+      const limit = pagination?.limit || 1000;
       const offset = (page - 1) * limit;
 
       let query = supabase
-        .from('app_clients')
+        .from('app_people')
         .select('*', { count: 'exact' })
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+        .order('nome', { ascending: true })
         .range(offset, offset + limit - 1);
 
-      // Apply filters
+      // Aplicar filtros de busca por nome, apelido, whatsapp, email, cidade ou documento
       if (filters?.search) {
-        query = query.or(`name.ilike.%${filters.search}%,apelido.ilike.%${filters.search}%,whatsapp.ilike.%${filters.search}%,email.ilike.%${filters.search}%,cidade.ilike.%${filters.search}%`);
+        query = query.or(
+          `nome.ilike.%${filters.search}%,apelido.ilike.%${filters.search}%,whatsapp.ilike.%${filters.search}%,email.ilike.%${filters.search}%,cidade.ilike.%${filters.search}%,documento.ilike.%${filters.search}%`
+        );
       }
       if (filters?.date_from) {
         query = query.gte('created_at', filters.date_from);
@@ -244,10 +282,10 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         query = query.lte('created_at', filters.date_to);
       }
       if (filters?.has_whatsapp) {
-        query = query.not('whatsapp', 'is', null);
+        query = query.not('whatsapp', 'is', null).neq('whatsapp', '');
       }
       if (filters?.has_email) {
-        query = query.not('email', 'is', null);
+        query = query.not('email', 'is', null).neq('email', '');
       }
       if (filters?.city) {
         query = query.ilike('cidade', `%${filters.city}%`);
@@ -258,17 +296,20 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       const { data, error, count } = await query;
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      setClients(data || []);
+      const mappedClients = (data || []).map(mapRowToClient);
+      setClients(mappedClients);
       setTotalCount(count || 0);
       setCurrentPage(page);
       setTotalPages(Math.ceil((count || 0) / limit));
 
       await calculateStats();
 
-      ActivityLogger.log('clients_loaded', 'Clientes carregados com sucesso', 'system', 'info', {
-        count: data?.length || 0,
+      ActivityLogger.log('clients_loaded', 'Clientes carregados com sucesso de app_people', 'system', 'info', {
+        count: mappedClients.length,
         filters
       });
     } catch (err: any) {
@@ -276,7 +317,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [calculateStats, handleError]);
 
   // Search clients with filters
   const searchClients = useCallback(async (searchTerm: string, additionalFilters?: Omit<ClientFilters, 'search'>) => {
@@ -294,19 +335,19 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .select('*')
-        .not('deleted_at', 'is', null)
-        .order('deleted_at', { ascending: false });
+        .eq('is_active', false)
+        .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      setDeletedClients(data || []);
+      setDeletedClients((data || []).map(mapRowToClient));
     } catch (err: any) {
       handleError(err, 'Erro ao carregar clientes da lixeira');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleError]);
 
   // Create client
   const createClient = useCallback(async (clientData: Omit<Client, 'id' | 'created_at' | 'updated_at'>): Promise<Client> => {
@@ -314,43 +355,60 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setLoading(true);
       setError(null);
 
-      // Map frontend fields back to legacy database fields
-      const payload: any = {
-        ...clientData,
-        nome: clientData.name,
+      const cleanPhone = (clientData.whatsapp || clientData.phone || clientData.telefone || '').replace(/\D/g, '');
+      const cleanDoc = (clientData.documento || clientData.cpf || '').replace(/\D/g, '');
+
+      const payload: Record<string, any> = {
+        nome: (clientData.nome || clientData.name || '').trim(),
+        whatsapp: clientData.whatsapp?.trim() || cleanPhone || null,
+        telefone: clientData.telefone?.trim() || null,
+        email: clientData.email?.trim() || null,
+        documento: cleanDoc || clientData.documento?.trim() || null,
+        apelido: clientData.apelido?.trim() || null,
+        cep: clientData.cep?.trim() || null,
+        logradouro: clientData.logradouro?.trim() || clientData.address?.trim() || null,
+        numero: clientData.numero?.trim() || null,
+        complemento: clientData.complemento?.trim() || null,
+        bairro: clientData.bairro?.trim() || null,
+        cidade: clientData.cidade?.trim() || clientData.city?.trim() || null,
+        uf: clientData.uf?.trim() || clientData.state?.trim() || null,
+        notes: clientData.notes?.trim() || clientData.observacoes?.trim() || null,
+        validated: clientData.validated !== false,
+        is_active: clientData.is_active !== false,
+        tipo: clientData.tipo?.trim() || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
-      if (clientData.whatsapp) payload.telefone = clientData.whatsapp;
-      if (clientData.logradouro) payload.endereco = clientData.logradouro;
-      if (clientData.uf) payload.estado = clientData.uf;
-      if (clientData.notes) payload.observacoes = clientData.notes;
-      if (clientData.is_active !== undefined) payload.ativo = clientData.is_active;
-
       const { data, error } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .insert([payload])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao adicionar cliente em app_people:', error);
+        throw error;
+      }
 
-      setClients(prev => [data, ...prev]);
+      const clientObj = mapRowToClient(data);
+      setClients(prev => [clientObj, ...prev]);
       await calculateStats();
 
       toast.success('Cliente adicionado com sucesso!');
       ActivityLogger.log('client_added', 'Novo cliente adicionado', 'system', 'success', {
         clientId: data.id,
-        name: data.name
+        name: clientObj.name
       });
 
-      return data;
+      return clientObj;
     } catch (err: any) {
       handleError(err, 'Erro ao adicionar cliente');
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [calculateStats]);
+  }, [calculateStats, handleError]);
 
   // Update client
   const updateClient = useCallback(async (id: string, clientData: Partial<Client>): Promise<Client> => {
@@ -358,45 +416,103 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setLoading(true);
       setError(null);
 
-      // Map frontend fields back to legacy database fields
-      const payload: any = {
-        ...clientData,
+      const cleanPhone = clientData.whatsapp ? clientData.whatsapp.replace(/\D/g, '') : undefined;
+      const cleanDoc = (clientData.documento || clientData.cpf) ? (clientData.documento || clientData.cpf || '').replace(/\D/g, '') : undefined;
+
+      const payload: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
 
-      if (clientData.name) payload.nome = clientData.name;
-      if (clientData.whatsapp) payload.telefone = clientData.whatsapp;
-      if (clientData.logradouro) payload.endereco = clientData.logradouro;
-      if (clientData.uf) payload.estado = clientData.uf;
-      if (clientData.notes) payload.observacoes = clientData.notes;
-      if (clientData.is_active !== undefined) payload.ativo = clientData.is_active;
+      if (clientData.nome !== undefined || clientData.name !== undefined) {
+        payload.nome = (clientData.nome ?? clientData.name ?? '').trim();
+      }
+      if (clientData.whatsapp !== undefined) {
+        payload.whatsapp = clientData.whatsapp?.trim() || cleanPhone || null;
+      }
+      if (clientData.telefone !== undefined) {
+        payload.telefone = clientData.telefone?.trim() || null;
+      }
+      if (clientData.email !== undefined) {
+        payload.email = clientData.email?.trim() || null;
+      }
+      if (clientData.documento !== undefined || clientData.cpf !== undefined) {
+        payload.documento = cleanDoc || clientData.documento?.trim() || clientData.cpf?.trim() || null;
+      }
+      if (clientData.apelido !== undefined) {
+        payload.apelido = clientData.apelido?.trim() || null;
+      }
+      if (clientData.cep !== undefined) {
+        payload.cep = clientData.cep?.trim() || null;
+      }
+      if (clientData.logradouro !== undefined) {
+        payload.logradouro = clientData.logradouro?.trim() || null;
+      } else if (clientData.address !== undefined) {
+        payload.logradouro = clientData.address?.trim() || null;
+      }
+      if (clientData.numero !== undefined) {
+        payload.numero = clientData.numero?.trim() || null;
+      }
+      if (clientData.complemento !== undefined) {
+        payload.complemento = clientData.complemento?.trim() || null;
+      }
+      if (clientData.bairro !== undefined) {
+        payload.bairro = clientData.bairro?.trim() || null;
+      }
+      if (clientData.cidade !== undefined) {
+        payload.cidade = clientData.cidade?.trim() || null;
+      } else if (clientData.city !== undefined) {
+        payload.cidade = clientData.city?.trim() || null;
+      }
+      if (clientData.uf !== undefined) {
+        payload.uf = clientData.uf?.trim() || null;
+      } else if (clientData.state !== undefined) {
+        payload.uf = clientData.state?.trim() || null;
+      }
+      if (clientData.notes !== undefined) {
+        payload.notes = clientData.notes?.trim() || null;
+      } else if (clientData.observacoes !== undefined) {
+        payload.notes = clientData.observacoes?.trim() || null;
+      }
+      if (clientData.validated !== undefined) {
+        payload.validated = Boolean(clientData.validated);
+      }
+      if (clientData.is_active !== undefined) {
+        payload.is_active = Boolean(clientData.is_active);
+      }
+      if (clientData.tipo !== undefined) {
+        payload.tipo = clientData.tipo?.trim() || null;
+      }
 
       const { data, error } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .update(payload)
         .eq('id', id)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao atualizar app_people:', error);
+        throw error;
+      }
 
-      setClients(prev => prev.map(client => client.id === id ? data : client));
+      const clientObj = mapRowToClient(data);
+      setClients(prev => prev.map(c => c.id === id ? clientObj : c));
       await calculateStats();
 
       toast.success('Cliente atualizado com sucesso!');
       ActivityLogger.log('client_updated', 'Cliente atualizado', 'system', 'success', {
         clientId: id,
-        name: data.name
+        name: clientObj.name
       });
 
-      return data;
+      return clientObj;
     } catch (err: any) {
       handleError(err, 'Erro ao atualizar cliente');
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [calculateStats]);
+  }, [calculateStats, handleError]);
 
   // Soft delete client
   const deleteClient = useCallback(async (id: string): Promise<void> => {
@@ -405,9 +521,9 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .update({
-          deleted_at: new Date().toISOString(),
+          is_active: false,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
@@ -416,22 +532,23 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       if (error) throw error;
 
+      const deletedItem = mapRowToClient(data);
       setClients(prev => prev.filter(client => client.id !== id));
-      setDeletedClients(prev => [data, ...prev]);
+      setDeletedClients(prev => [deletedItem, ...prev]);
       await calculateStats();
 
-      toast.success('Cliente movido para a lixeira!');
-      ActivityLogger.log('client_deleted', 'Cliente movido para lixeira', 'system', 'warning', {
+      toast.success('Cliente desativado!');
+      ActivityLogger.log('client_deleted', 'Cliente desativado', 'system', 'warning', {
         clientId: id,
-        name: data.name
+        name: deletedItem.name
       });
     } catch (err: any) {
-      handleError(err, 'Erro ao mover cliente para lixeira');
+      handleError(err, 'Erro ao desativar cliente');
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [calculateStats]);
+  }, [calculateStats, handleError]);
 
   // Restore client from trash
   const restoreClient = useCallback(async (id: string): Promise<void> => {
@@ -440,9 +557,9 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .update({
-          deleted_at: null,
+          is_active: true,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
@@ -451,22 +568,23 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       if (error) throw error;
 
+      const restoredItem = mapRowToClient(data);
       setDeletedClients(prev => prev.filter(client => client.id !== id));
-      setClients(prev => [data, ...prev]);
+      setClients(prev => [restoredItem, ...prev]);
       await calculateStats();
 
-      toast.success('Cliente restaurado com sucesso!');
-      ActivityLogger.log('client_restored', 'Cliente restaurado', 'system', 'success', {
+      toast.success('Cliente reativado com sucesso!');
+      ActivityLogger.log('client_restored', 'Cliente reativado', 'system', 'success', {
         clientId: id,
-        name: data.name
+        name: restoredItem.name
       });
     } catch (err: any) {
-      handleError(err, 'Erro ao restaurar cliente');
+      handleError(err, 'Erro ao reativar cliente');
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [calculateStats]);
+  }, [calculateStats, handleError]);
 
   // Permanently delete client
   const permanentDeleteClient = useCallback(async (id: string): Promise<void> => {
@@ -475,7 +593,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       setError(null);
 
       const { error } = await supabase
-        .from('app_clients')
+        .from('app_people')
         .delete()
         .eq('id', id);
 
@@ -494,9 +612,9 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [calculateStats]);
+  }, [calculateStats, handleError]);
 
-  // Add client interaction
+  // Add interaction
   const addInteraction = useCallback(async (interaction: Omit<ClientInteraction, 'id' | 'created_at' | 'updated_at'>): Promise<ClientInteraction> => {
     try {
       setLoading(true);
@@ -511,11 +629,6 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       if (error) throw error;
 
       toast.success('Interação adicionada com sucesso!');
-      ActivityLogger.log('interaction_added', 'Nova interação adicionada', 'system', 'success', {
-        clientId: interaction.client_id,
-        type: interaction.type
-      });
-
       return data;
     } catch (err: any) {
       handleError(err, 'Erro ao adicionar interação');
@@ -523,7 +636,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleError]);
 
   // Get client interactions
   const getClientInteractions = useCallback(async (clientId: string): Promise<ClientInteraction[]> => {
@@ -537,7 +650,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       if (error) throw error;
       return data || [];
     } catch (err: any) {
-      handleError(err, 'Erro ao carregar interações do cliente');
+      console.warn('Erro ao carregar interações do cliente:', err);
       return [];
     }
   }, []);
@@ -546,10 +659,13 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
   const fetchClientEvents = useCallback(async (clientId: string): Promise<ClientEvent[]> => {
     try {
       const { data, error } = await supabase
-        .from('app_client_events')
+        .from('app_event_orders')
         .select(`
-          *,
-          event:events(
+          id,
+          client_id,
+          event_id,
+          created_at,
+          event:app_events(
             id,
             title,
             description,
@@ -563,9 +679,17 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+
+      return (data || []).map((item: any) => ({
+        id: item.id,
+        client_id: item.client_id,
+        event_id: item.event_id,
+        relationship_type: 'participant',
+        created_at: item.created_at,
+        event: Array.isArray(item.event) ? item.event[0] : item.event
+      }));
     } catch (err: any) {
-      handleError(err, 'Erro ao carregar eventos do cliente');
+      console.warn('Erro ao carregar eventos do cliente:', err);
       return [];
     }
   }, []);
@@ -593,18 +717,13 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       if (error) throw error;
 
       toast.success('Evento vinculado com sucesso!');
-      ActivityLogger.log('client_event_linked', 'Cliente vinculado ao evento', 'system', 'success', {
-        clientId,
-        eventId,
-        relationshipType
-      });
     } catch (err: any) {
       handleError(err, 'Erro ao vincular cliente ao evento');
       throw err;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleError]);
 
   // Unlink client from event
   const unlinkClientFromEvent = useCallback(async (clientEventId: string): Promise<void> => {
@@ -620,16 +739,13 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       if (error) throw error;
 
       toast.success('Evento desvinculado com sucesso!');
-      ActivityLogger.log('client_event_unlinked', 'Cliente desvinculado do evento', 'system', 'success', {
-        clientEventId
-      });
     } catch (err: any) {
       handleError(err, 'Erro ao desvincular cliente do evento');
       throw err;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleError]);
 
   // Refetch function for UseAsyncState compatibility
   const refetch = useCallback(async () => {

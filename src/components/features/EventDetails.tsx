@@ -23,6 +23,7 @@ import CheckoutClientModal, { CheckoutClientData } from '../shared/CheckoutClien
 import PriceUpdatedModal from '../shared/PriceUpdatedModal';
 import PendingOrderRecoveryModal, { PendingOrderInfo } from '../shared/PendingOrderRecoveryModal';
 import { createMercadoPagoCheckout, checkMercadoPagoPaymentStatus, findPendingOrderForClient, cancelPendingOrder } from '../../shared/services/mercadoPagoService';
+import { getOrderBySessionId } from '../../shared/services/stripeService';
 import { createComplimentaryOrder } from '../../shared/services/complimentaryOrderService';
 import { getClientIpAddress } from '../../shared/utils/utils/ipUtils';
 import { supabase } from '../../shared/services/lib/supabase';
@@ -69,6 +70,8 @@ const EventDetails: React.FC = () => {
   const [stripeCheckoutLoading, setStripeCheckoutLoading] = useState(false);
   const [stripeErrorMessage, setStripeErrorMessage] = useState<string | null>(null);
   const [stripeSessionId, setStripeSessionId] = useState<string>('');
+  const [mercadoPagoCheckoutUrl, setMercadoPagoCheckoutUrl] = useState<string | null>(null);
+  const [currentClientId, setCurrentClientId] = useState<string | null>(null);
 
   // Efeito para verificar parâmetros de retorno de pagamento (?payment=success&order_id=... ou &session_id=...)
   useEffect(() => {
@@ -76,9 +79,35 @@ const EventDetails: React.FC = () => {
     const sessionId = searchParams.get('session_id') || searchParams.get('order_id');
 
     if (paymentStatus === 'success' && sessionId) {
-      setStripeSessionId(sessionId);
-      setShowPaymentSuccessModal(true);
-      
+      const verifySuccessReturn = async () => {
+        try {
+          const result = await checkMercadoPagoPaymentStatus(sessionId);
+          if (result.paid) {
+            setStripeSessionId(result.paymentId || sessionId);
+            setShowStripeCheckoutModal(false);
+            setAwaitingPaymentOrderId(null);
+            setShowPaymentSuccessModal(true);
+            toast.success('Pagamento confirmado com sucesso! 🎉');
+          } else {
+            const orderData = await getOrderBySessionId(sessionId);
+            if (orderData?.status === 'paid' || orderData?.status === 'approved') {
+              setStripeSessionId(sessionId);
+              setShowStripeCheckoutModal(false);
+              setAwaitingPaymentOrderId(null);
+              setShowPaymentSuccessModal(true);
+            } else {
+              setAwaitingPaymentOrderId(sessionId);
+              setShowStripeCheckoutModal(true);
+              toast.info('Seu pedido foi registrado e está aguardando a compensação do pagamento.');
+            }
+          }
+        } catch (err) {
+          console.warn('Erro ao verificar retorno de pagamento:', err);
+        }
+      };
+
+      verifySuccessReturn();
+
       // Limpar parâmetros da URL sem recarregar a página
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('payment');
@@ -576,6 +605,7 @@ const EventDetails: React.FC = () => {
         client_phone: currentPhone,
         client_email: currentClientEmail,
         client_document: currentClientCpf || undefined,
+        client_id: currentClientId || undefined,
         existing_order_id: reusableOrderId || undefined,
         payment_method: selectedPaymentMethod || undefined,
         installments: selectedInstallments || 1,
@@ -595,15 +625,32 @@ const EventDetails: React.FC = () => {
       }
 
       if (res.checkoutUrl) {
-        // Abrir checkout do Mercado Pago em nova aba
-        const paymentWin = window.open(res.checkoutUrl, '_blank');
-        setPaymentWindowRef(paymentWin);
+        setMercadoPagoCheckoutUrl(res.checkoutUrl);
 
         // Armazenar o orderId para polling de status
         if (res.orderId) {
           setAwaitingPaymentOrderId(res.orderId);
         }
 
+        const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+
+        // Em dispositivos móveis e WebViews, popup blockers bloqueiam window.open assíncrono. Redireciona diretamente:
+        if (isMobile) {
+          setStripeCheckoutLoading(false);
+          isSubmittingCheckoutRef.current = false;
+          window.location.href = res.checkoutUrl;
+          return;
+        }
+
+        // Em desktop, tenta abrir em nova aba
+        let paymentWin: Window | null = null;
+        try {
+          paymentWin = window.open(res.checkoutUrl, '_blank');
+        } catch (e) {
+          console.warn('Pop-up bloqueado pelo navegador:', e);
+        }
+
+        setPaymentWindowRef(paymentWin);
         setStripeCheckoutLoading(false);
         isSubmittingCheckoutRef.current = false;
       } else {
@@ -664,11 +711,18 @@ const EventDetails: React.FC = () => {
 
   const [attendeesList, setAttendeesList] = useState<CheckoutClientData[]>([]);
 
-  const handleCheckoutClientSubmit = async (buyerData: CheckoutClientData, allAttendees: CheckoutClientData[]) => {
+  const handleCheckoutClientSubmit = async (
+    buyerData: CheckoutClientData, 
+    allAttendees: CheckoutClientData[], 
+    buyerPersonId?: string | null
+  ) => {
     // Validar preço em tempo real antes de avançar para pagamento
     const isUpToDate = await verifyAndSyncEventData();
     if (!isUpToDate) return;
 
+    if (buyerPersonId) {
+      setCurrentClientId(buyerPersonId);
+    }
     setCurrentClientName(buyerData.nome);
     setCurrentPhone(buyerData.whatsapp);
     if (buyerData.email) setCurrentClientEmail(buyerData.email);
@@ -692,6 +746,7 @@ const EventDetails: React.FC = () => {
           client_phone: buyerData.whatsapp,
           client_email: buyerData.email || undefined,
           client_document: doc || undefined,
+          client_id: buyerPersonId || currentClientId || undefined,
           coupon_id: appliedCoupon?.coupon_id || undefined,
           coupon_code: appliedCoupon?.code || undefined,
           discount_amount: currentDiscountAmount || (currentUnitPrice * quantity),
@@ -957,6 +1012,7 @@ const EventDetails: React.FC = () => {
         loading={stripeCheckoutLoading}
         errorMessage={stripeErrorMessage}
         awaitingPayment={!!awaitingPaymentOrderId}
+        checkoutUrl={mercadoPagoCheckoutUrl}
       />
 
       {/* Modal de Pagamento Pix Chave (QR Code Próprio) */}
@@ -997,6 +1053,7 @@ const EventDetails: React.FC = () => {
         clientPhone={currentPhone}
         clientEmail={currentClientEmail}
         clientDocument={currentClientCpf}
+        clientId={currentClientId || undefined}
         onSuccess={() => {
           setShowPaymentProofModal(false);
           toast.success('Comprovante enviado com sucesso! Aguarde a validação.');

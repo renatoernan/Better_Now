@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
-import { Users, Plus, Search, Filter, Edit, Trash2, History, Download, Phone, Mail, MapPin, Calendar, X, Save, FileText, ChevronDown, Eye, Link, Unlink, RotateCcw, RefreshCw, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { Users, Plus, Search, Filter, Edit, Trash2, History, Download, Phone, Mail, MapPin, Calendar, X, Save, FileText, ChevronDown, Eye, Link, Unlink, RotateCcw, RefreshCw, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Baby, User } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSupabaseClients } from '../../shared/hooks/hooks/useSupabaseClients';
@@ -29,9 +29,67 @@ interface Client extends BaseClient {
   uf?: string;
   notes?: string;
   validated?: boolean;
+  tipo?: string;
 }
 
+// Helper para identificar registro de criança
+const isChild = (tipo?: string): boolean => {
+  if (!tipo) return false;
+  const t = tipo.toLowerCase().trim();
+  return (
+    t === 'crianca' ||
+    t === 'criança' ||
+    t === 'infantil' ||
+    t === 'child' ||
+    t === 'kids' ||
+    t.includes('cria') ||
+    t.includes('infan')
+  );
+};
 
+// Helper para formatar endereço completo
+const formatFullAddress = (client: Client): string => {
+  const parts: string[] = [];
+
+  // Logradouro e Número
+  const street = client.logradouro || client.endereco || client.address || '';
+  if (street) {
+    if (client.numero) {
+      parts.push(`${street}, ${client.numero}`);
+    } else {
+      parts.push(street);
+    }
+  }
+
+  // Complemento
+  if (client.complemento) {
+    parts.push(client.complemento);
+  }
+
+  // Bairro
+  if (client.bairro) {
+    parts.push(client.bairro);
+  }
+
+  // Cidade e UF
+  const city = client.cidade || client.city || '';
+  const uf = client.uf || client.estado || client.state || '';
+  if (city && uf) {
+    parts.push(`${city}/${uf}`);
+  } else if (city) {
+    parts.push(city);
+  } else if (uf) {
+    parts.push(uf);
+  }
+
+  // CEP
+  const cep = client.cep || client.zip_code;
+  if (cep) {
+    parts.push(`CEP: ${cep}`);
+  }
+
+  return parts.join(' - ');
+};
 
 const AdminClients: React.FC = () => {
   const { clients, deletedClients, loading, createClient: addClient, updateClient, deleteClient, searchClients, restoreClient, permanentDeleteClient, fetchClients, fetchDeletedClients, fetchClientEvents, linkClientToEvent, unlinkClientFromEvent } = useSupabaseClients();
@@ -62,6 +120,125 @@ const AdminClients: React.FC = () => {
   const [newInteraction, setNewInteraction] = useState('');
   const [activeTab, setActiveTab] = useState<'active' | 'trash'>('active');
   const [clientEvents, setClientEvents] = useState<any[]>([]);
+
+  // Estados de ordenação da tabela
+  type SortField = 'nome' | 'contato' | 'validated' | 'created_at';
+  const [sortField, setSortField] = useState<SortField>('nome');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'created_at' ? 'desc' : 'asc');
+    }
+  };
+
+  const [filters, setFilters] = useState({
+    dateFrom: '',
+    dateTo: '',
+    hasEmail: '',
+    hasWhatsapp: '',
+    personType: 'all', // 'all' | 'child' | 'adult'
+    validated: 'all' // 'all' | 'validated' | 'unvalidated'
+  });
+
+  const clearFilters = () => {
+    setFilters({
+      dateFrom: '',
+      dateTo: '',
+      hasEmail: '',
+      hasWhatsapp: '',
+      personType: 'all',
+      validated: 'all'
+    });
+    setSearchTerm('');
+  };
+
+  const hasActiveFilters = Boolean(
+    searchTerm ||
+    filters.dateFrom ||
+    filters.dateTo ||
+    filters.hasEmail ||
+    filters.hasWhatsapp ||
+    filters.personType !== 'all' ||
+    filters.validated !== 'all'
+  );
+
+  const sortedClients = useMemo(() => {
+    let list = activeTab === 'active' ? [...clients] : [...(deletedClients || [])];
+
+    // Aplicar filtros
+    list = list.filter((client) => {
+      // Busca geral
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase().trim();
+        const matchesSearch =
+          (client.name || client.nome || '').toLowerCase().includes(searchLower) ||
+          (client.apelido || '').toLowerCase().includes(searchLower) ||
+          (client.whatsapp || client.telefone || '').includes(searchLower) ||
+          (client.email || '').toLowerCase().includes(searchLower) ||
+          (client.documento || client.cpf || '').includes(searchLower) ||
+          (client.cidade || client.city || '').toLowerCase().includes(searchLower);
+        if (!matchesSearch) return false;
+      }
+
+      // Data de cadastro (de)
+      if (filters.dateFrom) {
+        const itemDate = new Date(client.created_at || 0).toISOString().split('T')[0];
+        if (itemDate < filters.dateFrom) return false;
+      }
+
+      // Data de cadastro (até)
+      if (filters.dateTo) {
+        const itemDate = new Date(client.created_at || 0).toISOString().split('T')[0];
+        if (itemDate > filters.dateTo) return false;
+      }
+
+      // Tem email
+      if (filters.hasEmail === 'true' && !client.email) return false;
+      if (filters.hasEmail === 'false' && client.email) return false;
+
+      // Tem WhatsApp
+      if (filters.hasWhatsapp === 'true' && !client.whatsapp && !client.phone) return false;
+      if (filters.hasWhatsapp === 'false' && (client.whatsapp || client.phone)) return false;
+
+      // Filtro: Crianças / Adultos / Todos
+      if (filters.personType === 'child' && !isChild(client.tipo)) return false;
+      if (filters.personType === 'adult' && isChild(client.tipo)) return false;
+
+      // Filtro: Válidos / Não Validados / Todos
+      if (filters.validated === 'validated' && !client.validated) return false;
+      if (filters.validated === 'unvalidated' && client.validated) return false;
+
+      return true;
+    });
+
+    return list.sort((a, b) => {
+      let comparison = 0;
+
+      if (sortField === 'nome') {
+        const nameA = (a.name || a.nome || '').trim().toLowerCase();
+        const nameB = (b.name || b.nome || '').trim().toLowerCase();
+        comparison = nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+      } else if (sortField === 'contato') {
+        const contactA = (a.whatsapp || a.telefone || a.email || '').trim().toLowerCase();
+        const contactB = (b.whatsapp || b.telefone || b.email || '').trim().toLowerCase();
+        comparison = contactA.localeCompare(contactB, 'pt-BR', { sensitivity: 'base' });
+      } else if (sortField === 'validated') {
+        const valA = a.validated ? 1 : 0;
+        const valB = b.validated ? 1 : 0;
+        comparison = valA - valB;
+      } else if (sortField === 'created_at') {
+        const dateA = new Date(activeTab === 'trash' && a.deleted_at ? a.deleted_at : (a.created_at || 0)).getTime();
+        const dateB = new Date(activeTab === 'trash' && b.deleted_at ? b.deleted_at : (b.created_at || 0)).getTime();
+        comparison = dateA - dateB;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [clients, deletedClients, activeTab, sortField, sortDirection, searchTerm, filters]);
 
   // Estados para o modal de confirmação
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -138,13 +315,6 @@ const AdminClients: React.FC = () => {
     }
   }, [watchedCep, fetchAddressByCep]);
 
-  const [filters, setFilters] = useState({
-    dateFrom: '',
-    dateTo: '',
-    hasEmail: '',
-    hasWhatsapp: ''
-  });
-
   // Função para carregar clientes excluídos
   const loadTrashClients = useCallback(async () => {
     try {
@@ -154,34 +324,16 @@ const AdminClients: React.FC = () => {
     }
   }, [fetchDeletedClients]);
 
+  // Carregar clientes ativos na montagem
   useEffect(() => {
-    const performSearch = async () => {
-      if (searchTerm || Object.values(filters).some(f => f)) {
-        await searchClients(searchTerm, {
-          date_from: filters.dateFrom || undefined,
-          date_to: filters.dateTo || undefined,
-          has_email: filters.hasEmail === '' ? undefined : filters.hasEmail === 'true',
-          has_whatsapp: filters.hasWhatsapp === '' ? undefined : filters.hasWhatsapp === 'true'
-        });
-      } else {
-        // Se não há termo de busca nem filtros, carregar todos os clientes
-        await fetchClients();
-      }
-    };
-
-    performSearch();
-  }, [searchTerm, filters, searchClients, fetchClients]);
+    fetchClients();
+  }, [fetchClients]);
 
   useEffect(() => {
     if (activeTab === 'trash') {
       loadTrashClients();
     }
   }, [activeTab, loadTrashClients]);
-
-  // Carregar clientes inicialmente
-  useEffect(() => {
-    fetchClients();
-  }, [fetchClients]);
 
   // Fechar menu de exportação ao clicar fora
   useEffect(() => {
@@ -641,42 +793,93 @@ const AdminClients: React.FC = () => {
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${showFilters ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-300 hover:bg-gray-50'
+            className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors font-medium text-sm ${showFilters || hasActiveFilters
+              ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-xs'
+              : 'border-gray-300 hover:bg-gray-50 text-gray-700'
               }`}
           >
             <Filter className="h-4 w-4" />
-            Filtros
+            <span>Filtros</span>
+            {hasActiveFilters && (
+              <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+            )}
           </button>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 hover:bg-gray-100 text-gray-600 rounded-lg text-sm transition-colors"
+              title="Limpar todos os filtros"
+            >
+              <X className="h-4 w-4" />
+              <span>Limpar</span>
+            </button>
+          )}
         </div>
 
         {/* Advanced Filters */}
         {showFilters && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="mt-4 p-4 bg-gray-50/80 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Filtrar Clientes</span>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline flex items-center gap-1"
+                >
+                  <X className="h-3 w-3" />
+                  Limpar filtros
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Data de cadastro (de)</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Tipo de Cadastro</label>
+                <select
+                  value={filters.personType}
+                  onChange={(e) => setFilters({ ...filters, personType: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+                >
+                  <option value="all">Todos</option>
+                  <option value="child">👶 Crianças</option>
+                  <option value="adult">👤 Adultos</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Status de Validação</label>
+                <select
+                  value={filters.validated}
+                  onChange={(e) => setFilters({ ...filters, validated: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+                >
+                  <option value="all">Todos</option>
+                  <option value="validated">✅ Validados</option>
+                  <option value="unvalidated">⏳ Não Validados</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Data de cadastro (de)</label>
                 <input
                   type="date"
                   value={filters.dateFrom}
                   onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Data de cadastro (até)</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Data de cadastro (até)</label>
                 <input
                   type="date"
                   value={filters.dateTo}
                   onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tem email</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Tem email</label>
                 <select
                   value={filters.hasEmail}
                   onChange={(e) => setFilters({ ...filters, hasEmail: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
                 >
                   <option value="">Todos</option>
                   <option value="true">Sim</option>
@@ -684,11 +887,11 @@ const AdminClients: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tem WhatsApp</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Tem WhatsApp</label>
                 <select
                   value={filters.hasWhatsapp}
                   onChange={(e) => setFilters({ ...filters, hasWhatsapp: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
                 >
                   <option value="">Todos</option>
                   <option value="true">Sim</option>
@@ -711,7 +914,7 @@ const AdminClients: React.FC = () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
-              {translations.activeClients} ({clients.length})
+              {translations.activeClients} ({activeTab === 'active' ? sortedClients.length : clients.length}{hasActiveFilters && activeTab === 'active' && sortedClients.length !== clients.length ? ` de ${clients.length}` : ''})
             </button>
             <button
               onClick={() => setActiveTab('trash')}
@@ -763,56 +966,144 @@ const AdminClients: React.FC = () => {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {translations.clientName}
+                  <th
+                    onClick={() => handleSort('nome')}
+                    className="px-6 py-3.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors select-none group"
+                    title="Clique para ordenar por Nome"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>{translations.clientName}</span>
+                      {sortField === 'nome' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                        ) : (
+                          <ArrowDown className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      )}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {translations.contact}
+                  <th
+                    onClick={() => handleSort('contato')}
+                    className="px-6 py-3.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors select-none group"
+                    title="Clique para ordenar por Contato"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>{translations.contact}</span>
+                      {sortField === 'contato' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                        ) : (
+                          <ArrowDown className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      )}
+                    </div>
                   </th>
                   {activeTab === 'active' && (
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Validado
+                    <th
+                      onClick={() => handleSort('validated')}
+                      className="px-6 py-3.5 text-center text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors select-none group"
+                      title="Clique para ordenar por Status de Validação"
+                    >
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span>Validado</span>
+                        {sortField === 'validated' ? (
+                          sortDirection === 'asc' ? (
+                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
+                      </div>
                     </th>
                   )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {activeTab === 'trash' ? translations.deletedAt : translations.createdAt}
+                  <th
+                    onClick={() => handleSort('created_at')}
+                    className="px-6 py-3.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors select-none group"
+                    title="Clique para ordenar por Data"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>{activeTab === 'trash' ? translations.deletedAt : translations.createdAt}</span>
+                      {sortField === 'created_at' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                        ) : (
+                          <ArrowDown className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      )}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3.5 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">
                     {translations.actions}
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {(activeTab === 'active' ? clients : deletedClients || []).map((client) => (
-                  <tr key={client.id} className={`hover:bg-gray-50 ${activeTab === 'trash' ? 'opacity-75' : ''}`}>
+                {sortedClients.map((client) => (
+                  <tr key={client.id} className={`hover:bg-gray-50/80 transition-colors ${activeTab === 'trash' ? 'opacity-75' : ''}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{client.name}</div>
+                        <div className="text-sm font-medium text-gray-900 flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold">{client.name || client.nome}</span>
+                          {client.apelido ? (
+                            <span className="text-gray-500 font-normal text-xs">
+                              ({client.apelido})
+                            </span>
+                          ) : null}
+                          {isChild(client.tipo) ? (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-xs"
+                              title="Criança / Infantil"
+                            >
+                              <Baby className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Criança</span>
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200"
+                              title="Adulto"
+                            >
+                              <User className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Adulto</span>
+                            </span>
+                          )}
+                        </div>
                         {client.notes && (
-                          <div className="text-sm text-gray-500 truncate max-w-xs">{client.notes}</div>
+                          <div className="text-xs text-gray-500 truncate max-w-xs mt-0.5">{client.notes}</div>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1">
+                    <td className="px-6 py-4">
+                      <div className="space-y-1.5 max-w-sm">
                         {client.whatsapp && (
-                          <div className="flex items-center text-sm text-gray-900">
-                            <span className="text-green-500 mr-2">📱</span>
-                            {client.whatsapp}
+                          <div className="flex items-center text-sm text-gray-900 font-medium">
+                            <span className="text-green-500 mr-2 shrink-0">📱</span>
+                            <span>{client.whatsapp}</span>
                           </div>
                         )}
                         {client.email && (
-                          <div className="flex items-center text-sm text-gray-500">
-                            <Mail className="h-4 w-4 mr-2 text-gray-400" />
-                            {client.email}
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Mail className="h-4 w-4 mr-2 text-gray-400 shrink-0" />
+                            <span className="truncate">{client.email}</span>
                           </div>
                         )}
-                        {client.address && (
-                          <div className="flex items-center text-sm text-gray-500">
-                            <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                            <span className="truncate max-w-xs">{client.address}</span>
-                          </div>
-                        )}
+                        {(() => {
+                          const fullAddress = formatFullAddress(client);
+                          if (!fullAddress) return null;
+                          return (
+                            <div className="flex items-start text-xs text-gray-600 leading-snug" title={fullAddress}>
+                              <MapPin className="h-3.5 w-3.5 mr-1.5 text-gray-400 shrink-0 mt-0.5" />
+                              <span className="break-words">{fullAddress}</span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </td>
                     {activeTab === 'active' && (
