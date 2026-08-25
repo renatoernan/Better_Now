@@ -123,33 +123,12 @@ const TicketCard: React.FC<TicketCardProps> = ({
   const feeAmount = subtotalAfterDiscount * (feePercentage / 100);
   const totalWithFee = subtotalAfterDiscount + feeAmount;
 
-  // Lógica de parcelamento para cartão de crédito
-  const isCard = selectedPaymentMethod === 'credit_card';
-  const cardConfig = effectiveBatchPaymentMethods.find(pm => pm.method === 'credit_card');
-  const configuredMaxInstallments = cardConfig?.max_installments || 12;
-  const maxInstallments = Math.min(configuredMaxInstallments, Math.max(1, Math.floor(totalWithFee / 5)));
-
-  const installmentOptions = Array.from({ length: maxInstallments }, (_, i) => {
-    const count = i + 1;
-    const installmentValue = totalWithFee / count;
-    return {
-      count,
-      value: installmentValue,
-      label: `${count}x de ${formatPrice(installmentValue)}${count === 1 ? ' (à vista)' : ''}`
-    };
-  });
-
   const isFreeOrComplimentary = totalWithFee === 0;
-  const isReadyToPurchase = isFreeOrComplimentary || (isMethodSelected && (!isCard || Boolean(selectedInstallments)));
+  const isReadyToPurchase = isFreeOrComplimentary || isMethodSelected;
 
   const getButtonText = () => {
     if (isFreeOrComplimentary) return 'Garantir Ingresso Cortesia • Grátis';
     if (!isMethodSelected) return 'Selecione a forma de pagamento';
-    if (isCard && !selectedInstallments) return 'Selecione o número de parcelas';
-    if (isCard && selectedInstallments) {
-      const instValue = totalWithFee / selectedInstallments;
-      return `Comprar Ingresso • ${selectedInstallments}x de ${formatPrice(instValue)}`;
-    }
     return `Comprar Ingresso • ${formatPrice(totalWithFee)}`;
   };
 
@@ -453,48 +432,6 @@ const TicketCard: React.FC<TicketCardProps> = ({
                     );
                   })}
                 </div>
-
-                {/* Seção de Parcelamento de Cartão */}
-                {isCard && (
-                  <div className="mt-3 p-3.5 bg-indigo-50/60 rounded-xl border border-indigo-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                        <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Parcelas no Cartão:</span>
-                        <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      {!selectedInstallments && (
-                        <span className="text-[11px] text-indigo-600 font-semibold animate-pulse">
-                          Escolha uma opção
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="relative">
-                      <select
-                        value={selectedInstallments || ''}
-                        onChange={(e) => onInstallmentsSelect && onInstallmentsSelect(Number(e.target.value))}
-                        className={`w-full pl-3 pr-8 py-2.5 text-xs font-semibold rounded-lg border appearance-none transition-all cursor-pointer bg-white shadow-sm ${
-                          selectedInstallments
-                            ? 'border-indigo-600 ring-2 ring-indigo-500/20 text-indigo-950 font-bold'
-                            : 'border-gray-300 text-gray-700 hover:border-indigo-400'
-                        }`}
-                      >
-                        <option value="" disabled>
-                          Selecione em quantas vezes quer pagar...
-                        </option>
-                        {installmentOptions.map(opt => (
-                          <option key={opt.count} value={opt.count}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-indigo-700">
-                        <ChevronDown className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             )
           )}
@@ -600,12 +537,6 @@ const TicketCard: React.FC<TicketCardProps> = ({
                 {formatPrice(totalWithFee)}
               </span>
             </div>
-
-            {isCard && selectedInstallments && selectedInstallments > 1 && (
-              <div className="text-[11px] text-indigo-800 font-semibold bg-indigo-50 p-1.5 rounded text-center border border-indigo-100">
-                {selectedInstallments}x de {formatPrice(totalWithFee / selectedInstallments)} no cartão
-              </div>
-            )}
           </div>
           
           {/* Botão de Compra */}
