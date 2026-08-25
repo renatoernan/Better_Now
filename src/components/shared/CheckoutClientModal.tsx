@@ -613,7 +613,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
 
   // Renderizar cada campo individual
   const renderField = (fieldConfig: CheckoutFieldConfig) => {
-    const { field } = fieldConfig;
+    const { field, label } = fieldConfig;
     const isRequired = isFieldRequired(field);
     const val = currentFormData[field as keyof CheckoutClientData] || '';
 
@@ -622,7 +622,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="nome" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Nome Completo <span className="text-red-500">*</span>
+              {label || 'Nome Completo'} <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
@@ -647,7 +647,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="whatsapp" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              WhatsApp <span className="text-red-500">*</span>
+              {label || 'WhatsApp'} <span className="text-red-500">*</span>
             </label>
             <PhoneInput
               value={val as string}
@@ -666,7 +666,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="telefone" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Telefone {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Telefone'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <PhoneInput
               value={val as string}
@@ -684,7 +684,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="email" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              E-mail {isRequired && <span className="text-red-500">*</span>}
+              {label || 'E-mail'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
@@ -709,7 +709,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="apelido" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Apelido / Nome Social {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Apelido / Nome Social'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <input
               type="text"
@@ -727,7 +727,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="data_nascimento" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Data de Nascimento {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Data de Nascimento'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
@@ -749,7 +749,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="profissao" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Profissão / Cargo {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Profissão / Cargo'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
@@ -772,7 +772,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="empresa" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Empresa / Organização {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Empresa / Organização'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
@@ -795,7 +795,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="cep" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              CEP {isRequired && <span className="text-red-500">*</span>}
+              {label || 'CEP'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
@@ -827,7 +827,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="logradouro" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Endereço / Logradouro {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Endereço / Logradouro'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <input
               type="text"
@@ -845,7 +845,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="numero" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Número {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Número'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <input
               type="text"
@@ -863,7 +863,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="complemento" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Complemento {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Complemento'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <input
               type="text"
@@ -881,7 +881,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="bairro" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Bairro {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Bairro'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <input
               type="text"
@@ -899,7 +899,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="cidade" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Cidade {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Cidade'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <input
               type="text"
@@ -917,7 +917,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="uf" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Estado (UF) {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Estado (UF)'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <select
               value={(val as string) || ''}
@@ -939,7 +939,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         return (
           <div key="notes" className="animate-in fade-in duration-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-              Observações / Como soube {isRequired && <span className="text-red-500">*</span>}
+              {label || 'Observações / Como soube'} {isRequired && <span className="text-red-500">*</span>}
             </label>
             <textarea
               value={(val as string) || ''}
@@ -1059,7 +1059,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-indigo-600" />
-                  {currentFormData.is_foreign ? 'Documento Estrangeiro' : 'CPF'}{' '}
+                  {currentFormData.is_foreign ? 'Documento Estrangeiro' : (cpfConfig?.label || 'CPF')}{' '}
                   {isFieldRequired('cpf') && <span className="text-red-500">*</span>}
                 </label>
                 <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer hover:text-indigo-600 transition-colors">

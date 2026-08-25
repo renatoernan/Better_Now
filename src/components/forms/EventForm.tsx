@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle, CreditCard, FileText, QrCode, Percent, Upload, Image as ImageIcon, UserCheck, ClipboardList, CheckSquare, GripVertical, ArrowUp, ArrowDown, MessageSquare, Copy, Check, Sparkles, RefreshCw, Ticket, Send } from 'lucide-react';
+import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle, CreditCard, FileText, QrCode, Percent, Upload, Image as ImageIcon, UserCheck, ClipboardList, CheckSquare, GripVertical, ArrowUp, ArrowDown, MessageSquare, Copy, Check, Sparkles, RefreshCw, Ticket, Send, RotateCcw, Pencil } from 'lucide-react';
 import { Event, PriceBatch, PaymentMethodFee, CheckoutFieldConfig } from '../../shared/types/types/event';
 import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEventTypes';
 import ImageUpload from '../shared/ImageUpload';
@@ -42,24 +42,44 @@ const DEFAULT_PAYMENT_METHODS: PaymentMethodFee[] = [
   { method: 'pix_chave', label: 'Pix (Chave / QR Code Próprio)', enabled: false, fee_percentage: 0, qr_code_url: '', pix_key: '' }
 ];
 
+export const DEFAULT_FIELD_LABELS: Record<string, string> = {
+  cpf: 'CPF / Documento',
+  nome: 'Nome Completo',
+  apelido: 'Apelido / Nome Social',
+  whatsapp: 'WhatsApp',
+  telefone: 'Telefone',
+  email: 'E-mail',
+  data_nascimento: 'Data de Nascimento',
+  profissao: 'Profissão / Cargo',
+  empresa: 'Empresa / Organização',
+  cep: 'CEP',
+  logradouro: 'Endereço / Logradouro',
+  numero: 'Número',
+  complemento: 'Complemento',
+  bairro: 'Bairro',
+  cidade: 'Cidade',
+  uf: 'Estado (UF)',
+  notes: 'Observações / Como soube',
+};
+
 const DEFAULT_CHECKOUT_FIELDS: CheckoutFieldConfig[] = [
-  { field: 'cpf', label: 'CPF / Documento', enabled: true, required: true, type: 'cpf' },
-  { field: 'nome', label: 'Nome Completo', enabled: true, required: true, type: 'text' },
-  { field: 'apelido', label: 'Apelido / Nome Social', enabled: false, required: false, type: 'text' },
-  { field: 'whatsapp', label: 'WhatsApp', enabled: true, required: true, type: 'phone' },
-  { field: 'telefone', label: 'Telefone', enabled: false, required: false, type: 'phone' },
-  { field: 'email', label: 'E-mail', enabled: true, required: false, type: 'email' },
-  { field: 'data_nascimento', label: 'Data de Nascimento', enabled: false, required: false, type: 'date' },
-  { field: 'profissao', label: 'Profissão / Cargo', enabled: false, required: false, type: 'text' },
-  { field: 'empresa', label: 'Empresa / Organização', enabled: false, required: false, type: 'text' },
-  { field: 'cep', label: 'CEP', enabled: false, required: false, type: 'cep' },
-  { field: 'logradouro', label: 'Endereço / Logradouro', enabled: false, required: false, type: 'text' },
-  { field: 'numero', label: 'Número', enabled: false, required: false, type: 'text' },
-  { field: 'complemento', label: 'Complemento', enabled: false, required: false, type: 'text' },
-  { field: 'bairro', label: 'Bairro', enabled: false, required: false, type: 'text' },
-  { field: 'cidade', label: 'Cidade', enabled: false, required: false, type: 'text' },
-  { field: 'uf', label: 'Estado (UF)', enabled: false, required: false, type: 'select' },
-  { field: 'notes', label: 'Observações / Como soube', enabled: false, required: false, type: 'textarea' },
+  { field: 'cpf', label: DEFAULT_FIELD_LABELS.cpf, enabled: true, required: true, type: 'cpf' },
+  { field: 'nome', label: DEFAULT_FIELD_LABELS.nome, enabled: true, required: true, type: 'text' },
+  { field: 'apelido', label: DEFAULT_FIELD_LABELS.apelido, enabled: false, required: false, type: 'text' },
+  { field: 'whatsapp', label: DEFAULT_FIELD_LABELS.whatsapp, enabled: true, required: true, type: 'phone' },
+  { field: 'telefone', label: DEFAULT_FIELD_LABELS.telefone, enabled: false, required: false, type: 'phone' },
+  { field: 'email', label: DEFAULT_FIELD_LABELS.email, enabled: true, required: false, type: 'email' },
+  { field: 'data_nascimento', label: DEFAULT_FIELD_LABELS.data_nascimento, enabled: false, required: false, type: 'date' },
+  { field: 'profissao', label: DEFAULT_FIELD_LABELS.profissao, enabled: false, required: false, type: 'text' },
+  { field: 'empresa', label: DEFAULT_FIELD_LABELS.empresa, enabled: false, required: false, type: 'text' },
+  { field: 'cep', label: DEFAULT_FIELD_LABELS.cep, enabled: false, required: false, type: 'cep' },
+  { field: 'logradouro', label: DEFAULT_FIELD_LABELS.logradouro, enabled: false, required: false, type: 'text' },
+  { field: 'numero', label: DEFAULT_FIELD_LABELS.numero, enabled: false, required: false, type: 'text' },
+  { field: 'complemento', label: DEFAULT_FIELD_LABELS.complemento, enabled: false, required: false, type: 'text' },
+  { field: 'bairro', label: DEFAULT_FIELD_LABELS.bairro, enabled: false, required: false, type: 'text' },
+  { field: 'cidade', label: DEFAULT_FIELD_LABELS.cidade, enabled: false, required: false, type: 'text' },
+  { field: 'uf', label: DEFAULT_FIELD_LABELS.uf, enabled: false, required: false, type: 'select' },
+  { field: 'notes', label: DEFAULT_FIELD_LABELS.notes, enabled: false, required: false, type: 'textarea' },
 ];
 
 interface EventFormProps {
@@ -212,7 +232,7 @@ const EventForm: React.FC<EventFormProps> = ({
               ...(defaultDef || { type: 'text' as const, label: savedField.label || key }),
               ...savedField,
               field: key,
-              label: defaultDef ? defaultDef.label : (savedField.label || key)
+              label: savedField.label || (defaultDef ? defaultDef.label : key)
             });
           }
         });
@@ -382,6 +402,29 @@ const EventForm: React.FC<EventFormProps> = ({
       }
       return f;
     }));
+  };
+
+  const handleUpdateFieldLabel = (fieldName: string, newLabel: string) => {
+    setCheckoutFields(prev => prev.map(f => {
+      if (f.field === fieldName) {
+        return { ...f, label: newLabel };
+      }
+      return f;
+    }));
+  };
+
+  const handleFieldLabelBlur = (fieldName: string) => {
+    setCheckoutFields(prev => prev.map(f => {
+      if (f.field === fieldName && !f.label.trim()) {
+        return { ...f, label: DEFAULT_FIELD_LABELS[fieldName] || fieldName };
+      }
+      return f;
+    }));
+  };
+
+  const handleResetFieldLabel = (fieldName: string) => {
+    const defaultLabel = DEFAULT_FIELD_LABELS[fieldName] || fieldName;
+    handleUpdateFieldLabel(fieldName, defaultLabel);
   };
 
   const handleDragStart = (index: number) => {
@@ -1741,14 +1784,44 @@ const EventForm: React.FC<EventFormProps> = ({
                               </div>
                             </div>
 
-                            {/* Nome do Campo */}
-                            <div className="col-span-5 sm:col-span-6 flex items-center gap-2 pl-2">
-                              <span className="text-xs font-semibold text-gray-800">
-                                {fieldConfig.label}
-                              </span>
-                              {isFixed && (
-                                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200 shrink-0">
-                                  Padrão
+                            {/* Nome do Campo (Editável com Restauração) */}
+                            <div className="col-span-5 sm:col-span-6 flex flex-col gap-1 pl-2">
+                              <div className="flex items-center gap-1.5 w-full">
+                                <div className="relative flex-1 group/label">
+                                  <input
+                                    type="text"
+                                    value={fieldConfig.label}
+                                    onChange={(e) => handleUpdateFieldLabel(fieldConfig.field, e.target.value)}
+                                    onBlur={() => handleFieldLabelBlur(fieldConfig.field)}
+                                    disabled={isSubmitting}
+                                    placeholder={DEFAULT_FIELD_LABELS[fieldConfig.field] || fieldConfig.field}
+                                    className="w-full text-xs font-semibold text-gray-900 bg-transparent hover:bg-white focus:bg-white px-2 py-1 rounded-lg border border-transparent hover:border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-gray-400"
+                                    title="Clique para editar o rótulo deste campo no formulário de compra"
+                                  />
+                                  <Pencil className="w-3 h-3 text-gray-400 opacity-0 group-hover/label:opacity-100 group-focus-within/label:opacity-0 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none transition-opacity" />
+                                </div>
+
+                                {isFixed && (
+                                  <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200 shrink-0">
+                                    Padrão
+                                  </span>
+                                )}
+
+                                {fieldConfig.label !== DEFAULT_FIELD_LABELS[fieldConfig.field] && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleResetFieldLabel(fieldConfig.field)}
+                                    className="text-[10px] text-gray-400 hover:text-indigo-600 p-1 rounded hover:bg-gray-100 transition-colors shrink-0 flex items-center gap-0.5"
+                                    title={`Restaurar rótulo padrão: "${DEFAULT_FIELD_LABELS[fieldConfig.field]}"`}
+                                  >
+                                    <RotateCcw className="w-3 h-3" />
+                                    <span className="hidden lg:inline text-[9px]">Restaurar</span>
+                                  </button>
+                                )}
+                              </div>
+                              {fieldConfig.label !== DEFAULT_FIELD_LABELS[fieldConfig.field] && (
+                                <span className="text-[10px] text-gray-400 pl-2">
+                                  Padrão: {DEFAULT_FIELD_LABELS[fieldConfig.field]}
                                 </span>
                               )}
                             </div>
@@ -1799,7 +1872,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
                   <p className="text-xs text-gray-500 flex items-center gap-1.5 bg-gray-50 p-3 rounded-xl border border-gray-200/60">
                     <span>💡</span>
-                    <span><strong>Dica:</strong> Arraste as linhas ou use as setas para cima/baixo para organizar a ordem em que os campos aparecerão na tela de compra.</span>
+                    <span><strong>Dica:</strong> Você pode <strong>editar o nome dos campos</strong> clicando diretamente no texto (ex: <em>"Nome Completo"</em> ➔ <em>"Seu nome"</em>) e <strong>arrastar as linhas</strong> para definir a ordem no checkout.</span>
                   </p>
                 </div>
               </div>
