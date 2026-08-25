@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin, ArrowLeft } from 'lucide-react';
+import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin, ArrowLeft, Globe, Link2, Copy } from 'lucide-react';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { Event } from '../../shared/types/types/event';
 import { toast } from 'sonner';
@@ -550,9 +550,22 @@ const AdminEvents: React.FC = () => {
                     {/* Topo do Card */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1 min-w-0 flex-1">
-                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-0.5 rounded-md inline-block">
-                          {event.event_type || 'Geral'}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-0.5 rounded-md inline-block">
+                            {event.event_type || 'Geral'}
+                          </span>
+                          {event.is_public === false ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-200">
+                              <Link2 className="w-3 h-3" />
+                              Apenas Link
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-200">
+                              <Globe className="w-3 h-3" />
+                              Público
+                            </span>
+                          )}
+                        </div>
                         <h3 className="font-bold text-gray-900 text-base leading-snug break-words">
                           {event.title}
                         </h3>
@@ -580,6 +593,20 @@ const AdminEvents: React.FC = () => {
 
                     {/* Ações Rápidas em Grid com Ícone e Rótulo */}
                     <div className="pt-2 border-t border-gray-100 grid grid-cols-4 gap-1.5 text-[11px] font-semibold text-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const link = `${window.location.origin}/eventos/${event.id}`;
+                          navigator.clipboard.writeText(link);
+                          toast.success('Link do evento copiado com sucesso!');
+                        }}
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors"
+                        title="Copiar Link do Evento"
+                      >
+                        <Link2 className="w-4 h-4 mb-1" />
+                        <span>Link</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => {
@@ -634,7 +661,7 @@ const AdminEvents: React.FC = () => {
                           setSelectedEvent(event);
                           setViewMode('gallery');
                         }}
-                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors"
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
                       >
                         <Camera className="w-4 h-4 mb-1" />
                         <span>Galeria</span>
@@ -655,10 +682,10 @@ const AdminEvents: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleDeleteEvent(event.id)}
-                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 transition-colors col-span-2"
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
                       >
                         <Trash2 className="w-4 h-4 mb-1" />
-                        <span>Mover p/ Lixeira</span>
+                        <span>Lixeira</span>
                       </button>
                     </div>
                   </div>
@@ -680,7 +707,7 @@ const AdminEvents: React.FC = () => {
                         Local
                       </th>
                       <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        Status
+                        Status & Visibilidade
                       </th>
                       <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                         Participantes
@@ -714,10 +741,25 @@ const AdminEvents: React.FC = () => {
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {event.location || '-'}
                         </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex px-2.5 py-1 text-xs font-bold rounded-full ${getStatusColor(event.status)}`}>
-                            {getStatusText(event.status)}
-                          </span>
+                        <td className="px-6 py-4 space-y-1">
+                          <div>
+                            <span className={`inline-flex px-2.5 py-1 text-xs font-bold rounded-full ${getStatusColor(event.status)}`}>
+                              {getStatusText(event.status)}
+                            </span>
+                          </div>
+                          <div>
+                            {event.is_public === false ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full border border-purple-200" title="Apenas acessível via link direto">
+                                <Link2 className="w-3 h-3" />
+                                Apenas Link
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200" title="Visível no site">
+                                <Globe className="w-3 h-3" />
+                                Público no Site
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           <div className="flex items-center gap-1.5">
@@ -726,13 +768,24 @@ const AdminEvents: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                const link = `${window.location.origin}/eventos/${event.id}`;
+                                navigator.clipboard.writeText(link);
+                                toast.success('Link do evento copiado com sucesso!');
+                              }}
+                              className="text-purple-600 hover:text-purple-800 p-1.5 rounded-lg hover:bg-purple-50 transition-colors cursor-pointer"
+                              title="Copiar Link do Evento"
+                            >
+                              <Link2 className="h-4 w-4" />
+                            </button>
                             <button
                               onClick={() => {
                                 setSelectedEvent(event);
                                 setViewMode('coupons');
                               }}
-                              className="text-indigo-600 hover:text-indigo-800 p-1.5 rounded-lg hover:bg-indigo-50 transition-colors"
+                              className="text-indigo-600 hover:text-indigo-800 p-1.5 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
                               title="Cupons de Desconto"
                             >
                               <Ticket className="h-4 w-4" />
@@ -742,7 +795,7 @@ const AdminEvents: React.FC = () => {
                                 setSelectedEvent(event);
                                 setViewMode('orders');
                               }}
-                              className="text-emerald-600 hover:text-emerald-800 p-1.5 rounded-lg hover:bg-emerald-50 transition-colors"
+                              className="text-emerald-600 hover:text-emerald-800 p-1.5 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
                               title="Ordens & Ingressos"
                             >
                               <Receipt className="h-4 w-4" />
@@ -750,9 +803,19 @@ const AdminEvents: React.FC = () => {
                             <button
                               onClick={() => {
                                 setSelectedEvent(event);
+                                setViewMode('checkin');
+                              }}
+                              className="text-green-600 hover:text-green-800 p-1.5 rounded-lg hover:bg-green-50 transition-colors cursor-pointer"
+                              title="Portaria & Check-in"
+                            >
+                              <QrCode className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedEvent(event);
                                 setViewMode('reports');
                               }}
-                              className="text-blue-600 hover:text-blue-800 p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                              className="text-blue-600 hover:text-blue-800 p-1.5 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
                               title="Relatórios"
                             >
                               <BarChart3 className="h-4 w-4" />
@@ -762,7 +825,7 @@ const AdminEvents: React.FC = () => {
                                 setSelectedEvent(event);
                                 setViewMode('gallery');
                               }}
-                              className="text-purple-600 hover:text-purple-800 p-1.5 rounded-lg hover:bg-purple-50 transition-colors"
+                              className="text-purple-600 hover:text-purple-800 p-1.5 rounded-lg hover:bg-purple-50 transition-colors cursor-pointer"
                               title="Galeria"
                             >
                               <Camera className="h-4 w-4" />
@@ -770,26 +833,16 @@ const AdminEvents: React.FC = () => {
                             <button
                               onClick={() => {
                                 setSelectedEvent(event);
-                                setViewMode('checkin');
-                              }}
-                              className="text-green-600 hover:text-green-800 p-1.5 rounded-lg hover:bg-green-50 transition-colors"
-                              title="Portaria & Check-in"
-                            >
-                              <QrCode className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedEvent(event);
                                 setViewMode('form');
                               }}
-                              className="text-amber-600 hover:text-amber-800 p-1.5 rounded-lg hover:bg-amber-50 transition-colors"
+                              className="text-amber-600 hover:text-amber-800 p-1.5 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer"
                               title="Editar"
                             >
                               <Edit className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteEvent(event.id)}
-                              className="text-red-600 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                              className="text-red-600 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
                               title="Mover para Lixeira"
                             >
                               <Trash2 className="h-4 w-4" />

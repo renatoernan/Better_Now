@@ -231,7 +231,8 @@ export const usePublicEvents = () => {
       }
 
       const event = enrichEventFromDb(data);
-      if (!event || event.is_public === false || !isEventActive(event.status)) {
+      // Permite acesso direto via link tanto para eventos públicos quanto não públicos (desde que ativos e não excluídos)
+      if (!event || !isEventActive(event.status)) {
         return null;
       }
 

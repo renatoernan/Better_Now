@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle, CreditCard, FileText, QrCode, Percent, Upload, Image as ImageIcon, UserCheck, ClipboardList, CheckSquare, GripVertical, ArrowUp, ArrowDown, MessageSquare, Copy, Check, Sparkles, RefreshCw, Ticket, Send, RotateCcw, Pencil } from 'lucide-react';
+import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle, CreditCard, FileText, QrCode, Percent, Upload, Image as ImageIcon, UserCheck, ClipboardList, CheckSquare, GripVertical, ArrowUp, ArrowDown, MessageSquare, Copy, Check, Sparkles, RefreshCw, Ticket, Send, RotateCcw, Pencil, Globe, Link2 } from 'lucide-react';
 import { Event, PriceBatch, PaymentMethodFee, CheckoutFieldConfig } from '../../shared/types/types/event';
 import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEventTypes';
 import ImageUpload from '../shared/ImageUpload';
@@ -936,7 +936,7 @@ const EventForm: React.FC<EventFormProps> = ({
                     Status e Visibilidade
                   </h3>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div>
                       <label htmlFor="status" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                         Status do Evento
@@ -952,22 +952,70 @@ const EventForm: React.FC<EventFormProps> = ({
                         <option value="cancelled">Cancelado</option>
                         <option value="completed">Finalizado</option>
                       </select>
+                      <p className="text-[11px] text-gray-400 mt-1.5">
+                        Defina como <strong>Ativo</strong> para permitir que participantes comprem ingressos.
+                      </p>
                     </div>
 
-                    <div className="flex flex-col justify-center space-y-2 pt-2">
-                      <label className="flex items-center gap-2.5 cursor-pointer">
-                        <input
-                          {...register('is_public')}
-                          type="checkbox"
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          disabled={isSubmitting}
-                        />
-                        <span className="text-xs font-medium text-gray-700">
-                          Evento público (visível no site)
-                        </span>
+                    <div className="space-y-3">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Visibilidade do Evento
                       </label>
+                      
+                      <div className="grid grid-cols-1 gap-2.5">
+                        {/* Opção: Público */}
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                          watch('is_public') !== false 
+                            ? 'bg-blue-50/80 border-blue-300 text-blue-900 shadow-2xs' 
+                            : 'bg-gray-50/60 border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="visibility_radio"
+                            checked={watch('is_public') !== false}
+                            onChange={() => setValue('is_public', true, { shouldValidate: true, shouldDirty: true })}
+                            className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                            disabled={isSubmitting}
+                          />
+                          <div className="text-xs">
+                            <div className="font-bold flex items-center gap-1.5">
+                              <Globe className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Evento Público (visível no site)</span>
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-0.5">
+                              Aparece na listagem pública do site, página inicial e buscas.
+                            </p>
+                          </div>
+                        </label>
 
-                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        {/* Opção: Não Público / Link Direto */}
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                          watch('is_public') === false 
+                            ? 'bg-purple-50/80 border-purple-300 text-purple-900 shadow-2xs' 
+                            : 'bg-gray-50/60 border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="visibility_radio"
+                            checked={watch('is_public') === false}
+                            onChange={() => setValue('is_public', false, { shouldValidate: true, shouldDirty: true })}
+                            className="mt-0.5 text-purple-600 focus:ring-purple-500"
+                            disabled={isSubmitting}
+                          />
+                          <div className="text-xs">
+                            <div className="font-bold flex items-center gap-1.5">
+                              <Link2 className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Não público (acessível apenas pelo link)</span>
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-0.5">
+                              Oculto no site. Somente quem tiver o link direto conseguirá acessar e comprar.
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Checkbox de aprovação */}
+                      <label className="flex items-center gap-2.5 cursor-pointer pt-1">
                         <input
                           {...register('requires_approval')}
                           type="checkbox"
@@ -975,11 +1023,37 @@ const EventForm: React.FC<EventFormProps> = ({
                           disabled={isSubmitting}
                         />
                         <span className="text-xs font-medium text-gray-700">
-                          Requer aprovação de cadastro
+                          Requer aprovação prévia de cadastro
                         </span>
                       </label>
                     </div>
                   </div>
+
+                  {/* Informação e link direto se for evento não público */}
+                  {watch('is_public') === false && (
+                    <div className="mt-3 p-3.5 bg-purple-50/80 border border-purple-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2 text-purple-900">
+                        <Link2 className="w-4 h-4 text-purple-600 shrink-0" />
+                        <span className="break-all">
+                          Link direto do evento: <strong>{event?.id ? `${window.location.origin}/eventos/${event.id}` : 'O link estará disponível assim que o evento for salvo.'}</strong>
+                        </span>
+                      </div>
+                      {event?.id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link = `${window.location.origin}/eventos/${event.id}`;
+                            navigator.clipboard.writeText(link);
+                            toast.success('Link direto do evento copiado!');
+                          }}
+                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer shrink-0 shadow-xs"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copiar Link</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* 6. Contato & Informações Extras */}
