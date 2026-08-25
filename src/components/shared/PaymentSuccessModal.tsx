@@ -132,8 +132,25 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-100 flex flex-col max-h-[92vh]">
-        {/* Header (Diferenciado para Pago vs Pendente) */}
-        {isOrderPaid ? (
+        {/* Header (Diferenciado para Pago vs Pendente vs Loading) */}
+        {loading ? (
+          <div className="bg-gradient-to-br from-indigo-700 via-indigo-800 to-indigo-950 text-white p-6 sm:p-8 text-center relative overflow-hidden">
+            <button
+              onClick={onClose}
+              className="absolute top-5 right-5 text-indigo-200 hover:text-white transition-colors p-1.5 rounded-full hover:bg-white/10 cursor-pointer"
+              aria-label="Fechar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mx-auto mb-3.5 border border-white/30 shadow-inner">
+              <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-white animate-spin" />
+            </div>
+
+            <h2 className="text-xl sm:text-2xl font-extrabold text-white">Carregando Pedido...</h2>
+            <p className="text-indigo-100 text-xs sm:text-sm mt-1">Buscando os detalhes e QR Codes dos ingressos</p>
+          </div>
+        ) : isOrderPaid ? (
           <div className="bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-900 text-white p-6 sm:p-8 text-center relative overflow-hidden">
             <button
               onClick={onClose}

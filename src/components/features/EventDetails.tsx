@@ -73,36 +73,46 @@ const EventDetails: React.FC = () => {
   const [mercadoPagoCheckoutUrl, setMercadoPagoCheckoutUrl] = useState<string | null>(null);
   const [currentClientId, setCurrentClientId] = useState<string | null>(null);
 
-  // Efeito para verificar parâmetros de retorno de pagamento (?payment=success&order_id=... ou &session_id=...)
+  // Efeito para verificar parâmetros de retorno de pagamento (?payment=success&order_id=... ou &session_id=... ou ?order_id=...)
   useEffect(() => {
     const paymentStatus = searchParams.get('payment');
     const sessionId = searchParams.get('session_id') || searchParams.get('order_id');
 
-    if (paymentStatus === 'success' && sessionId) {
+    if (sessionId) {
+      setStripeSessionId(sessionId);
+
       const verifySuccessReturn = async () => {
         try {
+          // 1. Busca primeiro se a ordem já está com status de paga
+          const orderData = await getOrderBySessionId(sessionId);
+          if (orderData && (orderData.status === 'paid' || orderData.status === 'approved')) {
+            setStripeSessionId(sessionId);
+            setShowStripeCheckoutModal(false);
+            setAwaitingPaymentOrderId(null);
+            setShowPaymentSuccessModal(true);
+            return;
+          }
+
+          // 2. Consulta a API do Mercado Pago se não constar paga
           const result = await checkMercadoPagoPaymentStatus(sessionId);
           if (result.paid) {
             setStripeSessionId(result.paymentId || sessionId);
             setShowStripeCheckoutModal(false);
             setAwaitingPaymentOrderId(null);
             setShowPaymentSuccessModal(true);
-            toast.success('Pagamento confirmado com sucesso! 🎉');
+            toast.success('Pagamento confirmado com sucesso! 🎉', { id: 'payment-success-toast', duration: 4000 });
+          } else if (paymentStatus === 'awaiting') {
+            setAwaitingPaymentOrderId(sessionId);
+            setShowStripeCheckoutModal(true);
+            toast.info('Seu pedido foi registrado e está aguardando a compensação do pagamento.');
           } else {
-            const orderData = await getOrderBySessionId(sessionId);
-            if (orderData?.status === 'paid' || orderData?.status === 'approved') {
-              setStripeSessionId(sessionId);
-              setShowStripeCheckoutModal(false);
-              setAwaitingPaymentOrderId(null);
-              setShowPaymentSuccessModal(true);
-            } else {
-              setAwaitingPaymentOrderId(sessionId);
-              setShowStripeCheckoutModal(true);
-              toast.info('Seu pedido foi registrado e está aguardando a compensação do pagamento.');
-            }
+            setStripeSessionId(sessionId);
+            setShowPaymentSuccessModal(true);
           }
         } catch (err) {
           console.warn('Erro ao verificar retorno de pagamento:', err);
+          setStripeSessionId(sessionId);
+          setShowPaymentSuccessModal(true);
         }
       };
 
@@ -692,22 +702,6 @@ const EventDetails: React.FC = () => {
     return () => clearInterval(pollInterval);
   }, [awaitingPaymentOrderId]);
 
-  // Verificar retorno via query params (quando o Mercado Pago redireciona de volta)
-  useEffect(() => {
-    const paymentStatus = searchParams.get('payment');
-    const orderId = searchParams.get('order_id');
-
-    if (paymentStatus === 'success' && orderId) {
-      setAwaitingPaymentOrderId(null);
-      setShowStripeCheckoutModal(false);
-      setShowPaymentSuccessModal(true);
-
-      const newParams = new URLSearchParams(searchParams);
-      newParams.delete('payment');
-      newParams.delete('order_id');
-      setSearchParams(newParams, { replace: true });
-    }
-  }, [searchParams]);
 
   const [attendeesList, setAttendeesList] = useState<CheckoutClientData[]>([]);
 
@@ -1020,7 +1014,10 @@ const EventDetails: React.FC = () => {
           setAwaitingPaymentOrderId(null);
           setShowStripeCheckoutModal(false);
           setShowPaymentSuccessModal(true);
-          toast.success('Pagamento aprovado com sucesso! Seus ingressos foram emitidos! 🎉');
+          toast.success('Pagamento aprovado com sucesso! Seus ingressos foram emitidos! 🎉', {
+            id: 'payment-success-toast',
+            duration: 4000,
+          });
         }}
         onConfirmCheckout={handleConfirmStripeCheckout}
         loading={stripeCheckoutLoading}

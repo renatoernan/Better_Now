@@ -151,14 +151,20 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
     return () => clearInterval(interval);
   }, [pixData, pixTimer]);
 
-  // Polling em tempo real para confirmação do Pix
+  // Polling em tempo real para confirmação do Pix (para imediatamente após confirmação)
+  const paymentConfirmedRef = useRef(false);
   useEffect(() => {
-    if (!pixData?.orderId) return;
+    if (!pixData?.orderId || paymentConfirmedRef.current) return;
+
+    let pollInterval: any;
 
     const checkStatus = async () => {
+      if (paymentConfirmedRef.current) return;
       try {
         const res = await checkMercadoPagoPaymentStatus(pixData.orderId);
-        if (res.paid) {
+        if (res.paid && !paymentConfirmedRef.current) {
+          paymentConfirmedRef.current = true;
+          if (pollInterval) clearInterval(pollInterval);
           if (onPaymentSuccess) {
             onPaymentSuccess(pixData.orderId);
           }
@@ -168,8 +174,10 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
       }
     };
 
-    const pollInterval = setInterval(checkStatus, 3500);
-    return () => clearInterval(pollInterval);
+    pollInterval = setInterval(checkStatus, 3500);
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [pixData?.orderId, onPaymentSuccess]);
 
   const generatePix = async () => {

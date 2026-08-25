@@ -426,7 +426,9 @@ export const sendOrderEmailNotification = async ({
     let eventLocation = eventRow?.location || 'Local a definir';
 
     // 4. Montar variáveis dinâmicas
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const origin = (typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('localhost'))
+      ? window.location.origin 
+      : 'https://betternow.cesire.com.br';
     const accessLink = `${origin}/eventos/${order.event_id}?payment=success&order_id=${currentOrderId}`;
     const paymentLink = order.payment_url || 
       order.checkout_url || 
@@ -613,7 +615,9 @@ export const sendOrderWhatsAppNotification = async ({
     const rawTemplate = customTemplate || wahaConfig.templates[type] || DEFAULT_WAHA_TEMPLATES[type];
 
     // 4. Montar variáveis dinâmicas
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const origin = (typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('localhost'))
+      ? window.location.origin 
+      : 'https://betternow.cesire.com.br';
     const accessLink = `${origin}/eventos/${order.event_id}?payment=success&order_id=${currentOrderId}`;
     const paymentLink = order.payment_url || 
       order.checkout_url || 
