@@ -208,24 +208,54 @@ export const completeMercadoPagoOrder = async (
   }
 };
 
+async function callMercadoPagoPaymentsApi(paymentBody: any, idempotencyKey?: string) {
+  // 1. Tenta chamar o endpoint serverless /api/mercadopago-payment (evita CORS)
+  try {
+    const res = await fetch('/api/mercadopago-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        paymentBody,
+        idempotencyKey,
+      }),
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+    const errData = await res.json().catch(() => ({}));
+    if (errData && (errData.id || errData.message || errData.cause || errData.status)) {
+      return errData;
+    }
+  } catch (backendErr) {
+    console.warn('Tentativa via /api/mercadopago-payment falhou, tentando fallback direto:', backendErr);
+  }
+
+  // 2. Fallback direto se o endpoint serverless não estiver disponível
+  const accessToken =
+    (import.meta as any).env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
+    (import.meta as any).env.MERCADOPAGO_ACCESS_TOKEN ||
+    'APP_USR-1264360358076296-081717-ffb3d55789b1665111c7d2c6e33a856f-68352240';
+
+  const directRes = await fetch('https://api.mercadopago.com/v1/payments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+      'X-Idempotency-Key': idempotencyKey || `mp-${Date.now()}`,
+    },
+    body: JSON.stringify(paymentBody),
+  });
+
+  return await directRes.json();
+}
+
 export const createMercadoPagoPixPayment = async (
   params: CreatePixPaymentParams
 ): Promise<PixPaymentResponse> => {
   try {
-    const accessToken =
-      (import.meta as any).env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-      (import.meta as any).env.MERCADOPAGO_ACCESS_TOKEN;
-
-    if (!accessToken) {
-      return {
-        success: false,
-        orderId: '',
-        paymentId: '',
-        qrCode: '',
-        error: 'Token do Mercado Pago não configurado (VITE_MERCADOPAGO_ACCESS_TOKEN).',
-      };
-    }
-
     const clientIp = await getClientIpAddress();
     const cleanDoc = params.client_document?.replace(/\D/g, '');
 
@@ -305,14 +335,8 @@ export const createMercadoPagoPixPayment = async (
     const firstName = nameParts[0] || 'Comprador';
     const lastName = nameParts.slice(1).join(' ') || 'Cliente';
 
-    const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-        'X-Idempotency-Key': `pix-${orderId}-${Date.now()}`,
-      },
-      body: JSON.stringify({
+    const mpData = await callMercadoPagoPaymentsApi(
+      {
         transaction_amount: totalAmount,
         description: `Ingresso - ${params.batch_name || 'Evento'} (${params.quantity}x)`,
         payment_method_id: 'pix',
@@ -332,14 +356,13 @@ export const createMercadoPagoPixPayment = async (
           client_id: params.client_id,
           quantity: params.quantity,
         },
-      }),
-    });
+      },
+      `pix-${orderId}-${Date.now()}`
+    );
 
-    const mpData = await mpRes.json();
-
-    if (!mpRes.ok || !mpData.id) {
+    if (!mpData || !mpData.id) {
       console.error('Erro retornado pela API do Mercado Pago (Pix):', mpData);
-      const errMsg = mpData.message || mpData.cause?.[0]?.description || 'Erro ao gerar Pix no Mercado Pago.';
+      const errMsg = mpData?.message || mpData?.cause?.[0]?.description || 'Erro ao gerar Pix no Mercado Pago.';
       return {
         success: false,
         orderId: orderId || '',
@@ -397,18 +420,6 @@ export const processMercadoPagoCardPayment = async (
   params: ProcessCardPaymentParams
 ): Promise<CardPaymentResponse> => {
   try {
-    const accessToken =
-      (import.meta as any).env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-      (import.meta as any).env.MERCADOPAGO_ACCESS_TOKEN;
-
-    if (!accessToken) {
-      return {
-        success: false,
-        status: 'rejected',
-        error: 'Token do Mercado Pago não configurado (VITE_MERCADOPAGO_ACCESS_TOKEN).',
-      };
-    }
-
     const clientIp = await getClientIpAddress();
     const cleanDoc = params.client_document?.replace(/\D/g, '');
 
@@ -488,14 +499,8 @@ export const processMercadoPagoCardPayment = async (
     const firstName = nameParts[0] || 'Comprador';
     const lastName = nameParts.slice(1).join(' ') || 'Cliente';
 
-    const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-        'X-Idempotency-Key': `card-${orderId}-${Date.now()}`,
-      },
-      body: JSON.stringify({
+    const mpData = await callMercadoPagoPaymentsApi(
+      {
         token: params.cardToken,
         transaction_amount: totalAmount,
         installments: Number(params.installments) || 1,
@@ -518,14 +523,13 @@ export const processMercadoPagoCardPayment = async (
           client_id: params.client_id,
           quantity: params.quantity,
         },
-      }),
-    });
+      },
+      `card-${orderId}-${Date.now()}`
+    );
 
-    const mpData = await mpRes.json();
-
-    if (!mpRes.ok || !mpData.id) {
+    if (!mpData || !mpData.id) {
       console.error('Erro na resposta do pagamento de cartão:', mpData);
-      const errMsg = mpData.message || mpData.cause?.[0]?.description || 'Erro ao processar cartão.';
+      const errMsg = mpData?.message || mpData?.cause?.[0]?.description || 'Erro ao processar cartão.';
       return {
         success: false,
         status: 'rejected',
