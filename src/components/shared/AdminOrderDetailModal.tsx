@@ -1,6 +1,10 @@
 import React from 'react';
-import { X, Ticket, User, Phone, Mail, CreditCard, Calendar, Globe, QrCode, CheckCircle2, AlertCircle, Ban, ArrowRight, ShieldCheck, MessageSquare } from 'lucide-react';
-import { EventOrderRecord } from '../../shared/hooks/hooks/useEventOrders';
+import { 
+  X, Ticket, User, Phone, Mail, CreditCard, Calendar, Globe, 
+  QrCode, CheckCircle2, AlertCircle, Ban, ArrowRight, ShieldCheck, 
+  MessageSquare, ArrowRightLeft, RotateCcw 
+} from 'lucide-react';
+import { EventOrderRecord, EventTicketRecord } from '../../shared/hooks/hooks/useEventOrders';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
 
 interface AdminOrderDetailModalProps {
@@ -10,6 +14,8 @@ interface AdminOrderDetailModalProps {
   onCancelOrder?: (orderId: string) => void;
   onApproveProof?: (orderId: string) => void;
   onSendWhatsApp?: (orderId: string, type: 'created' | 'confirmed' | 'cancelled') => void;
+  onTransferTicket?: (ticket: EventTicketRecord, order: EventOrderRecord) => void;
+  onRefundOrder?: (order: EventOrderRecord) => void;
 }
 
 export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
@@ -19,6 +25,8 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
   onCancelOrder,
   onApproveProof,
   onSendWhatsApp,
+  onTransferTicket,
+  onRefundOrder,
 }) => {
   if (!isOpen || !order) return null;
 
@@ -38,6 +46,14 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
   };
 
   const getStatusBadge = (status: string) => {
+    if (status === 'refunded' || order.refunded_at) {
+      return (
+        <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded-full flex items-center gap-1">
+          <RotateCcw className="w-3.5 h-3.5" /> Reembolsado
+        </span>
+      );
+    }
+
     switch (status) {
       case 'paid':
       case 'approved':
@@ -55,7 +71,6 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
         );
       case 'cancelled':
       case 'failed':
-      case 'refunded':
       default:
         return (
           <span className="px-3 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full flex items-center gap-1">
@@ -70,8 +85,11 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
     if (method === 'pix' || method === 'pix_stripe') return 'Pix (Online)';
     if (method === 'pix_chave') return 'Pix (Chave / QR Code Próprio)';
     if (method === 'boleto') return 'Boleto';
+    if (method === 'cortesia' || method === 'free') return 'Cortesia (Gratuito)';
     return method || 'Mercado Pago';
   };
+
+  const isPaid = order.status === 'paid' || (order.status as string) === 'approved';
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
@@ -80,7 +98,7 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
         <div className="bg-gradient-to-r from-gray-900 via-indigo-950 to-slate-900 text-white p-6 relative">
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 text-gray-400 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10"
+            className="absolute top-5 right-5 text-gray-400 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10 cursor-pointer"
             aria-label="Fechar"
           >
             <X className="w-5 h-5" />
@@ -149,10 +167,32 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
                 <p className="font-semibold text-gray-900">{getPaymentLabel(order.payment_method)}</p>
               </div>
               <div>
-                <p className="text-gray-500">Total Pago</p>
+                <p className="text-gray-500">Total</p>
                 <p className="font-extrabold text-indigo-700 text-sm">{formatPrice(order.amount_total)}</p>
               </div>
             </div>
+
+            {/* Informações de Reembolso se houver */}
+            {(order.refunded_at || order.refund_amount) && (
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 space-y-1">
+                <div className="flex items-center justify-between font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <RotateCcw className="w-3.5 h-3.5 text-purple-600" /> Reembolso Registrado
+                  </span>
+                  <span>{formatPrice(order.refund_amount || order.amount_total)}</span>
+                </div>
+                {order.refunded_at && (
+                  <p className="text-[11px] text-purple-700">
+                    Data: {formatDate(order.refunded_at)}
+                  </p>
+                )}
+                {order.refund_reason && (
+                  <p className="text-[11px] text-purple-800">
+                    <strong>Motivo:</strong> {order.refund_reason}
+                  </p>
+                )}
+              </div>
+            )}
 
             {order.cancellation_reason && (
               <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
@@ -168,6 +208,11 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
               <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
                 Ingressos Emitidos ({order.tickets?.length || 0})
               </h3>
+              {isPaid && onTransferTicket && (
+                <span className="text-[11px] text-indigo-600 font-semibold">
+                  Clique em &quot;Transferir&quot; para mudar o titular nominal
+                </span>
+              )}
             </div>
 
             {order.tickets && order.tickets.length > 0 ? (
@@ -175,9 +220,9 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
                 {order.tickets.map((ticket, idx) => (
                   <div
                     key={ticket.id || idx}
-                    className="p-3.5 rounded-2xl bg-white border border-gray-200 flex items-center justify-between shadow-2xs hover:border-indigo-300 transition-colors"
+                    className="p-3.5 rounded-2xl bg-white border border-gray-200 flex items-center justify-between shadow-2xs hover:border-indigo-300 transition-colors gap-3"
                   >
-                    <div className="space-y-1">
+                    <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-indigo-950 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
                           #{ticket.ticket_number}
@@ -191,13 +236,33 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
                       <p className="font-semibold text-gray-900 text-xs">
                         {ticket.person?.nome || order.client_name || `Participante ${idx + 1}`}
                       </p>
-                      {ticket.person?.documento && (
-                        <p className="text-[11px] text-gray-500">CPF: {ticket.person.documento}</p>
-                      )}
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
+                        {ticket.person?.documento && (
+                          <span>CPF: <strong>{ticket.person.documento}</strong></span>
+                        )}
+                        {ticket.person?.whatsapp && (
+                          <span>WhatsApp: {ticket.person.whatsapp}</span>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="w-10 h-10 bg-gray-50 rounded-lg p-1 border border-gray-200 flex items-center justify-center shrink-0">
-                      <QrCode className="w-full h-full text-gray-800" />
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Botão Transferir Titularidade */}
+                      {isPaid && ticket.status === 'valid' && onTransferTicket && (
+                        <button
+                          type="button"
+                          onClick={() => onTransferTicket(ticket, order)}
+                          className="px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                          title="Transferir este ingresso para outra pessoa"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                          <span>Transferir</span>
+                        </button>
+                      )}
+
+                      <div className="w-10 h-10 bg-gray-50 rounded-lg p-1 border border-gray-200 flex items-center justify-center shrink-0">
+                        <QrCode className="w-full h-full text-gray-800" />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -214,7 +279,7 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
 
         {/* Footer */}
         <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {order.client_phone && onSendWhatsApp && (
               <button
                 type="button"
@@ -231,6 +296,22 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
               >
                 <MessageSquare className="w-4 h-4" />
                 Reenviar WhatsApp
+              </button>
+            )}
+
+            {/* Ação de Reembolso */}
+            {isPaid && onRefundOrder && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRefundOrder(order);
+                  onClose();
+                }}
+                className="px-3.5 py-2 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Registrar reembolso deste pedido"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reembolsar
               </button>
             )}
 
@@ -262,3 +343,4 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
 };
 
 export default AdminOrderDetailModal;
+

@@ -5,13 +5,15 @@ import {
   Calendar, Layers, CreditCard, ChevronRight, AlertCircle, Ban, Trash2, RotateCcw, Zap, MessageSquare, Gift
 } from 'lucide-react';
 import { Event } from '../../shared/types/types/event';
-import { useEventOrders, EventOrderRecord } from '../../shared/hooks/hooks/useEventOrders';
+import { useEventOrders, EventOrderRecord, EventTicketRecord } from '../../shared/hooks/hooks/useEventOrders';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
 import AdminOrderDetailModal from '../shared/AdminOrderDetailModal';
 import AdminPaymentProofAuditModal from '../shared/AdminPaymentProofAuditModal';
 import AdminCancelOrderConfirmModal from '../shared/AdminCancelOrderConfirmModal';
 import AdminRestoreOrderConfirmModal from '../shared/AdminRestoreOrderConfirmModal';
 import AdminIssueComplimentaryModal from '../shared/AdminIssueComplimentaryModal';
+import AdminRefundOrderModal from '../shared/AdminRefundOrderModal';
+import AdminTransferTicketModal from '../shared/AdminTransferTicketModal';
 import { toast } from 'sonner';
 
 interface AdminEventOrdersProps {
@@ -29,6 +31,8 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
     approvePixProof, 
     rejectPixProof, 
     cancelOrder, 
+    refundOrder,
+    transferTicket,
     restoreOrder, 
     syncOrderWithMercadoPago, 
     syncAllPendingWithMercadoPago,
@@ -46,6 +50,8 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
   const [selectedOrderForProof, setSelectedOrderForProof] = useState<EventOrderRecord | null>(null);
   const [orderToCancel, setOrderToCancel] = useState<EventOrderRecord | null>(null);
   const [orderToRestore, setOrderToRestore] = useState<EventOrderRecord | null>(null);
+  const [orderToRefund, setOrderToRefund] = useState<EventOrderRecord | null>(null);
+  const [ticketToTransfer, setTicketToTransfer] = useState<{ ticket: EventTicketRecord; order: EventOrderRecord } | null>(null);
   const [showComplimentaryModal, setShowComplimentaryModal] = useState<boolean>(false);
 
   // Alternar status selecionado (múltipla escolha)
@@ -69,11 +75,14 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         order.ip_address?.includes(searchTerm) ||
         order.id.toLowerCase().includes(searchTerm.toLowerCase());
 
+      const isOrderRefunded = order.status === 'refunded' || !!order.refunded_at;
+
       const matchesStatus =
         selectedStatuses.length === 0 ||
         (selectedStatuses.includes('paid') && (order.status === 'paid' || (order.status as string) === 'approved')) ||
         (selectedStatuses.includes('pending') && (order.status === 'pending' || order.status === 'pending_proof')) ||
-        (selectedStatuses.includes('cancelled') && (order.status === 'cancelled' || order.status === 'refunded' || order.status === 'failed'));
+        (selectedStatuses.includes('cancelled') && (order.status === 'cancelled' || order.status === 'failed')) ||
+        (selectedStatuses.includes('refunded') && isOrderRefunded);
 
       const matchesPayment =
         paymentFilter === 'all' || order.payment_method === paymentFilter;
@@ -115,6 +124,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
       'Forma Pagamento',
       'Taxa',
       'Total Pago (R$)',
+      'Valor Reembolsado (R$)',
       'Participantes Nominais'
     ];
 
@@ -137,6 +147,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         o.payment_method || '',
         o.convenience_fee || 0,
         o.amount_total,
+        o.refund_amount || 0,
         `"${attendees}"`
       ].join(';');
     });
@@ -153,32 +164,37 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
     toast.success('Relatório CSV exportado com sucesso!');
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'paid':
-      case 'approved':
-        return (
-          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg flex items-center gap-1 w-fit">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Pago
-          </span>
-        );
-      case 'pending':
-      case 'pending_proof':
-        return (
-          <span className="px-2.5 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-lg flex items-center gap-1 w-fit">
-            <Clock className="w-3.5 h-3.5" /> Pendente
-          </span>
-        );
-      case 'cancelled':
-      case 'failed':
-      case 'refunded':
-      default:
-        return (
-          <span className="px-2.5 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-lg flex items-center gap-1 w-fit">
-            <Ban className="w-3.5 h-3.5" /> Cancelado
-          </span>
-        );
+  const getStatusBadge = (order: EventOrderRecord) => {
+    if (order.status === 'refunded' || !!order.refunded_at) {
+      return (
+        <span className="px-2.5 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded-lg flex items-center gap-1 w-fit">
+          <RotateCcw className="w-3.5 h-3.5" /> Reembolsado
+        </span>
+      );
     }
+
+    const st = order.status as string;
+    if (st === 'paid' || st === 'approved') {
+      return (
+        <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg flex items-center gap-1 w-fit">
+          <CheckCircle2 className="w-3.5 h-3.5" /> Pago
+        </span>
+      );
+    }
+
+    if (st === 'pending' || st === 'pending_proof') {
+      return (
+        <span className="px-2.5 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-lg flex items-center gap-1 w-fit">
+          <Clock className="w-3.5 h-3.5" /> Pendente
+        </span>
+      );
+    }
+
+    return (
+      <span className="px-2.5 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-lg flex items-center gap-1 w-fit">
+        <Ban className="w-3.5 h-3.5" /> Cancelado
+      </span>
+    );
   };
 
   const getPaymentBadge = (method?: string) => {
@@ -257,11 +273,11 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         </div>
       </div>
 
-      {/* Cards de KPIs no Topo */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Cards de KPIs no Topo (5 Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Receita Total */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <DollarSign className="w-6 h-6" />
           </div>
           <div>
@@ -273,7 +289,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
 
         {/* Ingressos Vendidos */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <Ticket className="w-6 h-6" />
           </div>
           <div>
@@ -287,25 +303,37 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
 
         {/* Pedidos Pendentes */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
             <Clock className="w-6 h-6" />
           </div>
           <div>
             <p className="text-xs font-semibold text-gray-500">Aguardando Pagamento</p>
             <h3 className="text-xl font-black text-amber-600">{kpis.pendingOrders}</h3>
-            <p className="text-[11px] text-amber-700">Inclui Pix Chave / Mercado Pago</p>
+            <p className="text-[11px] text-amber-700">Pix Chave / Mercado Pago</p>
           </div>
         </div>
 
         {/* Pedidos Cancelados */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
             <XCircle className="w-6 h-6" />
           </div>
           <div>
             <p className="text-xs font-semibold text-gray-500">Cancelados / Recusados</p>
             <h3 className="text-xl font-black text-gray-900">{kpis.cancelledOrders}</h3>
-            <p className="text-[11px] text-gray-400">Total de pedidos: {kpis.totalOrders}</p>
+            <p className="text-[11px] text-gray-400">Total: {kpis.totalOrders} pedidos</p>
+          </div>
+        </div>
+
+        {/* Card KPI de Reembolsos */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+            <RotateCcw className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500">Reembolsos / Devoluções</p>
+            <h3 className="text-xl font-black text-purple-900">{formatPrice(kpis.totalRefundAmount)}</h3>
+            <p className="text-[11px] text-purple-700 font-semibold">{kpis.refundedOrders} pedido(s) devolvido(s)</p>
           </div>
         </div>
       </div>
@@ -325,7 +353,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
             />
           </div>
 
-          {/* Filtro Multi-Status com Chips (Padrão: Pagos e Pendentes) */}
+          {/* Filtro Multi-Status com Chips */}
           <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200 overflow-x-auto shrink-0">
             <span className="text-[11px] font-bold text-gray-500 px-2 flex items-center gap-1 shrink-0">
               <Filter className="w-3 h-3" /> Status:
@@ -368,6 +396,20 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
               <Ban className="w-3.5 h-3.5" />
               <span>Cancelados</span>
             </button>
+
+            {/* Chip de Reembolsados */}
+            <button
+              type="button"
+              onClick={() => toggleStatus('refunded')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                selectedStatuses.includes('refunded')
+                  ? 'bg-purple-700 text-white shadow-xs'
+                  : 'bg-transparent text-gray-600 hover:bg-gray-200/60'
+              }`}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reembolsados</span>
+            </button>
           </div>
 
           {/* Filtro de Meio de Pagamento */}
@@ -381,6 +423,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
             <option value="pix">Pix</option>
             <option value="pix_chave">Pix Chave</option>
             <option value="boleto">Boleto</option>
+            <option value="cortesia">Cortesia</option>
           </select>
 
           {/* Filtro de Lote */}
@@ -430,140 +473,160 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700">
-                {filteredOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="font-bold text-indigo-950">
-                        #{order.id.substring(0, 8).toUpperCase()}
-                      </div>
-                      <div className="text-[10px] text-gray-400">
-                        {new Date(order.created_at).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </div>
-                    </td>
+                {filteredOrders.map((order) => {
+                  const isPaid = order.status === 'paid' || (order.status as string) === 'approved';
+                  return (
+                    <tr key={order.id} className="hover:bg-gray-50/70 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-indigo-950">
+                          #{order.id.substring(0, 8).toUpperCase()}
+                        </div>
+                        <div className="text-[10px] text-gray-400">
+                          {new Date(order.created_at).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </div>
+                      </td>
 
-                    <td className="px-5 py-4">
-                      <div className="font-bold text-gray-900">{order.client_name || 'Anônimo'}</div>
-                      <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                        <span>{order.client_phone || '-'}</span>
-                        {order.client_document && (
-                          <span className="text-gray-400">({order.client_document})</span>
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-gray-900">{order.client_name || 'Anônimo'}</div>
+                        <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                          <span>{order.client_phone || '-'}</span>
+                          {order.client_document && (
+                            <span className="text-gray-400">({order.client_document})</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="font-medium text-gray-900">{order.batch_name || 'Lote Padrão'}</div>
+                        <div className="text-[11px] text-indigo-600 font-bold">
+                          {order.quantity} ingresso(s)
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {getPaymentBadge(order.payment_method)}
+                      </td>
+
+                      <td className="px-5 py-4 font-black text-gray-900 text-sm">
+                        {formatPrice(order.amount_total)}
+                        {order.refund_amount && (
+                          <div className="text-[10px] text-purple-700 font-bold">
+                            Devolvido: {formatPrice(order.refund_amount)}
+                          </div>
                         )}
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-gray-900">{order.batch_name || 'Lote Padrão'}</div>
-                      <div className="text-[11px] text-indigo-600 font-bold">
-                        {order.quantity} ingresso(s)
-                      </div>
-                    </td>
+                      <td className="px-5 py-4">
+                        <span className="text-[11px] text-gray-600 font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+                          {order.ip_address || '127.0.0.1'}
+                        </span>
+                      </td>
 
-                    <td className="px-5 py-4">
-                      {getPaymentBadge(order.payment_method)}
-                    </td>
+                      <td className="px-5 py-4">
+                        {getStatusBadge(order)}
+                      </td>
 
-                    <td className="px-5 py-4 font-black text-gray-900 text-sm">
-                      {formatPrice(order.amount_total)}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <span className="text-[11px] text-gray-600 font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
-                        {order.ip_address || '127.0.0.1'}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      {getStatusBadge(order.status)}
-                    </td>
-
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* Botão de Ver Detalhes */}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedOrderForDetail(order)}
-                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                          title="Ver detalhes da ordem e participantes"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-
-                        {/* Botão de Auditar Comprovante (se Pix Chave com comprovante) */}
-                        {order.payment_proof_url && order.status === 'pending' && (
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Botão de Ver Detalhes */}
                           <button
                             type="button"
-                            onClick={() => setSelectedOrderForProof(order)}
-                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer relative"
-                            title="Auditar Comprovante Pix"
+                            onClick={() => setSelectedOrderForDetail(order)}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                            title="Ver detalhes da ordem e participantes"
                           >
-                            <FileText className="w-4 h-4" />
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 absolute top-1 right-1 animate-pulse" />
+                            <Eye className="w-4 h-4" />
                           </button>
-                        )}
 
-                        {/* Botão de Verificar Status no Mercado Pago (para pendentes) */}
-                        {order.status === 'pending' && (
-                          <button
-                            type="button"
-                            onClick={() => syncOrderWithMercadoPago(order.id)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                            title="Verificar se este pedido foi pago no Mercado Pago"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </button>
-                        )}
+                          {/* Botão de Reembolso para Pedidos Pagos */}
+                          {isPaid && (
+                            <button
+                              type="button"
+                              onClick={() => setOrderToRefund(order)}
+                              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                              title="Registrar Reembolso / Devolução"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
 
-                        {/* Botão de Enviar / Reenviar Notificação WhatsApp */}
-                        {order.client_phone && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const notifType = (order.status === 'paid' || (order.status as string) === 'approved')
-                                ? 'confirmed'
-                                : order.status === 'cancelled'
-                                ? 'cancelled'
-                                : 'created';
-                              sendManualOrderNotification(order.id, notifType);
-                            }}
-                            className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                            title="Enviar / Reenviar mensagem no WhatsApp do comprador"
-                          >
-                            <MessageSquare className="w-4 h-4" />
-                          </button>
-                        )}
+                          {/* Botão de Auditar Comprovante (se Pix Chave com comprovante) */}
+                          {order.payment_proof_url && order.status === 'pending' && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedOrderForProof(order)}
+                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer relative"
+                              title="Auditar Comprovante Pix"
+                            >
+                              <FileText className="w-4 h-4" />
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 absolute top-1 right-1 animate-pulse" />
+                            </button>
+                          )}
 
-                        {/* Botão de Recuperar / Reativar Pedido (para cancelados) */}
-                        {(order.status === 'cancelled' || order.status === 'refunded' || order.status === 'failed') && (
-                          <button
-                            type="button"
-                            onClick={() => setOrderToRestore(order)}
-                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                            title="Reativar / Recuperar Pedido"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
-                        )}
+                          {/* Botão de Verificar Status no Mercado Pago (para pendentes) */}
+                          {order.status === 'pending' && (
+                            <button
+                              type="button"
+                              onClick={() => syncOrderWithMercadoPago(order.id)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Verificar se este pedido foi pago no Mercado Pago"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </button>
+                          )}
 
-                        {/* Botão de Cancelar Pedido (para não cancelados) */}
-                        {order.status !== 'cancelled' && order.status !== 'refunded' && (
-                          <button
-                            type="button"
-                            onClick={() => setOrderToCancel(order)}
-                            className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                            title="Cancelar Pedido"
-                          >
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {/* Botão de Enviar / Reenviar Notificação WhatsApp */}
+                          {order.client_phone && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const notifType = (order.status === 'paid' || (order.status as string) === 'approved')
+                                  ? 'confirmed'
+                                  : order.status === 'cancelled'
+                                  ? 'cancelled'
+                                  : 'created';
+                                sendManualOrderNotification(order.id, notifType);
+                              }}
+                              className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                              title="Enviar / Reenviar mensagem no WhatsApp do comprador"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Botão de Recuperar / Reativar Pedido (para cancelados ou reembolsados) */}
+                          {(order.status === 'cancelled' || order.status === 'refunded' || order.status === 'failed') && (
+                            <button
+                              type="button"
+                              onClick={() => setOrderToRestore(order)}
+                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                              title="Reativar / Recuperar Pedido"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Botão de Cancelar Pedido (para não cancelados) */}
+                          {order.status !== 'cancelled' && order.status !== 'refunded' && (
+                            <button
+                              type="button"
+                              onClick={() => setOrderToCancel(order)}
+                              className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="Cancelar Pedido"
+                            >
+                              <Ban className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -580,6 +643,8 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
           if (target) setOrderToCancel(target);
         }}
         onSendWhatsApp={(orderId, type) => sendManualOrderNotification(orderId, type)}
+        onTransferTicket={(ticket, ord) => setTicketToTransfer({ ticket, order: ord })}
+        onRefundOrder={(ord) => setOrderToRefund(ord)}
       />
 
       {/* Modal de Auditoria de Comprovante */}
@@ -596,8 +661,8 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         isOpen={!!orderToCancel}
         onClose={() => setOrderToCancel(null)}
         order={orderToCancel}
-        onConfirmCancel={async (orderId, reason) => {
-          await cancelOrder(orderId, reason);
+        onConfirmCancel={async (orderId, reason, notifyOptions) => {
+          await cancelOrder(orderId, reason, notifyOptions);
           setOrderToCancel(null);
         }}
       />
@@ -620,8 +685,34 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         event={event}
         onSuccess={() => refetch()}
       />
+
+      {/* Modal de Reembolso de Pedido */}
+      <AdminRefundOrderModal
+        isOpen={!!orderToRefund}
+        onClose={() => setOrderToRefund(null)}
+        order={orderToRefund}
+        onConfirmRefund={async ({ orderId, amount, reason, isPartial }) => {
+          await refundOrder({ orderId, amount, reason, isPartial });
+          setOrderToRefund(null);
+        }}
+      />
+
+      {/* Modal de Transferência de Ingresso Individual */}
+      <AdminTransferTicketModal
+        isOpen={!!ticketToTransfer}
+        onClose={() => setTicketToTransfer(null)}
+        ticket={ticketToTransfer?.ticket || null}
+        orderClientName={ticketToTransfer?.order.client_name}
+        orderClientDocument={ticketToTransfer?.order.client_document}
+        orderClientPhone={ticketToTransfer?.order.client_phone}
+        onConfirmTransfer={async (params) => {
+          await transferTicket(params);
+          setTicketToTransfer(null);
+        }}
+      />
     </div>
   );
 };
 
 export default AdminEventOrders;
+

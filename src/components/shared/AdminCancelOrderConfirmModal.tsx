@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { X, Ban, AlertTriangle, Loader2 } from 'lucide-react';
-import { EventOrderRecord } from '../../shared/hooks/hooks/useEventOrders';
+import { X, Ban, AlertTriangle, Loader2, Mail, MessageSquare, Bell } from 'lucide-react';
+import { EventOrderRecord, CancelOrderNotifyOptions } from '../../shared/hooks/hooks/useEventOrders';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
 
 interface AdminCancelOrderConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
   order: EventOrderRecord | null;
-  onConfirmCancel: (orderId: string, reason: string) => Promise<boolean | void>;
+  onConfirmCancel: (
+    orderId: string, 
+    reason: string, 
+    notifyOptions: CancelOrderNotifyOptions
+  ) => Promise<boolean | void>;
 }
 
 export const AdminCancelOrderConfirmModal: React.FC<AdminCancelOrderConfirmModalProps> = ({
@@ -17,6 +21,8 @@ export const AdminCancelOrderConfirmModal: React.FC<AdminCancelOrderConfirmModal
   onConfirmCancel,
 }) => {
   const [reason, setReason] = useState('Cancelado pelo administrador');
+  const [notifyEmail, setNotifyEmail] = useState(true);
+  const [notifyWhatsApp, setNotifyWhatsApp] = useState(true);
   const [loading, setLoading] = useState(false);
 
   if (!isOpen || !order) return null;
@@ -24,7 +30,11 @@ export const AdminCancelOrderConfirmModal: React.FC<AdminCancelOrderConfirmModal
   const handleConfirm = async () => {
     setLoading(true);
     try {
-      await onConfirmCancel(order.id, reason.trim() || 'Cancelado pelo administrador');
+      await onConfirmCancel(
+        order.id, 
+        reason.trim() || 'Cancelado pelo administrador',
+        { email: notifyEmail, whatsapp: notifyWhatsApp }
+      );
       onClose();
     } finally {
       setLoading(false);
@@ -39,7 +49,7 @@ export const AdminCancelOrderConfirmModal: React.FC<AdminCancelOrderConfirmModal
           <button
             onClick={onClose}
             disabled={loading}
-            className="absolute top-5 right-5 text-red-200 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10 disabled:opacity-50"
+            className="absolute top-5 right-5 text-red-200 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10 disabled:opacity-50 cursor-pointer"
             aria-label="Fechar"
           >
             <X className="w-5 h-5" />
@@ -93,6 +103,86 @@ export const AdminCancelOrderConfirmModal: React.FC<AdminCancelOrderConfirmModal
               disabled={loading}
             />
           </div>
+
+          {/* Seção de Notificação do Cliente */}
+          <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-200 space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+              <Bell className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Notificar Cliente sobre o Cancelamento:</span>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              {/* Opção E-mail */}
+              <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                    <Mail className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold text-gray-900 block">E-mail</span>
+                    <span className="text-[10px] text-gray-500 truncate max-w-[180px] block">
+                      {order.client_email || 'Não informado'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setNotifyEmail(true)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                      notifyEmail ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Sim
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNotifyEmail(false)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                      !notifyEmail ? 'bg-gray-700 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Não
+                  </button>
+                </div>
+              </div>
+
+              {/* Opção WhatsApp */}
+              <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold text-gray-900 block">WhatsApp</span>
+                    <span className="text-[10px] text-gray-500 block">
+                      {order.client_phone || 'Não informado'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setNotifyWhatsApp(true)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                      notifyWhatsApp ? 'bg-emerald-600 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Sim
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNotifyWhatsApp(false)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                      !notifyWhatsApp ? 'bg-gray-700 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Não
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Footer com Botões */}
@@ -122,3 +212,4 @@ export const AdminCancelOrderConfirmModal: React.FC<AdminCancelOrderConfirmModal
 };
 
 export default AdminCancelOrderConfirmModal;
+

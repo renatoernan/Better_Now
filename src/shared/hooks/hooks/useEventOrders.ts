@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/lib/supabase';
 import { checkMercadoPagoPaymentStatus } from '../../services/mercadoPagoService';
-import { sendOrderNotifications, OrderNotificationType } from '../../services/orderNotificationService';
+import { 
+  sendOrderNotifications, 
+  sendOrderWhatsAppNotification, 
+  sendOrderEmailNotification, 
+  OrderNotificationType 
+} from '../../services/orderNotificationService';
 import { toast } from 'sonner';
 
 export interface EventOrderRecord {
@@ -28,6 +33,9 @@ export interface EventOrderRecord {
   coupon_id?: string;
   coupon_code?: string;
   discount_amount?: number;
+  refunded_at?: string;
+  refund_amount?: number;
+  refund_reason?: string;
   created_at: string;
   updated_at?: string;
   tickets?: EventTicketRecord[];
@@ -44,6 +52,7 @@ export interface EventTicketRecord {
   checked_in_at?: string;
   created_at: string;
   person?: {
+    id?: string;
     nome: string;
     documento?: string;
     whatsapp?: string;
@@ -57,7 +66,36 @@ export interface EventOrderKPIs {
   paidOrders: number;
   pendingOrders: number;
   cancelledOrders: number;
+  refundedOrders: number;
+  totalRefundAmount: number;
   totalTicketsSold: number;
+}
+
+export interface CancelOrderNotifyOptions {
+  email: boolean;
+  whatsapp: boolean;
+}
+
+export interface RefundOrderParams {
+  orderId: string;
+  amount: number;
+  reason: string;
+  isPartial?: boolean;
+}
+
+export interface TransferTicketParams {
+  ticketId: string;
+  orderId: string;
+  eventId: string;
+  fromPersonId?: string;
+  fromPersonName?: string;
+  toPerson: {
+    nome: string;
+    documento: string;
+    whatsapp?: string;
+    email?: string;
+  };
+  reason?: string;
 }
 
 export const useEventOrders = (eventId?: string) => {
@@ -70,6 +108,8 @@ export const useEventOrders = (eventId?: string) => {
     paidOrders: 0,
     pendingOrders: 0,
     cancelledOrders: 0,
+    refundedOrders: 0,
+    totalRefundAmount: 0,
     totalTicketsSold: 0,
   });
 
@@ -87,12 +127,12 @@ export const useEventOrders = (eventId?: string) => {
 
       if (ordersError) throw ordersError;
 
-      // 2. Buscar tickets vinculados ao evento
+      // 2. Buscar tickets vinculados ao evento com dados da pessoa
       const { data: ticketsData, error: ticketsError } = await supabase
         .from('app_event_tickets')
         .select(`
           *,
-          person:app_people(nome, documento, whatsapp, email)
+          person:app_people(id, nome, documento, whatsapp, email)
         `)
         .eq('event_id', eventId);
 
@@ -121,16 +161,24 @@ export const useEventOrders = (eventId?: string) => {
       let paidCount = 0;
       let pendingCount = 0;
       let cancelledCount = 0;
+      let refundedCount = 0;
+      let refundAmountTotal = 0;
       let ticketsSold = 0;
 
       combinedOrders.forEach((o) => {
+        const isRefunded = o.status === 'refunded' || !!o.refunded_at;
+        if (isRefunded) {
+          refundedCount += 1;
+          refundAmountTotal += Number(o.refund_amount || o.amount_total || 0);
+        }
+
         if (o.status === 'paid' || (o.status as string) === 'approved') {
           revenue += Number(o.amount_total || 0);
           paidCount += 1;
           ticketsSold += Number(o.quantity || 1);
         } else if (o.status === 'pending' || o.status === 'pending_proof') {
           pendingCount += 1;
-        } else if (o.status === 'cancelled' || o.status === 'refunded' || o.status === 'failed') {
+        } else if (o.status === 'cancelled' || o.status === 'failed') {
           cancelledCount += 1;
         }
       });
@@ -141,6 +189,8 @@ export const useEventOrders = (eventId?: string) => {
         paidOrders: paidCount,
         pendingOrders: pendingCount,
         cancelledOrders: cancelledCount,
+        refundedOrders: refundedCount,
+        totalRefundAmount: refundAmountTotal,
         totalTicketsSold: ticketsSold,
       });
     } catch (err: any) {
@@ -330,8 +380,12 @@ export const useEventOrders = (eventId?: string) => {
     }
   };
 
-  // Cancelar pedido manualmente
-  const cancelOrder = async (orderId: string, reason: string = 'cancelado_pelo_admin') => {
+  // Cancelar pedido manualmente com opções de notificação
+  const cancelOrder = async (
+    orderId: string, 
+    reason: string = 'cancelado_pelo_admin',
+    notifyOptions: CancelOrderNotifyOptions = { email: true, whatsapp: true }
+  ) => {
     try {
       const { error } = await supabase
         .from('app_event_orders')
@@ -350,11 +404,26 @@ export const useEventOrders = (eventId?: string) => {
         .update({ status: 'cancelled' })
         .eq('order_id', orderId);
 
-      // Disparar notificações automáticas de Pedido Cancelado (WhatsApp + E-mail)
-      sendOrderNotifications({
-        type: 'cancelled',
-        orderId: orderId,
-      }).catch(() => {});
+      // Disparar notificações conforme opções selecionadas pelo usuário
+      if (notifyOptions.email && notifyOptions.whatsapp) {
+        sendOrderNotifications({
+          type: 'cancelled',
+          orderId: orderId,
+        }).catch(() => {});
+      } else {
+        if (notifyOptions.whatsapp) {
+          sendOrderWhatsAppNotification({
+            type: 'cancelled',
+            orderId: orderId,
+          }).catch(() => {});
+        }
+        if (notifyOptions.email) {
+          sendOrderEmailNotification({
+            type: 'cancelled',
+            orderId: orderId,
+          }).catch(() => {});
+        }
+      }
 
       toast.success('Pedido cancelado com sucesso.');
       await fetchOrders();
@@ -362,6 +431,143 @@ export const useEventOrders = (eventId?: string) => {
     } catch (err: any) {
       console.error('Erro ao cancelar pedido:', err);
       toast.error('Erro ao cancelar pedido.');
+      return false;
+    }
+  };
+
+  // Registrar Reembolso de Pedido (Parcial ou Total)
+  const refundOrder = async ({ orderId, amount, reason, isPartial = false }: RefundOrderParams) => {
+    try {
+      const targetOrder = orders.find(o => o.id === orderId);
+      if (!targetOrder) {
+        toast.error('Pedido não encontrado.');
+        return false;
+      }
+
+      const newStatus = isPartial ? targetOrder.status : 'refunded';
+
+      const { error } = await supabase
+        .from('app_event_orders')
+        .update({
+          status: newStatus,
+          refunded_at: new Date().toISOString(),
+          refund_amount: amount,
+          refund_reason: reason,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      // Se for reembolso total, cancelar os tickets vinculados
+      if (!isPartial) {
+        await supabase
+          .from('app_event_tickets')
+          .update({ status: 'cancelled' })
+          .eq('order_id', orderId);
+      }
+
+      toast.success(
+        isPartial 
+          ? `Reembolso parcial de R$ ${amount.toFixed(2)} registrado com sucesso!` 
+          : 'Reembolso total registrado e ingressos cancelados com sucesso!'
+      );
+      await fetchOrders();
+      return true;
+    } catch (err: any) {
+      console.error('Erro ao processar reembolso:', err);
+      toast.error('Erro ao processar reembolso.');
+      return false;
+    }
+  };
+
+  // Transferir Ingresso Individual entre Pessoas
+  const transferTicket = async ({
+    ticketId,
+    orderId,
+    eventId: targetEventId,
+    fromPersonId,
+    fromPersonName,
+    toPerson,
+    reason = 'Transferência realizada pelo administrador'
+  }: TransferTicketParams) => {
+    try {
+      const cleanDoc = toPerson.documento ? toPerson.documento.replace(/\D/g, '') : '';
+      let targetPersonId: string | null = null;
+
+      // 1. Verificar se a pessoa que está recebendo já existe na app_people por documento
+      if (cleanDoc) {
+        const { data: existingPerson } = await supabase
+          .from('app_people')
+          .select('id, nome, documento, whatsapp, email')
+          .eq('documento', cleanDoc)
+          .maybeSingle();
+
+        if (existingPerson) {
+          targetPersonId = existingPerson.id;
+        }
+      }
+
+      // 2. Se não existir, gravar novo registro em app_people
+      if (!targetPersonId) {
+        const { data: newPerson, error: personError } = await supabase
+          .from('app_people')
+          .insert({
+            nome: toPerson.nome.trim(),
+            documento: cleanDoc || null,
+            whatsapp: toPerson.whatsapp || null,
+            email: toPerson.email || null,
+            ativo: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+
+        if (personError || !newPerson) {
+          console.error('Erro ao cadastrar nova pessoa em app_people:', personError);
+          throw new Error('Falha ao cadastrar destinatário na base de pessoas.');
+        }
+
+        targetPersonId = newPerson.id;
+      }
+
+      // 3. Atualizar o ticket com o novo client_id (pessoa titular)
+      const { error: ticketUpdateError } = await supabase
+        .from('app_event_tickets')
+        .update({
+          client_id: targetPersonId,
+        })
+        .eq('id', ticketId);
+
+      if (ticketUpdateError) throw ticketUpdateError;
+
+      // 4. Registrar log na tabela app_ticket_transfers (ignora se a tabela não existir ainda no banco)
+      try {
+        await supabase
+          .from('app_ticket_transfers')
+          .insert({
+            ticket_id: ticketId,
+            order_id: orderId,
+            event_id: targetEventId,
+            from_person_id: fromPersonId || null,
+            to_person_id: targetPersonId,
+            from_person_name: fromPersonName || 'Titular Anterior',
+            to_person_name: toPerson.nome,
+            transfer_reason: reason,
+            transferred_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+          });
+      } catch (logErr) {
+        console.warn('Aviso ao registrar log de transferência:', logErr);
+      }
+
+      toast.success(`Ingresso transferido para ${toPerson.nome} com sucesso! 🎉`);
+      await fetchOrders();
+      return true;
+    } catch (err: any) {
+      console.error('Erro ao transferir ingresso:', err);
+      toast.error(err.message || 'Erro ao transferir ingresso.');
       return false;
     }
   };
@@ -402,6 +608,9 @@ export const useEventOrders = (eventId?: string) => {
         .update({
           status: targetStatus,
           cancellation_reason: null,
+          refunded_at: null,
+          refund_amount: null,
+          refund_reason: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', orderId);
@@ -469,10 +678,13 @@ export const useEventOrders = (eventId?: string) => {
     approvePixProof,
     rejectPixProof,
     cancelOrder,
+    refundOrder,
+    transferTicket,
     restoreOrder,
     sendManualOrderNotification,
   };
 };
 
 export default useEventOrders;
+
 
