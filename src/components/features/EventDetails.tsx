@@ -832,8 +832,8 @@ const EventDetails: React.FC = () => {
   const handlePurchase = async () => {
     if (!event || !priceBatches[selectedBatch]) return;
     
-    // Verificar se é evento privado
-    if (!event.is_public) {
+    // Se o evento requerer aprovação prévia de cadastro
+    if (event.requires_approval) {
       setShowPhoneModal(true);
       return;
     }
