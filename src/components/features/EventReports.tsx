@@ -798,9 +798,9 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   <p className="text-xs text-gray-400 py-6 text-center">Nenhum pagamento confirmado ainda.</p>
                 ) : (
                   <div className="space-y-3">
-                    {Object.entries(reportData.paymentMethodDistribution).map(([method, data]) => {
+                    {(Object.entries(reportData.paymentMethodDistribution) as [string, { count: number; total: number }][]).map(([method, data]) => {
                       const percentage = reportData.totalParticipants > 0
-                        ? Math.round((data.count / reportData.totalParticipants) * 100)
+                        ? Math.round((Number(data.count) / reportData.totalParticipants) * 100)
                         : 0;
                       return (
                         <div key={method} className="p-3 bg-gray-50 rounded-xl space-y-1.5">
@@ -833,9 +833,9 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   <p className="text-xs text-gray-400 py-6 text-center">Nenhum lote vendido ainda.</p>
                 ) : (
                   <div className="space-y-3">
-                    {Object.entries(reportData.batchDistribution).map(([batch, data]) => {
+                    {(Object.entries(reportData.batchDistribution) as [string, { count: number; total: number; name: string }][]).map(([batch, data]) => {
                       const percentage = reportData.totalParticipants > 0
-                        ? Math.round((data.count / reportData.totalParticipants) * 100)
+                        ? Math.round((Number(data.count) / reportData.totalParticipants) * 100)
                         : 0;
                       return (
                         <div key={batch} className="p-3 bg-gray-50 rounded-xl space-y-1.5">
@@ -912,11 +912,11 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   {Object.keys(reportData.locationDistribution).length === 0 ? (
                     <p className="text-xs text-gray-400 py-6 text-center">Nenhuma localização identificada.</p>
                   ) : (
-                    Object.entries(reportData.locationDistribution)
-                      .sort(([, a], [, b]) => b - a)
+                    (Object.entries(reportData.locationDistribution) as [string, number][])
+                      .sort(([, a], [, b]) => Number(b) - Number(a))
                       .map(([location, count]) => {
                         const pct = reportData.totalParticipants > 0
-                          ? Math.round((count / reportData.totalParticipants) * 100)
+                          ? Math.round((Number(count) / reportData.totalParticipants) * 100)
                           : 0;
                         return (
                           <div key={location} className="flex items-center justify-between text-xs py-1 border-b border-gray-50 last:border-0">
