@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import Header from '../layout/Header';
 import Footer from '../layout/Footer';
@@ -545,19 +545,27 @@ const EventDetails: React.FC = () => {
     }
   };
 
+  const isSubmittingCheckoutRef = useRef(false);
+
   const handleConfirmStripeCheckout = async () => {
     if (!id || !priceBatches[selectedBatch]) return;
+    if (isSubmittingCheckoutRef.current || stripeCheckoutLoading) return;
 
-    // Validar preço em tempo real antes de gerar o checkout
-    const isUpToDate = await verifyAndSyncEventData();
-    if (!isUpToDate) return;
-
+    isSubmittingCheckoutRef.current = true;
     setStripeCheckoutLoading(true);
     setStripeErrorMessage(null);
 
-    const cardConfig = (event?.payment_methods || []).find(pm => pm.method === 'credit_card');
-
     try {
+      // Validar preço em tempo real antes de gerar o checkout
+      const isUpToDate = await verifyAndSyncEventData();
+      if (!isUpToDate) {
+        isSubmittingCheckoutRef.current = false;
+        setStripeCheckoutLoading(false);
+        return;
+      }
+
+      const cardConfig = (event?.payment_methods || []).find(pm => pm.method === 'credit_card');
+
       const res = await createMercadoPagoCheckout({
         event_id: id,
         batch_index: selectedBatch,
@@ -582,6 +590,7 @@ const EventDetails: React.FC = () => {
       if (res.error) {
         setStripeErrorMessage(res.error);
         setStripeCheckoutLoading(false);
+        isSubmittingCheckoutRef.current = false;
         return;
       }
 
@@ -596,14 +605,17 @@ const EventDetails: React.FC = () => {
         }
 
         setStripeCheckoutLoading(false);
+        isSubmittingCheckoutRef.current = false;
       } else {
         setStripeErrorMessage('Não foi possível obter o link de pagamento.');
         setStripeCheckoutLoading(false);
+        isSubmittingCheckoutRef.current = false;
       }
     } catch (err: any) {
       console.error('Erro ao iniciar checkout do Mercado Pago:', err);
       setStripeErrorMessage(err.message || 'Erro ao processar checkout.');
       setStripeCheckoutLoading(false);
+      isSubmittingCheckoutRef.current = false;
     }
   };
 

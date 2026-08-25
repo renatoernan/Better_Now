@@ -629,12 +629,43 @@ export const sendOrderWhatsAppNotification = async ({
   }
 };
 
+// Cache em memória para deduplicação de disparos (janela de 10s para o mesmo tipo e pedido)
+const notificationCooldownMap = new Map<string, number>();
+
+const isDuplicateNotification = (type: string, orderId?: string | null): boolean => {
+  if (!orderId) return false;
+  const key = `${type}:${orderId}`;
+  const now = Date.now();
+  const lastTime = notificationCooldownMap.get(key);
+  
+  if (lastTime && now - lastTime < 10000) {
+    return true;
+  }
+  
+  notificationCooldownMap.set(key, now);
+  // Limpeza automática após 30 segundos
+  setTimeout(() => {
+    notificationCooldownMap.delete(key);
+  }, 30000);
+  
+  return false;
+};
+
 /**
- * Dispara notificações em todos os canais configurados (WhatsApp + E-mail) em paralelo
+ * Dispara notificações em todos os canais configurados (WhatsApp + E-mail) em paralelo com proteção anti-duplicação
  */
 export const sendOrderNotifications = async (
   params: SendOrderNotificationParams
 ): Promise<{ whatsapp: { success: boolean; message: string }; email: { success: boolean; message: string } }> => {
+  const currentOrderId = params.orderId || params.orderData?.id;
+  if (currentOrderId && isDuplicateNotification(params.type, currentOrderId)) {
+    console.warn(`[Notificações] Disparo duplicado prevenido para o pedido ${currentOrderId} (tipo: ${params.type})`);
+    return {
+      whatsapp: { success: true, message: 'Notificação já enviada recentemente (duplicação evitada).' },
+      email: { success: true, message: 'Notificação já enviada recentemente (duplicação evitada).' },
+    };
+  }
+
   const [whatsappResult, emailResult] = await Promise.allSettled([
     sendOrderWhatsAppNotification(params),
     sendOrderEmailNotification(params),
