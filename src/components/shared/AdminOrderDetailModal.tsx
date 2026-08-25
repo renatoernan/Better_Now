@@ -173,28 +173,31 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
             </div>
 
             {/* Informações de Reembolso se houver */}
-            {(order.refunded_at || order.refund_amount) && (
-              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 space-y-1">
+            {(order.status === 'refunded' || order.refunded_at || order.refund_amount) && (
+              <div className="p-3.5 bg-purple-50 border border-purple-200 rounded-2xl text-xs text-purple-900 space-y-1.5 shadow-2xs">
                 <div className="flex items-center justify-between font-bold">
-                  <span className="flex items-center gap-1.5">
-                    <RotateCcw className="w-3.5 h-3.5 text-purple-600" /> Reembolso Registrado
+                  <span className="flex items-center gap-1.5 text-purple-950 font-extrabold">
+                    <RotateCcw className="w-4 h-4 text-purple-700" /> Reembolso Registrado
                   </span>
-                  <span>{formatPrice(order.refund_amount || order.amount_total)}</span>
+                  <span className="text-sm font-black text-purple-900">
+                    {formatPrice(order.refund_amount || order.amount_total)}
+                  </span>
                 </div>
                 {order.refunded_at && (
                   <p className="text-[11px] text-purple-700">
-                    Data: {formatDate(order.refunded_at)}
+                    <strong>Data:</strong> {formatDate(order.refunded_at)}
                   </p>
                 )}
                 {order.refund_reason && (
-                  <p className="text-[11px] text-purple-800">
-                    <strong>Motivo:</strong> {order.refund_reason}
+                  <p className="text-[11px] text-purple-800 bg-purple-100/60 p-2 rounded-xl border border-purple-200/60">
+                    <strong>Motivo do Reembolso:</strong> {order.refund_reason}
                   </p>
                 )}
               </div>
             )}
 
-            {order.cancellation_reason && (
+            {/* Motivo do Cancelamento (apenas para pedidos cancelados que não sejam reembolsos e não sejam JSON de participantes) */}
+            {order.status === 'cancelled' && !order.refunded_at && order.cancellation_reason && !order.cancellation_reason.trim().startsWith('[') && !order.cancellation_reason.trim().startsWith('{') && (
               <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                 <span><strong>Motivo do cancelamento:</strong> {order.cancellation_reason}</span>
@@ -217,55 +220,70 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
 
             {order.tickets && order.tickets.length > 0 ? (
               <div className="space-y-2.5">
-                {order.tickets.map((ticket, idx) => (
-                  <div
-                    key={ticket.id || idx}
-                    className="p-3.5 rounded-2xl bg-white border border-gray-200 flex items-center justify-between shadow-2xs hover:border-indigo-300 transition-colors gap-3"
-                  >
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-indigo-950 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                          #{ticket.ticket_number}
-                        </span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                          ticket.status === 'valid' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          {ticket.status === 'valid' ? 'VÁLIDO' : ticket.status.toUpperCase()}
-                        </span>
+                {order.tickets.map((ticket, idx) => {
+                  // Fallback para participantes no JSON se person não estiver populado
+                  let attendeeData: any = null;
+                  if (order.cancellation_reason && order.cancellation_reason.trim().startsWith('[')) {
+                    try {
+                      const parsed = JSON.parse(order.cancellation_reason);
+                      if (Array.isArray(parsed) && parsed[idx]) attendeeData = parsed[idx];
+                    } catch {}
+                  }
+
+                  const participantName = ticket.person?.nome || attendeeData?.nome || order.client_name || `Participante ${idx + 1}`;
+                  const participantDoc = ticket.person?.documento || attendeeData?.documento || attendeeData?.cpf || (idx === 0 ? order.client_document : null);
+                  const participantPhone = ticket.person?.whatsapp || attendeeData?.whatsapp || attendeeData?.telefone || (idx === 0 ? order.client_phone : null);
+
+                  return (
+                    <div
+                      key={ticket.id || idx}
+                      className="p-3.5 rounded-2xl bg-white border border-gray-200 flex items-center justify-between shadow-2xs hover:border-indigo-300 transition-colors gap-3"
+                    >
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-indigo-950 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                            #{ticket.ticket_number}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            ticket.status === 'valid' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {ticket.status === 'valid' ? 'VÁLIDO' : ticket.status.toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="font-semibold text-gray-900 text-xs">
+                          {participantName}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
+                          {participantDoc && (
+                            <span>CPF: <strong>{participantDoc}</strong></span>
+                          )}
+                          {participantPhone && (
+                            <span>WhatsApp: {participantPhone}</span>
+                          )}
+                        </div>
                       </div>
-                      <p className="font-semibold text-gray-900 text-xs">
-                        {ticket.person?.nome || order.client_name || `Participante ${idx + 1}`}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
-                        {ticket.person?.documento && (
-                          <span>CPF: <strong>{ticket.person.documento}</strong></span>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Botão Transferir Titularidade */}
+                        {isPaid && ticket.status === 'valid' && onTransferTicket && (
+                          <button
+                            type="button"
+                            onClick={() => onTransferTicket(ticket, order)}
+                            className="px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                            title="Transferir este ingresso para outra pessoa"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                            <span>Transferir</span>
+                          </button>
                         )}
-                        {ticket.person?.whatsapp && (
-                          <span>WhatsApp: {ticket.person.whatsapp}</span>
-                        )}
+
+                        <div className="w-10 h-10 bg-gray-50 rounded-lg p-1 border border-gray-200 flex items-center justify-center shrink-0">
+                          <QrCode className="w-full h-full text-gray-800" />
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Botão Transferir Titularidade */}
-                      {isPaid && ticket.status === 'valid' && onTransferTicket && (
-                        <button
-                          type="button"
-                          onClick={() => onTransferTicket(ticket, order)}
-                          className="px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-                          title="Transferir este ingresso para outra pessoa"
-                        >
-                          <ArrowRightLeft className="w-3.5 h-3.5" />
-                          <span>Transferir</span>
-                        </button>
-                      )}
-
-                      <div className="w-10 h-10 bg-gray-50 rounded-lg p-1 border border-gray-200 flex items-center justify-center shrink-0">
-                        <QrCode className="w-full h-full text-gray-800" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 text-xs text-gray-500 text-center">

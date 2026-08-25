@@ -77,7 +77,7 @@ export const AdminRestoreOrderConfirmModal: React.FC<AdminRestoreOrderConfirmMod
                 <strong>{order.quantity} ingresso(s)</strong>
               </div>
             </div>
-            {order.cancellation_reason && (
+            {order.cancellation_reason && !order.cancellation_reason.trim().startsWith('[') && !order.cancellation_reason.trim().startsWith('{') && (
               <p className="text-[11px] text-red-600 bg-red-50 p-1.5 rounded-lg border border-red-100">
                 Cancelado por: {order.cancellation_reason}
               </p>
