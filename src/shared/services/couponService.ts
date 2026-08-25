@@ -179,19 +179,25 @@ export const applyCouponOnOrder = async (params: {
       return preview;
     }
 
-    // Incrementar current_uses
-    try {
-      const { data: c } = await supabase.from('app_event_coupons').select('current_uses').eq('id', preview.coupon_id).single();
-      if (c) {
-        await supabase.from('app_event_coupons').update({ current_uses: (c.current_uses || 0) + 1 }).eq('id', preview.coupon_id);
+    const targetCouponId = params.couponId || preview.coupon_id;
+
+    // Verificar se este pedido já teve o cupom contabilizado para evitar duplicações
+    if (params.orderId && targetCouponId) {
+      const { data: existingUsage } = await supabase
+        .from('app_event_coupon_usages')
+        .select('id')
+        .eq('coupon_id', targetCouponId)
+        .eq('order_id', params.orderId)
+        .maybeSingle();
+
+      if (existingUsage) {
+        return preview;
       }
-    } catch (incErr) {
-      console.warn('Aviso ao incrementar usos do cupom:', incErr);
     }
 
-    // Inserir uso
+    // Inserir registro na tabela de utilizações
     await supabase.from('app_event_coupon_usages').insert({
-      coupon_id: preview.coupon_id,
+      coupon_id: targetCouponId,
       order_id: params.orderId || null,
       event_id: params.eventId,
       client_name: params.clientName || null,
@@ -203,6 +209,34 @@ export const applyCouponOnOrder = async (params: {
       original_amount: params.originalAmount,
       final_amount: preview.final_amount || 0,
     });
+
+    // Incrementar e sincronizar a contagem de usos do cupom
+    try {
+      const { count: realUsageCount } = await supabase
+        .from('app_event_coupon_usages')
+        .select('id', { count: 'exact', head: true })
+        .eq('coupon_id', targetCouponId);
+
+      const { data: c } = await supabase
+        .from('app_event_coupons')
+        .select('current_uses')
+        .eq('id', targetCouponId)
+        .single();
+
+      const newUses = Math.max(realUsageCount || 0, (c?.current_uses || 0) + 1);
+
+      await supabase
+        .from('app_event_coupons')
+        .update({ 
+          current_uses: newUses,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', targetCouponId);
+
+      preview.current_uses = newUses;
+    } catch (incErr) {
+      console.warn('Aviso ao sincronizar usos do cupom:', incErr);
+    }
 
     return preview;
   } catch (err: any) {
@@ -234,7 +268,40 @@ export const getCoupons = async (eventId?: string): Promise<EventCoupon[]> => {
     throw error;
   }
 
-  return (data || []) as EventCoupon[];
+  const couponsList = (data || []) as EventCoupon[];
+
+  // Reconciliar contagem real de usos a partir da tabela app_event_coupon_usages
+  try {
+    const { data: usagesData } = await supabase
+      .from('app_event_coupon_usages')
+      .select('coupon_id');
+
+    if (usagesData && usagesData.length > 0) {
+      const usageCountMap: Record<string, number> = {};
+      usagesData.forEach(u => {
+        if (u.coupon_id) {
+          usageCountMap[u.coupon_id] = (usageCountMap[u.coupon_id] || 0) + 1;
+        }
+      });
+
+      couponsList.forEach(coupon => {
+        const realCount = usageCountMap[coupon.id] ?? 0;
+        if (realCount > (coupon.current_uses || 0)) {
+          coupon.current_uses = realCount;
+          // Sincronizar em background
+          supabase
+            .from('app_event_coupons')
+            .update({ current_uses: realCount })
+            .eq('id', coupon.id)
+            .then(() => {});
+        }
+      });
+    }
+  } catch (reconcileErr) {
+    console.warn('Aviso ao sincronizar contagem de usos dos cupons:', reconcileErr);
+  }
+
+  return couponsList;
 };
 
 /**

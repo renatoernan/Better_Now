@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Settings, Save, Globe, Bell, Shield, Database, Palette, Mail, Loader2, RefreshCw, AlertCircle, Clock, Upload, Eye, EyeOff, Trash2, RotateCcw, Move, X, Image as ImageIcon, Plus, MessageSquare, Key, Smartphone, Play, CheckSquare, Square, Copy, Check, Sparkles } from 'lucide-react';
+import { Settings, Save, Globe, Bell, Shield, Database, Palette, Mail, Loader2, RefreshCw, AlertCircle, Clock, Upload, Eye, EyeOff, Trash2, RotateCcw, Move, X, Image as ImageIcon, Plus, MessageSquare, Key, Smartphone, Play, CheckSquare, Square, Copy, Check, Sparkles, Server, Lock } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAppSettings, AppSettings } from '../../shared/hooks/hooks/useAppSettings';
@@ -10,25 +10,30 @@ import {
   carouselSettingsSchema,
   systemSettingsSchema,
   wahaSettingsSchema,
+  emailServerSettingsSchema,
   SiteSettings,
   ContactSettings,
   BusinessHoursSettings,
   CarouselSettings,
   SystemSettings,
-  WahaSettings
+  WahaSettings,
+  EmailServerSettings
 } from '../../shared/types/schemas/validationSchemas';
 import { useSupabaseImages } from '../../shared/hooks/hooks/useSupabaseImages';
 import { CarouselImage } from '../../shared/services/lib/supabase';
 import { PhoneInput } from '../ui/PhoneInput';
 import { WahaTestModal } from '../shared/WahaTestModal';
+import { EmailServerTestModal } from '../shared/EmailServerTestModal';
 
-type SettingsCategory = 'site' | 'contact' | 'waha' | 'business_hours' | 'carousel' | 'system';
+type SettingsCategory = 'site' | 'contact' | 'email' | 'waha' | 'business_hours' | 'carousel' | 'system';
 
 const AdminSettings: React.FC = () => {
   const { settings, loading, saving, error, updateSetting, updateMultipleSettings, loadSettings } = useAppSettings();
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('site');
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [isEmailTestModalOpen, setIsEmailTestModalOpen] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showEmailPassword, setShowEmailPassword] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     images,
@@ -53,6 +58,8 @@ const AdminSettings: React.FC = () => {
         return siteSettingsSchema;
       case 'contact':
         return contactSettingsSchema;
+      case 'email':
+        return emailServerSettingsSchema;
       case 'waha':
         return wahaSettingsSchema;
       case 'business_hours':
@@ -80,6 +87,27 @@ const AdminSettings: React.FC = () => {
           address: settings.address || '',
           social_instagram: settings.social_instagram || '',
           social_whatsapp: settings.social_whatsapp || '',
+        };
+      case 'email':
+        return {
+          email_smtp_user: settings.email_smtp_user || '',
+          email_smtp_password: settings.email_smtp_password || '',
+          email_incoming_host: settings.email_incoming_host || '',
+          email_imap_port: settings.email_imap_port || 993,
+          email_pop3_port: settings.email_pop3_port || 995,
+          email_outgoing_host: settings.email_outgoing_host || '',
+          email_smtp_port: settings.email_smtp_port || 465,
+          email_from_name: settings.email_from_name || '',
+          email_from_address: settings.email_from_address || '',
+          email_security: settings.email_security || 'ssl_tls',
+          email_auth_required: settings.email_auth_required ?? true,
+          email_enabled: settings.email_enabled ?? true,
+          email_msg_order_created_subject: settings.email_msg_order_created_subject || 'Pedido Recebido #{numero_pedido} - {evento}',
+          email_msg_order_created_body: settings.email_msg_order_created_body || '',
+          email_msg_order_confirmed_subject: settings.email_msg_order_confirmed_subject || '🎉 Ingressos Confirmados! Pedido #{numero_pedido} - {evento}',
+          email_msg_order_confirmed_body: settings.email_msg_order_confirmed_body || '',
+          email_msg_order_cancelled_subject: settings.email_msg_order_cancelled_subject || 'Pedido Cancelado #{numero_pedido} - {evento}',
+          email_msg_order_cancelled_body: settings.email_msg_order_cancelled_body || '',
         };
       case 'waha':
         return {
@@ -156,6 +184,27 @@ const AdminSettings: React.FC = () => {
         return ['site_title'];
       case 'contact':
         return ['contact_email', 'phone', 'address', 'social_instagram', 'social_whatsapp'];
+      case 'email':
+        return [
+          'email_smtp_user',
+          'email_smtp_password',
+          'email_incoming_host',
+          'email_imap_port',
+          'email_pop3_port',
+          'email_outgoing_host',
+          'email_smtp_port',
+          'email_from_name',
+          'email_from_address',
+          'email_security',
+          'email_auth_required',
+          'email_enabled',
+          'email_msg_order_created_subject',
+          'email_msg_order_created_body',
+          'email_msg_order_confirmed_subject',
+          'email_msg_order_confirmed_body',
+          'email_msg_order_cancelled_subject',
+          'email_msg_order_cancelled_body'
+        ];
       case 'waha':
         return ['waha_api_url', 'waha_session_name', 'waha_api_key', 'waha_enabled', 'waha_msg_order_created', 'waha_msg_order_confirmed', 'waha_msg_order_cancelled'];
       case 'business_hours':
@@ -252,7 +301,8 @@ const AdminSettings: React.FC = () => {
           <nav className="flex space-x-8 px-6" aria-label="Tabs">
             {[
               { id: 'site', name: 'Site', icon: Globe },
-              { id: 'contact', name: 'Contato', icon: Mail },
+              { id: 'contact', name: 'Contato', icon: Smartphone },
+              { id: 'email', name: 'Servidor de E-mail', icon: Mail },
               { id: 'waha', name: 'WhatsApp (WAHA)', icon: MessageSquare },
               { id: 'business_hours', name: 'Horários', icon: Clock },
               { id: 'carousel', name: 'Carrossel', icon: Palette },
@@ -414,6 +464,329 @@ const AdminSettings: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Categoria Servidor de E-mail */}
+          {activeCategory === 'email' && (
+            <div className="space-y-6">
+              {/* Header do Card E-mail */}
+              <div className="flex items-center gap-4 pb-4 border-b border-gray-100">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-sm shrink-0">
+                  <Mail className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    Servidor de E-mail (IMAP / POP3 / SMTP)
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Configure os parâmetros do seu servidor de e-mail para envio de notificações e mensagens do sistema.
+                  </p>
+                </div>
+              </div>
+
+              {/* Card no formato da referência: Secure SSL/TLS Settings */}
+              <div className="rounded-2xl border border-sky-300/80 shadow-sm overflow-hidden bg-white">
+                {/* Header Azul do Card */}
+                <div className="bg-[#2080cd] px-5 py-3.5 text-white flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-sky-100" />
+                    <span className="font-semibold text-sm tracking-wide">
+                      Secure SSL/TLS Settings (Recomendado)
+                    </span>
+                  </div>
+                  <span className="text-[11px] bg-white/20 px-2.5 py-0.5 rounded-full font-medium text-white">
+                    Portas Seguras SSL/TLS
+                  </span>
+                </div>
+
+                {/* Conteúdo em linhas divididas */}
+                <div className="divide-y divide-sky-100 text-sm">
+                  {/* Linha 1: Nome de usuário */}
+                  <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 items-center bg-white hover:bg-sky-50/20 transition-colors">
+                    <div className="sm:col-span-1">
+                      <label className="font-medium text-gray-800 block">
+                        Nome de usuário:
+                      </label>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <input
+                        type="text"
+                        {...register('email_smtp_user')}
+                        placeholder="betternow@cesire.com.br"
+                        className={`w-full px-3.5 py-2.5 bg-slate-50/60 border rounded-xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm ${
+                          errors.email_smtp_user ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                        }`}
+                      />
+                      {errors.email_smtp_user && (
+                        <div className="flex items-center gap-1 mt-1 text-red-600 text-xs">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          <span>{String(errors.email_smtp_user?.message || '')}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Linha 2: Senha */}
+                  <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 items-start bg-white hover:bg-sky-50/20 transition-colors">
+                    <div className="sm:col-span-1 pt-2">
+                      <label className="font-medium text-gray-800 block">
+                        Senha:
+                      </label>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <div className="relative">
+                        <input
+                          type={showEmailPassword ? 'text' : 'password'}
+                          {...register('email_smtp_password')}
+                          placeholder="••••••••••••••••"
+                          className={`w-full px-3.5 py-2.5 pr-11 bg-slate-50/60 border rounded-xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm font-mono ${
+                            errors.email_smtp_password ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowEmailPassword(!showEmailPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                        >
+                          {showEmailPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      {errors.email_smtp_password && (
+                        <div className="flex items-center gap-1 mt-1 text-red-600 text-xs">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          <span>{String(errors.email_smtp_password?.message || '')}</span>
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 italic mt-1.5">
+                        Use a senha da conta de email.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Linha 3: Servidor de entrada */}
+                  <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 items-start bg-white hover:bg-sky-50/20 transition-colors">
+                    <div className="sm:col-span-1 pt-2">
+                      <label className="font-medium text-gray-800 block">
+                        Servidor de entrada:
+                      </label>
+                    </div>
+                    <div className="sm:col-span-3 space-y-3">
+                      <div>
+                        <input
+                          type="text"
+                          {...register('email_incoming_host')}
+                          placeholder="mail.cesire.com.br"
+                          className={`w-full px-3.5 py-2.5 bg-slate-50/60 border rounded-xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm ${
+                            errors.email_incoming_host ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                          }`}
+                        />
+                        {errors.email_incoming_host && (
+                          <div className="flex items-center gap-1 mt-1 text-red-600 text-xs">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            <span>{String(errors.email_incoming_host?.message || '')}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                            <span className="underline decoration-dotted font-bold text-slate-700">IMAP Port</span>: 993 (SSL)
+                          </label>
+                          <input
+                            type="number"
+                            {...register('email_imap_port', { valueAsNumber: true })}
+                            placeholder="993"
+                            className="w-full px-3 py-2 bg-slate-50/60 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-sky-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                            <span className="underline decoration-dotted font-bold text-slate-700">POP3 Port</span>: 995 (SSL)
+                          </label>
+                          <input
+                            type="number"
+                            {...register('email_pop3_port', { valueAsNumber: true })}
+                            placeholder="995"
+                            className="w-full px-3 py-2 bg-slate-50/60 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-sky-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Linha 4: Servidor de saída */}
+                  <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 items-start bg-white hover:bg-sky-50/20 transition-colors">
+                    <div className="sm:col-span-1 pt-2">
+                      <label className="font-medium text-gray-800 block">
+                        Servidor de saída:
+                      </label>
+                    </div>
+                    <div className="sm:col-span-3 space-y-3">
+                      <div>
+                        <input
+                          type="text"
+                          {...register('email_outgoing_host')}
+                          placeholder="mail.cesire.com.br"
+                          className={`w-full px-3.5 py-2.5 bg-slate-50/60 border rounded-xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm ${
+                            errors.email_outgoing_host ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                          }`}
+                        />
+                        {errors.email_outgoing_host && (
+                          <div className="flex items-center gap-1 mt-1 text-red-600 text-xs">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            <span>{String(errors.email_outgoing_host?.message || '')}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                            <span className="underline decoration-dotted font-bold text-slate-700">SMTP Port</span>: 465 (SSL)
+                          </label>
+                          <input
+                            type="number"
+                            {...register('email_smtp_port', { valueAsNumber: true })}
+                            placeholder="465"
+                            className="w-full px-3 py-2 bg-slate-50/60 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-sky-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Linha 5: Mensagem informativa do rodapé */}
+                  <div className="p-4 bg-sky-50/60 flex items-center gap-2.5 text-sky-950 font-medium text-xs">
+                    <Shield className="w-4 h-4 text-sky-600 shrink-0" />
+                    <span>IMAP, POP3 e SMTP require authentication.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Informações Complementares de Remetente e Segurança */}
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-5 space-y-4">
+                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-sky-600" />
+                  Identificação do Remetente e Segurança Adicional
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                      Nome de Exibição do Remetente
+                    </label>
+                    <input
+                      type="text"
+                      {...register('email_from_name')}
+                      placeholder="Better Now Eventos"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                      E-mail do Remetente (From)
+                    </label>
+                    <input
+                      type="email"
+                      {...register('email_from_address')}
+                      placeholder="betternow@cesire.com.br"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                      Protocolo de Criptografia
+                    </label>
+                    <select
+                      {...register('email_security')}
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-sky-500"
+                    >
+                      <option value="ssl_tls">SSL / TLS (Recomendado - Porta 465)</option>
+                      <option value="starttls">STARTTLS (Porta 587)</option>
+                      <option value="none">Nenhuma (Não seguro)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <label className="flex items-center gap-3 p-3.5 bg-white border border-sky-200/60 rounded-xl cursor-pointer hover:bg-sky-50/30 transition-all">
+                    <input
+                      type="checkbox"
+                      {...register('email_auth_required')}
+                      className="w-4 h-4 text-sky-600 rounded border-gray-300 focus:ring-sky-500"
+                    />
+                    <div>
+                      <span className="text-xs font-semibold text-slate-900 block">
+                        Autenticação Obrigatória no Servidor (SMTP Auth)
+                      </span>
+                      <span className="text-[11px] text-slate-500 block">
+                        Exige envio de usuário e senha na negociação SSL/TLS para garantir entrega das mensagens.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-3.5 bg-sky-50/70 border border-sky-300/80 rounded-xl cursor-pointer hover:bg-sky-50 transition-all">
+                    <input
+                      type="checkbox"
+                      {...register('email_enabled')}
+                      className="w-4 h-4 text-sky-600 rounded border-gray-300 focus:ring-sky-500"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-sky-950 block flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                        Envio Automático de E-mails Ativo
+                      </span>
+                      <span className="text-[11px] text-sky-800 block">
+                        Dispara e-mails de confirmação e ingressos automaticamente aos compradores.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Informativo de Modelos Personalizados por Evento */}
+              <div className="bg-sky-50/70 border border-sky-200/90 rounded-2xl p-5 flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-sky-950">
+                    Modelos de E-mail Personalizados por Evento
+                  </h4>
+                  <p className="text-xs text-sky-800 leading-relaxed">
+                    Assim como no WhatsApp, os modelos e assuntos dos e-mails automáticos de confirmação, criação de pedido e cancelamento são <strong>configurados individualmente em cada evento</strong>.
+                  </p>
+                  <p className="text-xs text-sky-700 pt-1">
+                    👉 Para personalizar ou testar os textos de um evento específico, acesse o menu <strong>Eventos &gt; Editar Evento &gt; aba &quot;Mensagens E-mail&quot;</strong>.
+                  </p>
+                </div>
+              </div>
+
+              {/* Ações Inferiores */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEmailTestModalOpen(true)}
+                  className="border border-sky-500 text-sky-700 bg-sky-50/40 hover:bg-sky-100/80 rounded-xl px-5 py-2.5 flex items-center gap-2 font-medium transition-all shadow-sm text-sm"
+                >
+                  <Play className="w-4 h-4 fill-sky-600/30" />
+                  Testar Conexão
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit(onSubmit)}
+                  disabled={saving}
+                  className="bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-6 py-2.5 flex items-center gap-2 font-semibold shadow-sm transition-all text-sm disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {saving ? 'Salvando...' : 'Salvar Alterações'}
+                </button>
               </div>
             </div>
           )}
@@ -1003,6 +1376,23 @@ const AdminSettings: React.FC = () => {
         apiUrl={watch('waha_api_url')}
         sessionName={watch('waha_session_name')}
         apiKey={watch('waha_api_key')}
+      />
+
+      {/* Modal de Teste do Servidor de E-mail */}
+      <EmailServerTestModal
+        isOpen={isEmailTestModalOpen}
+        onClose={() => setIsEmailTestModalOpen(false)}
+        smtpUser={watch('email_smtp_user')}
+        smtpPassword={watch('email_smtp_password')}
+        incomingHost={watch('email_incoming_host')}
+        imapPort={watch('email_imap_port') || 993}
+        pop3Port={watch('email_pop3_port') || 995}
+        outgoingHost={watch('email_outgoing_host')}
+        smtpPort={watch('email_smtp_port') || 465}
+        fromName={watch('email_from_name')}
+        fromAddress={watch('email_from_address')}
+        security={watch('email_security')}
+        authRequired={watch('email_auth_required')}
       />
     </div>
   );

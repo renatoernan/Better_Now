@@ -42,6 +42,12 @@ export interface Event {
   waha_msg_order_created?: string;
   waha_msg_order_confirmed?: string;
   waha_msg_order_cancelled?: string;
+  email_msg_order_created_subject?: string;
+  email_msg_order_created_body?: string;
+  email_msg_order_confirmed_subject?: string;
+  email_msg_order_confirmed_body?: string;
+  email_msg_order_cancelled_subject?: string;
+  email_msg_order_cancelled_body?: string;
   schedule?: ScheduleItem[] | string;
   registration_deadline?: string;
   created_at?: string;

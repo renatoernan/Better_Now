@@ -1,6 +1,6 @@
 import { supabase } from './lib/supabase';
 import { getClientIpAddress } from '../utils/utils/ipUtils';
-import { sendOrderWhatsAppNotification } from './orderNotificationService';
+import { sendOrderNotifications } from './orderNotificationService';
 
 export interface CreateMercadoPagoCheckoutParams {
   event_id: string;
@@ -97,8 +97,8 @@ export const cancelPendingOrder = async (orderId: string, reason: string = 'canc
       .eq('status', 'pending');
 
     if (!error) {
-      // Disparar notificação automática de Pedido Cancelado
-      sendOrderWhatsAppNotification({ type: 'cancelled', orderId }).catch(() => {});
+      // Disparar notificações automáticas de Pedido Cancelado (WhatsApp + E-mail)
+      sendOrderNotifications({ type: 'cancelled', orderId }).catch(() => {});
     }
 
     return !error;
@@ -236,6 +236,15 @@ export const createMercadoPagoCheckout = async (
       }
       order = newOrder;
       orderId = newOrder?.id;
+
+      if (orderId && newOrder) {
+        // Disparar notificações de Pedido Criado (WhatsApp + E-mail)
+        sendOrderNotifications({
+          type: 'created',
+          orderId: orderId,
+          orderData: newOrder,
+        }).catch(() => {});
+      }
     }
 
     // 2. Fallback direto usando o token configurado no ambiente (.env com prefixo VITE_)
@@ -348,8 +357,8 @@ export const createMercadoPagoCheckout = async (
         })
         .eq('id', order.id);
 
-      // Disparar notificação automática de Pedido Criado (Aguardando Pagamento)
-      sendOrderWhatsAppNotification({
+      // Disparar notificações automáticas de Pedido Criado (WhatsApp + E-mail)
+      sendOrderNotifications({
         type: 'created',
         orderId: order.id,
         orderData: { ...order, stripe_session_id: mpData.id },
@@ -466,8 +475,8 @@ export const checkMercadoPagoPaymentStatus = async (
         }
       }
 
-      // Disparar notificação automática de Pagamento Confirmado (Ingressos Emitidos)
-      sendOrderWhatsAppNotification({
+      // Disparar notificações automáticas de Pagamento Confirmado (WhatsApp + E-mail)
+      sendOrderNotifications({
         type: 'confirmed',
         orderId: orderId,
         orderData: { ...currentOrder, status: 'paid' },

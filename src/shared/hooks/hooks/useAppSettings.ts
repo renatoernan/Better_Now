@@ -27,6 +27,24 @@ export interface AppSettings {
   waha_msg_order_created: string;
   waha_msg_order_confirmed: string;
   waha_msg_order_cancelled: string;
+  email_smtp_user: string;
+  email_smtp_password: string;
+  email_incoming_host: string;
+  email_imap_port: number;
+  email_pop3_port: number;
+  email_outgoing_host: string;
+  email_smtp_port: number;
+  email_from_name: string;
+  email_from_address: string;
+  email_security: 'ssl_tls' | 'starttls' | 'none';
+  email_auth_required: boolean;
+  email_enabled: boolean;
+  email_msg_order_created_subject: string;
+  email_msg_order_created_body: string;
+  email_msg_order_confirmed_subject: string;
+  email_msg_order_confirmed_body: string;
+  email_msg_order_cancelled_subject: string;
+  email_msg_order_cancelled_body: string;
 }
 
 export interface AppSettingsHook {
@@ -63,6 +81,24 @@ const defaultSettings: AppSettings = {
   waha_msg_order_created: 'Olá, {cliente}! Recebemos seu pedido #{numero_pedido} para o evento *{evento}*.\n\n💰 *Total:* {total}\n⏳ *Status:* Aguardando Pagamento\n\nAssim que o pagamento for confirmado, você receberá seus ingressos por aqui!',
   waha_msg_order_confirmed: '🎉 Parabéns, {cliente}! Seu pagamento para o evento *{evento}* foi confirmado com sucesso!\n\n🎟️ *Quantidade de Ingressos:* {quantidade}\n📅 *Data:* {data_evento}\n📍 *Local:* {local_evento}\n\nVocê pode acessar seus ingressos a qualquer momento através do link: {link_acesso}',
   waha_msg_order_cancelled: 'Olá, {cliente}. Informamos que seu pedido #{numero_pedido} para o evento *{evento}* foi cancelado.\n\nSe você tiver alguma dúvida, entre em contato conosco.',
+  email_smtp_user: 'betternow@cesire.com.br',
+  email_smtp_password: '',
+  email_incoming_host: 'mail.cesire.com.br',
+  email_imap_port: 993,
+  email_pop3_port: 995,
+  email_outgoing_host: 'mail.cesire.com.br',
+  email_smtp_port: 465,
+  email_from_name: 'Better Now',
+  email_from_address: 'betternow@cesire.com.br',
+  email_security: 'ssl_tls',
+  email_auth_required: true,
+  email_enabled: true,
+  email_msg_order_created_subject: 'Pedido Recebido #{numero_pedido} - {evento}',
+  email_msg_order_created_body: 'Olá, {cliente}!\n\nRecebemos o seu pedido #{numero_pedido} para o evento {evento}.\n\nValor Total: {total}\nQuantidade de Ingressos: {quantidade}\n\nAssim que o pagamento for confirmado, você receberá seus ingressos com QR Code por aqui!',
+  email_msg_order_confirmed_subject: '🎉 Ingressos Confirmados! Pedido #{numero_pedido} - {evento}',
+  email_msg_order_confirmed_body: 'Parabéns, {cliente}!\n\nSeu pagamento para o evento {evento} foi confirmado com sucesso!\n\nDetalhes do Evento:\n- Data: {data_evento}\n- Local: {local_evento}\n- Quantidade de Ingressos: {quantidade}\n\nVocê pode visualizar seus ingressos e QR Codes no link abaixo:\n{link_acesso}',
+  email_msg_order_cancelled_subject: 'Pedido Cancelado #{numero_pedido} - {evento}',
+  email_msg_order_cancelled_body: 'Olá, {cliente}.\n\nInformamos que seu pedido #{numero_pedido} para o evento {evento} foi cancelado.\n\nSe tiver alguma dúvida, entre em contato conosco.',
 };
 
 export const useAppSettings = (): AppSettingsHook => {

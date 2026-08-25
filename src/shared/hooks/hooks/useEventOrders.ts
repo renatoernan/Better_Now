@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/lib/supabase';
 import { checkMercadoPagoPaymentStatus } from '../../services/mercadoPagoService';
-import { sendOrderWhatsAppNotification, OrderNotificationType } from '../../services/orderNotificationService';
+import { sendOrderNotifications, OrderNotificationType } from '../../services/orderNotificationService';
 import { toast } from 'sonner';
 
 export interface EventOrderRecord {
@@ -283,8 +283,8 @@ export const useEventOrders = (eventId?: string) => {
         }
       }
 
-      // Disparar notificação automática de Pagamento Confirmado (Ingressos Emitidos)
-      sendOrderWhatsAppNotification({
+      // Disparar notificações automáticas de Pagamento Confirmado (WhatsApp + E-mail)
+      sendOrderNotifications({
         type: 'confirmed',
         orderId: orderId,
         orderData: { ...order, status: 'paid' },
@@ -314,8 +314,8 @@ export const useEventOrders = (eventId?: string) => {
 
       if (error) throw error;
 
-      // Disparar notificação automática de Pedido Cancelado
-      sendOrderWhatsAppNotification({
+      // Disparar notificações automáticas de Pedido Cancelado (WhatsApp + E-mail)
+      sendOrderNotifications({
         type: 'cancelled',
         orderId: orderId,
       }).catch(() => {});
@@ -350,8 +350,8 @@ export const useEventOrders = (eventId?: string) => {
         .update({ status: 'cancelled' })
         .eq('order_id', orderId);
 
-      // Disparar notificação automática de Pedido Cancelado
-      sendOrderWhatsAppNotification({
+      // Disparar notificações automáticas de Pedido Cancelado (WhatsApp + E-mail)
+      sendOrderNotifications({
         type: 'cancelled',
         orderId: orderId,
       }).catch(() => {});
@@ -366,21 +366,27 @@ export const useEventOrders = (eventId?: string) => {
     }
   };
 
-  // Reenviar notificação de WhatsApp manualmente
+  // Reenviar notificação de WhatsApp e E-mail manualmente
   const sendManualOrderNotification = async (orderId: string, type: OrderNotificationType) => {
     try {
       const typeLabel = type === 'created' ? 'Pedido Criado' : type === 'confirmed' ? 'Pagamento Confirmado' : 'Pedido Cancelado';
-      toast.info(`Enviando mensagem de ${typeLabel} via WhatsApp...`);
-      const res = await sendOrderWhatsAppNotification({ type, orderId });
-      if (res.success) {
-        toast.success(`Mensagem de ${typeLabel} enviada no WhatsApp com sucesso! 📱`);
+      toast.info(`Enviando notificações de ${typeLabel} (WhatsApp / E-mail)...`);
+      const res = await sendOrderNotifications({ type, orderId });
+      
+      const successChannels: string[] = [];
+      if (res.whatsapp?.success) successChannels.push('WhatsApp 📱');
+      if (res.email?.success) successChannels.push('E-mail ✉️');
+
+      if (successChannels.length > 0) {
+        toast.success(`Notificação de ${typeLabel} enviada via ${successChannels.join(' e ')}!`);
         return true;
       } else {
-        toast.error(`Falha no envio do WhatsApp: ${res.message}`);
+        const errorMsg = res.email?.message || res.whatsapp?.message || 'Falha no envio';
+        toast.error(`Falha no envio da notificação: ${errorMsg}`);
         return false;
       }
     } catch (err: any) {
-      toast.error(`Erro ao enviar mensagem: ${err.message || 'Erro inesperado'}`);
+      toast.error(`Erro ao enviar notificação: ${err.message || 'Erro inesperado'}`);
       return false;
     }
   };

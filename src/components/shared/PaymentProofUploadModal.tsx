@@ -14,9 +14,12 @@ interface PaymentProofUploadModalProps {
   unitPrice: number;
   quantity: number;
   feePercentage?: number;
+  appliedCoupon?: any;
+  discountAmount?: number;
   clientName?: string;
   clientPhone?: string;
   clientEmail?: string;
+  clientDocument?: string;
   onSuccess: () => void;
 }
 
@@ -30,9 +33,12 @@ const PaymentProofUploadModal: React.FC<PaymentProofUploadModalProps> = ({
   unitPrice,
   quantity,
   feePercentage = 0,
+  appliedCoupon,
+  discountAmount = 0,
   clientName = '',
   clientPhone = '',
   clientEmail = '',
+  clientDocument = '',
   onSuccess,
 }) => {
   const [file, setFile] = useState<File | null>(null);
@@ -43,7 +49,9 @@ const PaymentProofUploadModal: React.FC<PaymentProofUploadModalProps> = ({
 
   if (!isOpen) return null;
 
-  const subtotal = unitPrice * quantity;
+  const rawSubtotal = unitPrice * quantity;
+  const discount = discountAmount || (appliedCoupon?.discount_applied ?? 0);
+  const subtotal = Math.max(0, rawSubtotal - discount);
   const feeAmount = subtotal * (feePercentage / 100);
   const totalPrice = subtotal + feeAmount;
 
@@ -100,9 +108,13 @@ const PaymentProofUploadModal: React.FC<PaymentProofUploadModalProps> = ({
         client_name: clientName,
         client_phone: clientPhone,
         client_email: clientEmail,
+        client_document: clientDocument || undefined,
         payment_proof_url: uploadRes.url,
         convenience_fee: feeAmount,
-        convenience_fee_percentage: feePercentage
+        convenience_fee_percentage: feePercentage,
+        coupon_id: appliedCoupon?.coupon_id || undefined,
+        coupon_code: appliedCoupon?.code || undefined,
+        discount_amount: discount,
       });
 
       if (orderRes.error) {

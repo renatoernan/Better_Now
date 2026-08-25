@@ -979,8 +979,12 @@ const EventDetails: React.FC = () => {
         unitPrice={currentUnitPrice}
         quantity={quantity}
         feePercentage={currentFeePercentage}
+        appliedCoupon={appliedCoupon}
+        discountAmount={currentDiscountAmount}
         clientName={currentClientName}
         clientPhone={currentPhone}
+        clientEmail={currentClientEmail}
+        clientDocument={currentClientCpf}
         onSuccess={() => {
           setShowPaymentProofModal(false);
           toast.success('Comprovante enviado com sucesso! Aguarde a validação.');

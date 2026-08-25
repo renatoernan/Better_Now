@@ -6,12 +6,22 @@ import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEvent
 import ImageUpload from '../shared/ImageUpload';
 import VideoUpload from '../shared/VideoUpload';
 import EventWahaTestModal from '../shared/EventWahaTestModal';
+import EventEmailTestModal from '../shared/EventEmailTestModal';
 import { toast } from 'sonner';
 import { PhoneInput } from '../ui/PhoneInput';
 
 const DEFAULT_WAHA_MSG_CREATED = 'Olá, {cliente}! Recebemos seu pedido #{numero_pedido} para o evento *{evento}*.\n\n💰 *Total:* {total}\n⏳ *Status:* Aguardando Pagamento\n\nAssim que o pagamento for confirmado, você receberá seus ingressos por aqui!';
 const DEFAULT_WAHA_MSG_CONFIRMED = '🎉 Parabéns, {cliente}! Seu pagamento para o evento *{evento}* foi confirmado com sucesso!\n\n🎟️ *Quantidade de Ingressos:* {quantidade}\n📅 *Data:* {data_evento}\n📍 *Local:* {local_evento}\n\nVocê pode acessar seus ingressos a qualquer momento através do link: {link_acesso}';
 const DEFAULT_WAHA_MSG_CANCELLED = 'Olá, {cliente}. Informamos que seu pedido #{numero_pedido} para o evento *{evento}* foi cancelado.\n\nSe você tiver alguma dúvida, entre em contato conosco.';
+
+const DEFAULT_EMAIL_MSG_CREATED_SUBJECT = 'Pedido Recebido #{numero_pedido} - {evento}';
+const DEFAULT_EMAIL_MSG_CREATED_BODY = 'Olá, {cliente}!\n\nRecebemos o seu pedido #{numero_pedido} para o evento {evento}.\n\nValor Total: {total}\nQuantidade de Ingressos: {quantidade}\n\nAssim que o pagamento for confirmado, você receberá seus ingressos com QR Code por aqui!';
+
+const DEFAULT_EMAIL_MSG_CONFIRMED_SUBJECT = '🎉 Ingressos Confirmados! Pedido #{numero_pedido} - {evento}';
+const DEFAULT_EMAIL_MSG_CONFIRMED_BODY = 'Parabéns, {cliente}!\n\nSeu pagamento para o evento {evento} foi confirmado com sucesso!\n\nDetalhes do Evento:\n- Data: {data_evento}\n- Local: {local_evento}\n- Quantidade de Ingressos: {quantidade}\n\nVocê pode visualizar seus ingressos e QR Codes no link abaixo:\n{link_acesso}';
+
+const DEFAULT_EMAIL_MSG_CANCELLED_SUBJECT = 'Pedido Cancelado #{numero_pedido} - {evento}';
+const DEFAULT_EMAIL_MSG_CANCELLED_BODY = 'Olá, {cliente}.\n\nInformamos que seu pedido #{numero_pedido} para o evento {evento} foi cancelado.\n\nSe tiver alguma dúvida, entre em contato conosco.';
 
 interface LocalPriceBatch {
   id: string;
@@ -100,10 +110,16 @@ const EventForm: React.FC<EventFormProps> = ({
       waha_msg_order_created: DEFAULT_WAHA_MSG_CREATED,
       waha_msg_order_confirmed: DEFAULT_WAHA_MSG_CONFIRMED,
       waha_msg_order_cancelled: DEFAULT_WAHA_MSG_CANCELLED,
+      email_msg_order_created_subject: DEFAULT_EMAIL_MSG_CREATED_SUBJECT,
+      email_msg_order_created_body: DEFAULT_EMAIL_MSG_CREATED_BODY,
+      email_msg_order_confirmed_subject: DEFAULT_EMAIL_MSG_CONFIRMED_SUBJECT,
+      email_msg_order_confirmed_body: DEFAULT_EMAIL_MSG_CONFIRMED_BODY,
+      email_msg_order_cancelled_subject: DEFAULT_EMAIL_MSG_CANCELLED_SUBJECT,
+      email_msg_order_cancelled_body: DEFAULT_EMAIL_MSG_CANCELLED_BODY,
     }
   });
 
-  type EventFormTab = 'details' | 'tickets' | 'media' | 'payments' | 'checkout' | 'whatsapp';
+  type EventFormTab = 'details' | 'tickets' | 'media' | 'payments' | 'checkout' | 'whatsapp' | 'email';
 
   const [activeTab, setActiveTab] = useState<EventFormTab>('details');
   const [priceBatches, setPriceBatches] = useState<LocalPriceBatch[]>([]);
@@ -112,6 +128,7 @@ const EventForm: React.FC<EventFormProps> = ({
   const [draggedFieldIndex, setDraggedFieldIndex] = useState<number | null>(null);
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
   const [showWahaTestModal, setShowWahaTestModal] = useState(false);
+  const [showEmailTestModal, setShowEmailTestModal] = useState(false);
 
   useEffect(() => {
     if (event) {
@@ -137,6 +154,12 @@ const EventForm: React.FC<EventFormProps> = ({
       setValue('waha_msg_order_created', event.waha_msg_order_created || DEFAULT_WAHA_MSG_CREATED, { shouldValidate: true });
       setValue('waha_msg_order_confirmed', event.waha_msg_order_confirmed || DEFAULT_WAHA_MSG_CONFIRMED, { shouldValidate: true });
       setValue('waha_msg_order_cancelled', event.waha_msg_order_cancelled || DEFAULT_WAHA_MSG_CANCELLED, { shouldValidate: true });
+      setValue('email_msg_order_created_subject', event.email_msg_order_created_subject || DEFAULT_EMAIL_MSG_CREATED_SUBJECT, { shouldValidate: true });
+      setValue('email_msg_order_created_body', event.email_msg_order_created_body || DEFAULT_EMAIL_MSG_CREATED_BODY, { shouldValidate: true });
+      setValue('email_msg_order_confirmed_subject', event.email_msg_order_confirmed_subject || DEFAULT_EMAIL_MSG_CONFIRMED_SUBJECT, { shouldValidate: true });
+      setValue('email_msg_order_confirmed_body', event.email_msg_order_confirmed_body || DEFAULT_EMAIL_MSG_CONFIRMED_BODY, { shouldValidate: true });
+      setValue('email_msg_order_cancelled_subject', event.email_msg_order_cancelled_subject || DEFAULT_EMAIL_MSG_CANCELLED_SUBJECT, { shouldValidate: true });
+      setValue('email_msg_order_cancelled_body', event.email_msg_order_cancelled_body || DEFAULT_EMAIL_MSG_CANCELLED_BODY, { shouldValidate: true });
       
       if (event.price_batches && Array.isArray(event.price_batches)) {
         setPriceBatches(event.price_batches.map((b, idx) => {
@@ -578,6 +601,12 @@ const EventForm: React.FC<EventFormProps> = ({
                   id: 'whatsapp',
                   name: 'Mensagens WhatsApp',
                   icon: MessageSquare,
+                  hasError: false
+                },
+                {
+                  id: 'email',
+                  name: 'Mensagens E-mail',
+                  icon: Mail,
                   hasError: false
                 }
               ].map((tab) => {
@@ -1913,6 +1942,266 @@ const EventForm: React.FC<EventFormProps> = ({
               </div>
             )}
 
+            {/* ABA 5: MENSAGENS E-MAIL */}
+            {activeTab === 'email' && (
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-2xs space-y-5">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-4 flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center">
+                        <Mail className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">
+                          Comunicação por E-mail dos Ingressos
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                          Personalize os assuntos e conteúdos dos e-mails automáticos enviados aos compradores
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const wCreated = watch('waha_msg_order_created') || DEFAULT_WAHA_MSG_CREATED;
+                          const wConfirmed = watch('waha_msg_order_confirmed') || DEFAULT_WAHA_MSG_CONFIRMED;
+                          const wCancelled = watch('waha_msg_order_cancelled') || DEFAULT_WAHA_MSG_CANCELLED;
+                          setValue('email_msg_order_created_body', wCreated, { shouldDirty: true });
+                          setValue('email_msg_order_confirmed_body', wConfirmed, { shouldDirty: true });
+                          setValue('email_msg_order_cancelled_body', wCancelled, { shouldDirty: true });
+                          toast.success('Todas as 3 mensagens do WhatsApp foram copiadas para os e-mails!');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                        title="Copia os textos das mensagens configuradas no WhatsApp para os 3 modelos de e-mail"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-sky-600" />
+                        Copiar Todas do WhatsApp
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowEmailTestModal(true)}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold rounded-xl shadow-xs hover:shadow-md transition-all cursor-pointer select-none"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        Testar Envio de E-mail
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Card de Tags Dinâmicas */}
+                  <div className="bg-sky-50/60 border border-sky-200/80 rounded-xl p-4 shadow-2xs">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-900 mb-2">
+                      <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                      Tags Dinâmicas (clique para copiar):
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        '{cliente}',
+                        '{evento}',
+                        '{total}',
+                        '{quantidade}',
+                        '{data_evento}',
+                        '{local_evento}',
+                        '{numero_pedido}',
+                        '{link_acesso}'
+                      ].map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(tag);
+                            setCopiedTag(tag);
+                            setTimeout(() => setCopiedTag(null), 2000);
+                            toast.success(`Tag ${tag} copiada!`);
+                          }}
+                          className="bg-white hover:bg-sky-100 border border-sky-300 text-sky-800 text-xs px-2.5 py-1 rounded-lg font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          {copiedTag === tag ? <Check className="w-3 h-3 text-sky-600" /> : <Copy className="w-3 h-3 text-sky-500" />}
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    {/* Modelo 1: Pedido Criado */}
+                    <div className="bg-slate-50/50 border border-gray-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                          1. Pedido Criado (Aguardando Pagamento)
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const wMsg = watch('waha_msg_order_created') || DEFAULT_WAHA_MSG_CREATED;
+                              setValue('email_msg_order_created_body', wMsg, { shouldDirty: true });
+                              toast.success('Mensagem do WhatsApp copiada para o corpo do e-mail!');
+                            }}
+                            className="text-xs bg-white hover:bg-sky-50 text-sky-700 border border-sky-200 px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Copy className="w-3 h-3 text-sky-600" /> Copiar do WhatsApp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setValue('email_msg_order_created_subject', DEFAULT_EMAIL_MSG_CREATED_SUBJECT, { shouldDirty: true });
+                              setValue('email_msg_order_created_body', DEFAULT_EMAIL_MSG_CREATED_BODY, { shouldDirty: true });
+                            }}
+                            className="text-xs text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1 cursor-pointer"
+                          >
+                            <RefreshCw className="w-3 h-3" /> Restaurar Padrão
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Assunto do E-mail:
+                        </label>
+                        <input
+                          type="text"
+                          {...register('email_msg_order_created_subject')}
+                          placeholder="Pedido Recebido #{numero_pedido} - {evento}"
+                          className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-800 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Corpo do E-mail (Texto da Mensagem):
+                        </label>
+                        <textarea
+                          {...register('email_msg_order_created_body')}
+                          rows={3}
+                          className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-800 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-xs leading-relaxed"
+                          placeholder="Olá, {cliente}! Recebemos o seu pedido..."
+                        />
+                      </div>
+                    </div>
+
+                    {/* Modelo 2: Pagamento Confirmado */}
+                    <div className="bg-slate-50/50 border border-gray-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                          2. Pagamento Confirmado (Ingressos Emitidos)
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const wMsg = watch('waha_msg_order_confirmed') || DEFAULT_WAHA_MSG_CONFIRMED;
+                              setValue('email_msg_order_confirmed_body', wMsg, { shouldDirty: true });
+                              toast.success('Mensagem do WhatsApp copiada para o corpo do e-mail!');
+                            }}
+                            className="text-xs bg-white hover:bg-sky-50 text-sky-700 border border-sky-200 px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Copy className="w-3 h-3 text-sky-600" /> Copiar do WhatsApp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setValue('email_msg_order_confirmed_subject', DEFAULT_EMAIL_MSG_CONFIRMED_SUBJECT, { shouldDirty: true });
+                              setValue('email_msg_order_confirmed_body', DEFAULT_EMAIL_MSG_CONFIRMED_BODY, { shouldDirty: true });
+                            }}
+                            className="text-xs text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1 cursor-pointer"
+                          >
+                            <RefreshCw className="w-3 h-3" /> Restaurar Padrão
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Assunto do E-mail:
+                        </label>
+                        <input
+                          type="text"
+                          {...register('email_msg_order_confirmed_subject')}
+                          placeholder="🎉 Ingressos Confirmados! Pedido #{numero_pedido} - {evento}"
+                          className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-800 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Corpo do E-mail (Texto da Mensagem):
+                        </label>
+                        <textarea
+                          {...register('email_msg_order_confirmed_body')}
+                          rows={4}
+                          className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-800 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-xs leading-relaxed"
+                          placeholder="Parabéns, {cliente}! Seu pagamento..."
+                        />
+                      </div>
+                    </div>
+
+                    {/* Modelo 3: Cancelamento */}
+                    <div className="bg-slate-50/50 border border-gray-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                          3. Pedido Cancelado / Recusado
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const wMsg = watch('waha_msg_order_cancelled') || DEFAULT_WAHA_MSG_CANCELLED;
+                              setValue('email_msg_order_cancelled_body', wMsg, { shouldDirty: true });
+                              toast.success('Mensagem do WhatsApp copiada para o corpo do e-mail!');
+                            }}
+                            className="text-xs bg-white hover:bg-sky-50 text-sky-700 border border-sky-200 px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Copy className="w-3 h-3 text-sky-600" /> Copiar do WhatsApp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setValue('email_msg_order_cancelled_subject', DEFAULT_EMAIL_MSG_CANCELLED_SUBJECT, { shouldDirty: true });
+                              setValue('email_msg_order_cancelled_body', DEFAULT_EMAIL_MSG_CANCELLED_BODY, { shouldDirty: true });
+                            }}
+                            className="text-xs text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1 cursor-pointer"
+                          >
+                            <RefreshCw className="w-3 h-3" /> Restaurar Padrão
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Assunto do E-mail:
+                        </label>
+                        <input
+                          type="text"
+                          {...register('email_msg_order_cancelled_subject')}
+                          placeholder="Pedido Cancelado #{numero_pedido} - {evento}"
+                          className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-800 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Corpo do E-mail (Texto da Mensagem):
+                        </label>
+                        <textarea
+                          {...register('email_msg_order_cancelled_body')}
+                          rows={2}
+                          className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-800 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-xs leading-relaxed"
+                          placeholder="Olá, {cliente}. Informamos que seu pedido..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Botões flutuantes fixos na parte inferior */}
@@ -1964,6 +2253,23 @@ const EventForm: React.FC<EventFormProps> = ({
           wahaMsgCreated={watch('waha_msg_order_created')}
           wahaMsgConfirmed={watch('waha_msg_order_confirmed')}
           wahaMsgCancelled={watch('waha_msg_order_cancelled')}
+        />
+      )}
+
+      {/* Modal de Teste de Envio de E-mail */}
+      {showEmailTestModal && (
+        <EventEmailTestModal
+          isOpen={showEmailTestModal}
+          onClose={() => setShowEmailTestModal(false)}
+          eventTitle={watch('title')}
+          eventDate={watch('event_date')}
+          eventLocation={watch('location')}
+          emailMsgCreatedSubj={watch('email_msg_order_created_subject')}
+          emailMsgCreatedBody={watch('email_msg_order_created_body')}
+          emailMsgConfirmedSubj={watch('email_msg_order_confirmed_subject')}
+          emailMsgConfirmedBody={watch('email_msg_order_confirmed_body')}
+          emailMsgCancelledSubj={watch('email_msg_order_cancelled_subject')}
+          emailMsgCancelledBody={watch('email_msg_order_cancelled_body')}
         />
       )}
     </div>

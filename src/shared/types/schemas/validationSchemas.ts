@@ -328,6 +328,27 @@ export const wahaSettingsSchema = z.object({
   waha_msg_order_cancelled: z.string().max(2000, 'Mensagem muito longa').optional().or(z.literal('')),
 });
 
+export const emailServerSettingsSchema = z.object({
+  email_smtp_user: z.string().min(1, 'Nome de usuário é obrigatório').max(200, 'Nome de usuário muito longo'),
+  email_smtp_password: z.string().max(255, 'Senha muito longa').optional().or(z.literal('')),
+  email_incoming_host: z.string().min(1, 'Servidor de entrada é obrigatório').max(255, 'Host muito longo'),
+  email_imap_port: z.number().int().min(1, 'Porta inválida').max(65535, 'Porta inválida'),
+  email_pop3_port: z.number().int().min(1, 'Porta inválida').max(65535, 'Porta inválida'),
+  email_outgoing_host: z.string().min(1, 'Servidor de saída é obrigatório').max(255, 'Host muito longo'),
+  email_smtp_port: z.number().int().min(1, 'Porta inválida').max(65535, 'Porta inválida'),
+  email_from_name: z.string().max(100, 'Nome muito longo').optional().or(z.literal('')),
+  email_from_address: z.string().email('Email de remetente inválido').optional().or(z.literal('')),
+  email_security: z.enum(['ssl_tls', 'starttls', 'none']).default('ssl_tls'),
+  email_auth_required: z.boolean().default(true),
+  email_enabled: z.boolean().default(true),
+  email_msg_order_created_subject: z.string().max(200, 'Assunto muito longo').optional().or(z.literal('')),
+  email_msg_order_created_body: z.string().max(5000, 'Corpo muito longo').optional().or(z.literal('')),
+  email_msg_order_confirmed_subject: z.string().max(200, 'Assunto muito longo').optional().or(z.literal('')),
+  email_msg_order_confirmed_body: z.string().max(5000, 'Corpo muito longo').optional().or(z.literal('')),
+  email_msg_order_cancelled_subject: z.string().max(200, 'Assunto muito longo').optional().or(z.literal('')),
+  email_msg_order_cancelled_body: z.string().max(5000, 'Corpo muito longo').optional().or(z.literal('')),
+});
+
 export const appSettingsSchema = z.object({
   company_name: z.string().min(1, 'Nome da empresa é obrigatório').max(200, 'Nome muito longo'),
   company_email: z.string().email('Email inválido'),
@@ -469,6 +490,7 @@ export type BusinessHoursSettings = z.infer<typeof businessHoursSettingsSchema>;
 export type CarouselSettings = z.infer<typeof carouselSettingsSchema>;
 export type SystemSettings = z.infer<typeof systemSettingsSchema>;
 export type WahaSettings = z.infer<typeof wahaSettingsSchema>;
+export type EmailServerSettings = z.infer<typeof emailServerSettingsSchema>;
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
 export type RegisterData = z.infer<typeof registerSchema>;

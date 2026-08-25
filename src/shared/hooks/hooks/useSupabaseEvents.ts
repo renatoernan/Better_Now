@@ -96,6 +96,24 @@ const enrichEventFromDb = (dbItem: any): Event => {
         if (parsed.waha_msg_order_cancelled) {
           dbItem.waha_msg_order_cancelled = parsed.waha_msg_order_cancelled;
         }
+        if (parsed.email_msg_order_created_subject) {
+          dbItem.email_msg_order_created_subject = parsed.email_msg_order_created_subject;
+        }
+        if (parsed.email_msg_order_created_body) {
+          dbItem.email_msg_order_created_body = parsed.email_msg_order_created_body;
+        }
+        if (parsed.email_msg_order_confirmed_subject) {
+          dbItem.email_msg_order_confirmed_subject = parsed.email_msg_order_confirmed_subject;
+        }
+        if (parsed.email_msg_order_confirmed_body) {
+          dbItem.email_msg_order_confirmed_body = parsed.email_msg_order_confirmed_body;
+        }
+        if (parsed.email_msg_order_cancelled_subject) {
+          dbItem.email_msg_order_cancelled_subject = parsed.email_msg_order_cancelled_subject;
+        }
+        if (parsed.email_msg_order_cancelled_body) {
+          dbItem.email_msg_order_cancelled_body = parsed.email_msg_order_cancelled_body;
+        }
       } else {
         descriptionStr = dbItem.observations;
       }
@@ -151,6 +169,12 @@ const enrichEventFromDb = (dbItem: any): Event => {
     waha_msg_order_created: dbItem.waha_msg_order_created || '',
     waha_msg_order_confirmed: dbItem.waha_msg_order_confirmed || '',
     waha_msg_order_cancelled: dbItem.waha_msg_order_cancelled || '',
+    email_msg_order_created_subject: dbItem.email_msg_order_created_subject || '',
+    email_msg_order_created_body: dbItem.email_msg_order_created_body || '',
+    email_msg_order_confirmed_subject: dbItem.email_msg_order_confirmed_subject || '',
+    email_msg_order_confirmed_body: dbItem.email_msg_order_confirmed_body || '',
+    email_msg_order_cancelled_subject: dbItem.email_msg_order_cancelled_subject || '',
+    email_msg_order_cancelled_body: dbItem.email_msg_order_cancelled_body || '',
     image_url: imageUrlVal,
     videos: videosVal
   };
@@ -236,6 +260,12 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
   const wahaMsgCreatedVal = eventData.waha_msg_order_created || '';
   const wahaMsgConfirmedVal = eventData.waha_msg_order_confirmed || '';
   const wahaMsgCancelledVal = eventData.waha_msg_order_cancelled || '';
+  const emailMsgCreatedSubjVal = eventData.email_msg_order_created_subject || '';
+  const emailMsgCreatedBodyVal = eventData.email_msg_order_created_body || '';
+  const emailMsgConfirmedSubjVal = eventData.email_msg_order_confirmed_subject || '';
+  const emailMsgConfirmedBodyVal = eventData.email_msg_order_confirmed_body || '';
+  const emailMsgCancelledSubjVal = eventData.email_msg_order_cancelled_subject || '';
+  const emailMsgCancelledBodyVal = eventData.email_msg_order_cancelled_body || '';
   const imageUrlVal = eventData.image_url || '';
   const videosVal = eventData.videos || [];
 
@@ -265,6 +295,12 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
     waha_msg_order_created: wahaMsgCreatedVal,
     waha_msg_order_confirmed: wahaMsgConfirmedVal,
     waha_msg_order_cancelled: wahaMsgCancelledVal,
+    email_msg_order_created_subject: emailMsgCreatedSubjVal,
+    email_msg_order_created_body: emailMsgCreatedBodyVal,
+    email_msg_order_confirmed_subject: emailMsgConfirmedSubjVal,
+    email_msg_order_confirmed_body: emailMsgConfirmedBodyVal,
+    email_msg_order_cancelled_subject: emailMsgCancelledSubjVal,
+    email_msg_order_cancelled_body: emailMsgCancelledBodyVal,
     image_url: imageUrlVal,
     videos: videosVal
   });

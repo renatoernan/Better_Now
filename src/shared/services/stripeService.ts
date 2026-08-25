@@ -1,6 +1,6 @@
 import { supabase } from './lib/supabase';
 import { loadStripe } from '@stripe/stripe-js';
-import { sendOrderWhatsAppNotification } from './orderNotificationService';
+import { sendOrderNotifications } from './orderNotificationService';
 
 // Chave pública do Stripe obtida das variáveis de ambiente
 // @ts-ignore
@@ -240,6 +240,10 @@ export const createPixChaveOrder = async (orderData: {
   payment_proof_url?: string;
   convenience_fee?: number;
   convenience_fee_percentage?: number;
+  coupon_id?: string | null;
+  coupon_code?: string | null;
+  discount_amount?: number;
+  client_document?: string | null;
 }): Promise<{ data?: EventOrder; error?: string }> => {
   try {
     const payload = {
@@ -248,6 +252,7 @@ export const createPixChaveOrder = async (orderData: {
       client_name: orderData.client_name || null,
       client_email: orderData.client_email || null,
       client_phone: orderData.client_phone || null,
+      client_document: orderData.client_document || null,
       amount_total: orderData.amount_total,
       currency: 'brl',
       quantity: orderData.quantity,
@@ -257,7 +262,10 @@ export const createPixChaveOrder = async (orderData: {
       payment_method: 'pix_chave',
       payment_proof_url: orderData.payment_proof_url || null,
       convenience_fee: orderData.convenience_fee || 0,
-      convenience_fee_percentage: orderData.convenience_fee_percentage || 0
+      convenience_fee_percentage: orderData.convenience_fee_percentage || 0,
+      coupon_id: orderData.coupon_id || null,
+      coupon_code: orderData.coupon_code || null,
+      discount_amount: orderData.discount_amount || 0,
     };
 
     const { data, error } = await supabase
@@ -272,8 +280,8 @@ export const createPixChaveOrder = async (orderData: {
     }
 
     if (data?.id) {
-      // Disparar notificação automática de Pedido Criado (Aguardando Pagamento/Aprovação)
-      sendOrderWhatsAppNotification({
+      // Disparar notificações automáticas de Pedido Criado (WhatsApp + E-mail)
+      sendOrderNotifications({
         type: 'created',
         orderId: data.id,
         orderData: data,

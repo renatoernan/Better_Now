@@ -5,7 +5,7 @@
 
 import { supabase } from './lib/supabase';
 import { getClientIpAddress } from '../utils/utils/ipUtils';
-import { sendOrderWhatsAppNotification } from './orderNotificationService';
+import { sendOrderNotifications } from './orderNotificationService';
 import { applyCouponOnOrder } from './couponService';
 
 export interface CreateComplimentaryOrderParams {
@@ -185,16 +185,14 @@ export const createComplimentaryOrder = async (
       console.warn('Aviso ao emitir ingressos cortesia:', ticketErr);
     }
 
-    // 5. Disparar notificação de confirmação no WhatsApp
-    if (params.send_whatsapp !== false && params.client_phone) {
-      sendOrderWhatsAppNotification({
-        type: 'confirmed',
-        orderId: orderId,
-        orderData: newOrder,
-      }).catch((wahaErr) => {
-        console.warn('Aviso no envio de WhatsApp da cortesia:', wahaErr);
-      });
-    }
+    // 5. Disparar notificações de confirmação (WhatsApp + E-mail)
+    sendOrderNotifications({
+      type: 'confirmed',
+      orderId: orderId,
+      orderData: newOrder,
+    }).catch((notifErr) => {
+      console.warn('Aviso no envio de notificações da cortesia:', notifErr);
+    });
 
     return {
       success: true,
