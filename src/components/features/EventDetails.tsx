@@ -988,7 +988,7 @@ const EventDetails: React.FC = () => {
         eventTitle={event?.title}
       />
 
-      {/* Modal de Pagamento do Stripe / Mercado Pago (Boleto, Cartão, Pix) */}
+      {/* Modal de Pagamento do Mercado Pago (Transparente - Pix e Cartão de Crédito) */}
       <StripeCheckoutModal
         isOpen={showStripeCheckoutModal}
         onClose={() => {
@@ -996,6 +996,8 @@ const EventDetails: React.FC = () => {
           setStripeErrorMessage(null);
           setAwaitingPaymentOrderId(null);
         }}
+        eventId={id || ''}
+        batchIndex={selectedBatch}
         eventTitle={event?.title || 'Evento'}
         batchName={priceBatches[selectedBatch]?.name || `Lote ${selectedBatch + 1}`}
         unitPrice={currentUnitPrice}
@@ -1008,6 +1010,18 @@ const EventDetails: React.FC = () => {
         clientName={currentClientName}
         clientPhone={currentPhone}
         clientEmail={currentClientEmail}
+        clientDocument={currentClientCpf}
+        clientId={currentClientId || undefined}
+        existingOrderId={reusableOrderId || undefined}
+        maxInstallments={((event?.payment_methods || []).find(pm => pm.method === 'credit_card')?.max_installments) || 12}
+        selectedInstallments={selectedInstallments || 1}
+        onPaymentSuccess={(orderId) => {
+          setStripeSessionId(orderId);
+          setAwaitingPaymentOrderId(null);
+          setShowStripeCheckoutModal(false);
+          setShowPaymentSuccessModal(true);
+          toast.success('Pagamento aprovado com sucesso! Seus ingressos foram emitidos! 🎉');
+        }}
         onConfirmCheckout={handleConfirmStripeCheckout}
         loading={stripeCheckoutLoading}
         errorMessage={stripeErrorMessage}

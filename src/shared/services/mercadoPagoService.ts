@@ -35,9 +35,577 @@ export interface MercadoPagoCheckoutResponse {
   error?: string;
 }
 
-/**
- * Busca se já existe uma ordem pendente para o mesmo comprador/IP no mesmo evento
- */
+export interface CreatePixPaymentParams {
+  event_id: string;
+  batch_index: number;
+  batch_name?: string;
+  unit_price: number;
+  quantity: number;
+  convenience_fee?: number;
+  convenience_fee_percentage?: number;
+  client_name?: string;
+  client_email?: string;
+  client_phone?: string;
+  client_document?: string;
+  client_id?: string;
+  existing_order_id?: string;
+  coupon_id?: string;
+  coupon_code?: string;
+  discount_amount?: number;
+}
+
+export interface PixPaymentResponse {
+  success: boolean;
+  orderId: string;
+  paymentId: string;
+  qrCode: string;
+  qrCodeBase64?: string;
+  ticketUrl?: string;
+  expirationDate?: string;
+  error?: string;
+}
+
+export interface ProcessCardPaymentParams {
+  event_id: string;
+  batch_index: number;
+  batch_name?: string;
+  unit_price: number;
+  quantity: number;
+  convenience_fee?: number;
+  convenience_fee_percentage?: number;
+  client_name?: string;
+  client_email?: string;
+  client_phone?: string;
+  client_document?: string;
+  client_id?: string;
+  existing_order_id?: string;
+  coupon_id?: string;
+  coupon_code?: string;
+  discount_amount?: number;
+  cardToken: string;
+  paymentMethodId: string;
+  issuerId?: string;
+  installments: number;
+}
+
+export interface CardPaymentResponse {
+  success: boolean;
+  status: 'approved' | 'in_process' | 'rejected' | 'pending';
+  statusDetail?: string;
+  orderId?: string;
+  paymentId?: string;
+  message?: string;
+  error?: string;
+}
+
+export const loadMercadoPagoSDK = (): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window !== 'undefined' && (window as any).MercadoPago) {
+      resolve((window as any).MercadoPago);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://sdk.mercadopago.com/js/v2';
+    script.onload = () => {
+      resolve((window as any).MercadoPago);
+    };
+    script.onerror = () => {
+      reject(new Error('Não foi possível carregar o SDK do Mercado Pago.'));
+    };
+    document.body.appendChild(script);
+  });
+};
+
+export const getCardBrand = (cardNumber: string): string => {
+  const clean = cardNumber.replace(/\D/g, '');
+  if (/^4/.test(clean)) return 'visa';
+  if (/^(5[1-5]|2[2-7])/.test(clean)) return 'master';
+  if (/^(636368|438935|504175|451416|6011|5067|5090|6504|6505|6507|6509|6516|6550)/.test(clean)) return 'elo';
+  if (/^(606282|3841)/.test(clean)) return 'hipercard';
+  if (/^3[47]/.test(clean)) return 'amex';
+  return '';
+};
+
+export const completeMercadoPagoOrder = async (
+  orderId: string,
+  paymentId: string
+): Promise<boolean> => {
+  try {
+    const cleanOrderId = orderId.trim();
+
+    const { data: currentOrder, error: orderErr } = await supabase
+      .from('app_event_orders')
+      .update({
+        status: 'paid',
+        stripe_session_id: paymentId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', cleanOrderId)
+      .select()
+      .single();
+
+    if (orderErr || !currentOrder) {
+      console.error('Erro ao atualizar status do pedido para paid:', orderErr);
+      return false;
+    }
+
+    const { data: existingTickets } = await supabase
+      .from('app_event_tickets')
+      .select('id')
+      .eq('order_id', cleanOrderId);
+
+    if (!existingTickets || existingTickets.length === 0) {
+      const qty = currentOrder.quantity || 1;
+      const ticketsToInsert = [];
+
+      for (let i = 0; i < qty; i++) {
+        const qrHash = `MP-${paymentId.slice(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
+
+        ticketsToInsert.push({
+          order_id: cleanOrderId,
+          event_id: currentOrder.event_id,
+          client_id: currentOrder.client_id || null,
+          ticket_number: i + 1,
+          qr_code_hash: qrHash,
+          status: 'valid',
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      await supabase.from('app_event_tickets').insert(ticketsToInsert);
+    }
+
+    if (currentOrder.coupon_code || currentOrder.coupon_id) {
+      try {
+        const { applyCouponOnOrder } = await import('./couponService');
+        await applyCouponOnOrder({
+          couponId: currentOrder.coupon_id || '',
+          code: currentOrder.coupon_code || '',
+          eventId: currentOrder.event_id,
+          orderId: cleanOrderId,
+          batchIndex: currentOrder.batch_index || 0,
+          originalAmount: Number(currentOrder.amount_total || 0) + Number(currentOrder.discount_amount || 0),
+          clientName: currentOrder.client_name || undefined,
+          clientDocument: currentOrder.client_document || undefined,
+          clientPhone: currentOrder.client_phone || undefined,
+          clientEmail: currentOrder.client_email || undefined,
+        });
+      } catch (couponErr) {
+        console.warn('Aviso ao registrar cupom de desconto:', couponErr);
+      }
+    }
+
+    sendOrderNotifications({
+      type: 'confirmed',
+      orderId: cleanOrderId,
+      orderData: { ...currentOrder, status: 'paid' },
+    }).catch(() => {});
+
+    return true;
+  } catch (err) {
+    console.error('Erro ao completar pedido do Mercado Pago:', err);
+    return false;
+  }
+};
+
+export const createMercadoPagoPixPayment = async (
+  params: CreatePixPaymentParams
+): Promise<PixPaymentResponse> => {
+  try {
+    const accessToken =
+      (import.meta as any).env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
+      (import.meta as any).env.MERCADOPAGO_ACCESS_TOKEN;
+
+    if (!accessToken) {
+      return {
+        success: false,
+        orderId: '',
+        paymentId: '',
+        qrCode: '',
+        error: 'Token do Mercado Pago não configurado (VITE_MERCADOPAGO_ACCESS_TOKEN).',
+      };
+    }
+
+    const clientIp = await getClientIpAddress();
+    const cleanDoc = params.client_document?.replace(/\D/g, '');
+
+    const rawSubtotal = params.unit_price * params.quantity;
+    const discount = params.discount_amount || 0;
+    const subtotal = Math.max(0, rawSubtotal - discount);
+    const fee = params.convenience_fee || (subtotal * ((params.convenience_fee_percentage || 0) / 100));
+    const totalAmount = Number((subtotal + fee).toFixed(2));
+
+    let orderId = params.existing_order_id;
+    let order: any = null;
+
+    if (orderId) {
+      const { data: updatedOrder } = await supabase
+        .from('app_event_orders')
+        .update({
+          client_id: params.client_id || null,
+          client_name: params.client_name || '',
+          client_email: params.client_email || '',
+          client_phone: params.client_phone || '',
+          client_document: cleanDoc || null,
+          amount_total: totalAmount,
+          batch_index: params.batch_index || 0,
+          batch_name: params.batch_name || 'Lote Padrão',
+          payment_method: 'pix',
+          convenience_fee: fee,
+          convenience_fee_percentage: params.convenience_fee_percentage || 0,
+          coupon_id: params.coupon_id || null,
+          coupon_code: params.coupon_code || null,
+          discount_amount: discount,
+          ip_address: clientIp,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+        .select()
+        .single();
+      order = updatedOrder;
+    }
+
+    if (!order) {
+      const { data: newOrder, error: orderErr } = await supabase
+        .from('app_event_orders')
+        .insert({
+          event_id: params.event_id,
+          client_id: params.client_id || null,
+          client_name: params.client_name || '',
+          client_email: params.client_email || '',
+          client_phone: params.client_phone || '',
+          client_document: cleanDoc || null,
+          ip_address: clientIp,
+          amount_total: totalAmount,
+          currency: 'brl',
+          quantity: params.quantity,
+          batch_index: params.batch_index || 0,
+          batch_name: params.batch_name || 'Lote Padrão',
+          status: 'pending',
+          payment_method: 'pix',
+          convenience_fee: fee,
+          convenience_fee_percentage: params.convenience_fee_percentage || 0,
+          coupon_id: params.coupon_id || null,
+          coupon_code: params.coupon_code || null,
+          discount_amount: discount,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (orderErr) {
+        console.error('Erro ao registrar ordem para Pix:', orderErr);
+      }
+      order = newOrder;
+      orderId = newOrder?.id;
+    }
+
+    const nameParts = (params.client_name || 'Comprador').trim().split(/\s+/);
+    const firstName = nameParts[0] || 'Comprador';
+    const lastName = nameParts.slice(1).join(' ') || 'Cliente';
+
+    const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Idempotency-Key': `pix-${orderId}-${Date.now()}`,
+      },
+      body: JSON.stringify({
+        transaction_amount: totalAmount,
+        description: `Ingresso - ${params.batch_name || 'Evento'} (${params.quantity}x)`,
+        payment_method_id: 'pix',
+        payer: {
+          email: params.client_email?.trim() || 'comprador@betternow.com.br',
+          first_name: firstName,
+          last_name: lastName,
+          identification: cleanDoc && cleanDoc.length === 11 ? {
+            type: 'CPF',
+            number: cleanDoc,
+          } : undefined,
+        },
+        external_reference: orderId,
+        metadata: {
+          order_id: orderId,
+          event_id: params.event_id,
+          client_id: params.client_id,
+          quantity: params.quantity,
+        },
+      }),
+    });
+
+    const mpData = await mpRes.json();
+
+    if (!mpRes.ok || !mpData.id) {
+      console.error('Erro retornado pela API do Mercado Pago (Pix):', mpData);
+      const errMsg = mpData.message || mpData.cause?.[0]?.description || 'Erro ao gerar Pix no Mercado Pago.';
+      return {
+        success: false,
+        orderId: orderId || '',
+        paymentId: '',
+        qrCode: '',
+        error: errMsg,
+      };
+    }
+
+    const paymentId = String(mpData.id);
+    const transactionData = mpData.point_of_interaction?.transaction_data;
+    const qrCode = transactionData?.qr_code || '';
+    const qrCodeBase64 = transactionData?.qr_code_base64 || '';
+    const ticketUrl = transactionData?.ticket_url || '';
+    const expirationDate = mpData.date_of_expiration || '';
+
+    if (orderId) {
+      await supabase
+        .from('app_event_orders')
+        .update({
+          stripe_session_id: paymentId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      sendOrderNotifications({
+        type: 'created',
+        orderId: orderId,
+        orderData: { ...order, stripe_session_id: paymentId, pix_code: qrCode },
+      }).catch(() => {});
+    }
+
+    return {
+      success: true,
+      orderId: orderId || '',
+      paymentId,
+      qrCode,
+      qrCodeBase64,
+      ticketUrl,
+      expirationDate,
+    };
+  } catch (err: any) {
+    console.error('Exceção ao criar Pix transparente:', err);
+    return {
+      success: false,
+      orderId: '',
+      paymentId: '',
+      qrCode: '',
+      error: err.message || 'Erro inesperado ao gerar pagamento Pix.',
+    };
+  }
+};
+
+export const processMercadoPagoCardPayment = async (
+  params: ProcessCardPaymentParams
+): Promise<CardPaymentResponse> => {
+  try {
+    const accessToken =
+      (import.meta as any).env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
+      (import.meta as any).env.MERCADOPAGO_ACCESS_TOKEN;
+
+    if (!accessToken) {
+      return {
+        success: false,
+        status: 'rejected',
+        error: 'Token do Mercado Pago não configurado (VITE_MERCADOPAGO_ACCESS_TOKEN).',
+      };
+    }
+
+    const clientIp = await getClientIpAddress();
+    const cleanDoc = params.client_document?.replace(/\D/g, '');
+
+    const rawSubtotal = params.unit_price * params.quantity;
+    const discount = params.discount_amount || 0;
+    const subtotal = Math.max(0, rawSubtotal - discount);
+    const fee = params.convenience_fee || (subtotal * ((params.convenience_fee_percentage || 0) / 100));
+    const totalAmount = Number((subtotal + fee).toFixed(2));
+
+    let orderId = params.existing_order_id;
+    let order: any = null;
+
+    if (orderId) {
+      const { data: updatedOrder } = await supabase
+        .from('app_event_orders')
+        .update({
+          client_id: params.client_id || null,
+          client_name: params.client_name || '',
+          client_email: params.client_email || '',
+          client_phone: params.client_phone || '',
+          client_document: cleanDoc || null,
+          amount_total: totalAmount,
+          batch_index: params.batch_index || 0,
+          batch_name: params.batch_name || 'Lote Padrão',
+          payment_method: 'credit_card',
+          convenience_fee: fee,
+          convenience_fee_percentage: params.convenience_fee_percentage || 0,
+          coupon_id: params.coupon_id || null,
+          coupon_code: params.coupon_code || null,
+          discount_amount: discount,
+          ip_address: clientIp,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+        .select()
+        .single();
+      order = updatedOrder;
+    }
+
+    if (!order) {
+      const { data: newOrder, error: orderErr } = await supabase
+        .from('app_event_orders')
+        .insert({
+          event_id: params.event_id,
+          client_id: params.client_id || null,
+          client_name: params.client_name || '',
+          client_email: params.client_email || '',
+          client_phone: params.client_phone || '',
+          client_document: cleanDoc || null,
+          ip_address: clientIp,
+          amount_total: totalAmount,
+          currency: 'brl',
+          quantity: params.quantity,
+          batch_index: params.batch_index || 0,
+          batch_name: params.batch_name || 'Lote Padrão',
+          status: 'pending',
+          payment_method: 'credit_card',
+          convenience_fee: fee,
+          convenience_fee_percentage: params.convenience_fee_percentage || 0,
+          coupon_id: params.coupon_id || null,
+          coupon_code: params.coupon_code || null,
+          discount_amount: discount,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (orderErr) {
+        console.error('Erro ao registrar ordem para Cartão:', orderErr);
+      }
+      order = newOrder;
+      orderId = newOrder?.id;
+    }
+
+    const nameParts = (params.client_name || 'Comprador').trim().split(/\s+/);
+    const firstName = nameParts[0] || 'Comprador';
+    const lastName = nameParts.slice(1).join(' ') || 'Cliente';
+
+    const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Idempotency-Key': `card-${orderId}-${Date.now()}`,
+      },
+      body: JSON.stringify({
+        token: params.cardToken,
+        transaction_amount: totalAmount,
+        installments: Number(params.installments) || 1,
+        payment_method_id: params.paymentMethodId,
+        issuer_id: params.issuerId || undefined,
+        description: `Ingresso - ${params.batch_name || 'Evento'} (${params.quantity}x)`,
+        payer: {
+          email: params.client_email?.trim() || 'comprador@betternow.com.br',
+          first_name: firstName,
+          last_name: lastName,
+          identification: cleanDoc ? {
+            type: 'CPF',
+            number: cleanDoc,
+          } : undefined,
+        },
+        external_reference: orderId,
+        metadata: {
+          order_id: orderId,
+          event_id: params.event_id,
+          client_id: params.client_id,
+          quantity: params.quantity,
+        },
+      }),
+    });
+
+    const mpData = await mpRes.json();
+
+    if (!mpRes.ok || !mpData.id) {
+      console.error('Erro na resposta do pagamento de cartão:', mpData);
+      const errMsg = mpData.message || mpData.cause?.[0]?.description || 'Erro ao processar cartão.';
+      return {
+        success: false,
+        status: 'rejected',
+        orderId: orderId || '',
+        paymentId: '',
+        error: errMsg,
+      };
+    }
+
+    const paymentId = String(mpData.id);
+    const status = mpData.status as 'approved' | 'in_process' | 'rejected' | 'pending';
+    const statusDetail = mpData.status_detail;
+
+    if (orderId) {
+      await supabase
+        .from('app_event_orders')
+        .update({
+          stripe_session_id: paymentId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+    }
+
+    if (status === 'approved') {
+      await completeMercadoPagoOrder(orderId || '', paymentId);
+      return {
+        success: true,
+        status: 'approved',
+        statusDetail,
+        orderId: orderId || '',
+        paymentId,
+        message: 'Pagamento aprovado com sucesso! Seus ingressos foram emitidos! 🎉',
+      };
+    }
+
+    if (status === 'in_process') {
+      return {
+        success: true,
+        status: 'in_process',
+        statusDetail,
+        orderId: orderId || '',
+        paymentId,
+        message: 'Seu pagamento está sendo analisado pela operadora.',
+      };
+    }
+
+    const rejectionMessages: Record<string, string> = {
+      cc_rejected_bad_filled_card_number: 'Número do cartão inválido.',
+      cc_rejected_bad_filled_date: 'Data de validade incorreta.',
+      cc_rejected_bad_filled_security_code: 'Código de segurança (CVV) inválido.',
+      cc_rejected_bad_filled_other: 'Dados do cartão incorretos. Verifique e tente novamente.',
+      cc_rejected_insufficient_amount: 'Saldo ou limite insuficiente no cartão.',
+      cc_rejected_call_for_authorize: 'Pagamento não autorizado pelo seu banco. Ligue para a operadora ou tente outro cartão.',
+      cc_rejected_card_disabled: 'Cartão desabilitado. Entre em contato com seu banco para ativá-lo.',
+      cc_rejected_duplicated_payment: 'Pagamento duplicado. Você já realizou uma compra deste valor recentemente.',
+      cc_rejected_high_risk: 'Pagamento recusado pela análise de risco. Tente com Pix ou outro cartão.',
+      cc_rejected_max_attempts: 'Limite de tentativas atingido. Tente novamente mais tarde ou use outro método.',
+    };
+
+    const friendlyError = rejectionMessages[statusDetail] || 'Pagamento recusado pelo banco emissor. Verifique os dados ou tente outro cartão.';
+
+    return {
+      success: false,
+      status: 'rejected',
+      statusDetail,
+      orderId: orderId || '',
+      paymentId,
+      message: friendlyError,
+      error: friendlyError,
+    };
+  } catch (err: any) {
+    console.error('Exceção ao processar cartão transparente:', err);
+    return {
+      success: false,
+      status: 'rejected',
+      error: err.message || 'Erro inesperado ao processar pagamento com cartão.',
+    };
+  }
+};
+
 export const findPendingOrderForClient = async (params: {
   event_id: string;
   client_document?: string;
@@ -47,7 +615,6 @@ export const findPendingOrderForClient = async (params: {
   try {
     if (!params.event_id) return null;
 
-    // Criar filtros OR para CPF, WhatsApp e IP
     const cleanDoc = params.client_document?.replace(/\D/g, '');
     const cleanPhone = params.client_phone?.replace(/\D/g, '');
 
@@ -81,9 +648,6 @@ export const findPendingOrderForClient = async (params: {
   }
 };
 
-/**
- * Cancela uma ordem pendente registrando o motivo
- */
 export const cancelPendingOrder = async (orderId: string, reason: string = 'cancelado_pelo_usuario'): Promise<boolean> => {
   try {
     const { error } = await supabase
@@ -97,7 +661,6 @@ export const cancelPendingOrder = async (orderId: string, reason: string = 'canc
       .eq('status', 'pending');
 
     if (!error) {
-      // Disparar notificações automáticas de Pedido Cancelado (WhatsApp + E-mail)
       sendOrderNotifications({ type: 'cancelled', orderId }).catch(() => {});
     }
 
@@ -108,9 +671,6 @@ export const cancelPendingOrder = async (orderId: string, reason: string = 'canc
   }
 };
 
-/**
- * Cria a sessão de Checkout do Mercado Pago com suporte a parcelamento em até 12x
- */
 export const createMercadoPagoCheckout = async (
   params: CreateMercadoPagoCheckoutParams
 ): Promise<MercadoPagoCheckoutResponse> => {
@@ -123,7 +683,6 @@ export const createMercadoPagoCheckout = async (
     const clientIp = params.ip_address || await getClientIpAddress();
     const cleanDoc = params.client_document?.replace(/\D/g, '');
 
-    // 1. Validar se o lote do evento possui estoque disponível
     const { data: eventRow } = await supabase
       .from('app_events')
       .select('price_batches, observations')
@@ -136,9 +695,7 @@ export const createMercadoPagoCheckout = async (
         try {
           const parsed = JSON.parse(eventRow.observations);
           if (Array.isArray(parsed.price_batches)) batches = parsed.price_batches;
-        } catch {
-          // Ignora erro de parse
-        }
+        } catch {}
       }
 
       const targetBatch = batches[params.batch_index || 0];
@@ -174,7 +731,6 @@ export const createMercadoPagoCheckout = async (
     let order: any = null;
 
     if (orderId) {
-      // Reutilizar e atualizar a ordem pendente existente
       const { data: updatedOrder, error: updateErr } = await supabase
         .from('app_event_orders')
         .update({
@@ -204,7 +760,6 @@ export const createMercadoPagoCheckout = async (
       }
     }
 
-    // Se não há ordem existente para reutilizar, criar uma nova
     if (!order) {
       const { data: newOrder, error: orderErr } = await supabase
         .from('app_event_orders')
@@ -239,7 +794,6 @@ export const createMercadoPagoCheckout = async (
       orderId = newOrder?.id;
     }
 
-    // 2. Fallback direto usando o token configurado no ambiente (.env com prefixo VITE_)
     const accessToken =
       (import.meta as any).env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
       (import.meta as any).env.MERCADOPAGO_ACCESS_TOKEN;
@@ -248,7 +802,6 @@ export const createMercadoPagoCheckout = async (
       return { error: 'Token do Mercado Pago não configurado. Verifique o arquivo .env (VITE_MERCADOPAGO_ACCESS_TOKEN).' };
     }
 
-    // Criar a preferência na API oficial do Mercado Pago
     const isHttpsPublic = defaultSuccessUrl.startsWith('https://') && 
                           !defaultSuccessUrl.includes('localhost') && 
                           !defaultSuccessUrl.includes('127.0.0.1');
@@ -274,6 +827,9 @@ export const createMercadoPagoCheckout = async (
         pending: `${defaultPendingUrl}&order_id=${order?.id || ''}`,
       },
       payment_methods: {
+        excluded_payment_methods: [
+          { id: 'account_money' }
+        ],
         excluded_payment_types: (() => {
           if (params.payment_method === 'credit_card') {
             return [
@@ -304,8 +860,8 @@ export const createMercadoPagoCheckout = async (
           }
           return undefined;
         })(),
-        installments: params.installments ? Number(params.installments) : (params.max_installments || 12), // Trava no parcelamento selecionado no site
-        default_installments: params.installments ? Number(params.installments) : 1, // Pré-seleciona a parcela exata
+        installments: params.installments ? Number(params.installments) : (params.max_installments || 12),
+        default_installments: params.installments ? Number(params.installments) : 1,
       },
       external_reference: order?.id || `${params.event_id}-${Date.now()}`,
       metadata: {
@@ -316,7 +872,6 @@ export const createMercadoPagoCheckout = async (
       },
     };
 
-    // Mercado Pago exige HTTPS público para auto_return
     if (isHttpsPublic) {
       mpPreferenceBody.auto_return = 'approved';
     }
@@ -341,7 +896,6 @@ export const createMercadoPagoCheckout = async (
 
     const checkoutUrl = mpData.init_point || mpData.sandbox_init_point;
 
-    // Salvar preference ID no pedido
     if (order?.id && mpData.id) {
       await supabase
         .from('app_event_orders')
@@ -351,7 +905,6 @@ export const createMercadoPagoCheckout = async (
         })
         .eq('id', order.id);
 
-      // Disparar notificações automáticas de Pedido Criado (WhatsApp + E-mail) com link de pagamento
       sendOrderNotifications({
         type: 'created',
         orderId: order.id,
@@ -386,7 +939,6 @@ export const checkMercadoPagoPaymentStatus = async (
 
     const cleanOrderId = orderId.trim();
 
-    // 1. Primeiro verificar se o pedido já foi marcado como pago no Supabase
     const { data: currentOrder } = await supabase
       .from('app_event_orders')
       .select('*')
@@ -397,7 +949,6 @@ export const checkMercadoPagoPaymentStatus = async (
       return { paid: true, paymentId: currentOrder.stripe_session_id || currentOrder.payment_id, status: 'approved' };
     }
 
-    // 2. Consultar pagamentos por external_reference na API do Mercado Pago
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(cleanOrderId)}&sort=date_created&criteria=desc`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -409,7 +960,6 @@ export const checkMercadoPagoPaymentStatus = async (
     const mpData = await mpRes.json();
     const paymentsList: any[] = Array.isArray(mpData.results) ? mpData.results : [];
 
-    // Validar estritamente que o pagamento retornado tem o external_reference idêntico ao orderId
     const matchingPayments = paymentsList.filter((p: any) => 
       p && String(p.external_reference || '').trim() === cleanOrderId
     );
@@ -421,71 +971,7 @@ export const checkMercadoPagoPaymentStatus = async (
 
     if (approvedPayment && currentOrder) {
       const paymentId = String(approvedPayment.id);
-
-      // Atualizar o status do pedido para 'paid'
-      await supabase
-        .from('app_event_orders')
-        .update({
-          status: 'paid',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', cleanOrderId);
-
-      // Gerar ingressos na tabela app_event_tickets se ainda não existirem
-      const { data: existingTickets } = await supabase
-        .from('app_event_tickets')
-        .select('id')
-        .eq('order_id', cleanOrderId);
-
-      if (!existingTickets || existingTickets.length === 0) {
-        const qty = currentOrder.quantity || 1;
-        const ticketsToInsert = [];
-
-        for (let i = 0; i < qty; i++) {
-          const qrHash = `MP-${paymentId.slice(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
-
-          ticketsToInsert.push({
-            order_id: cleanOrderId,
-            event_id: currentOrder.event_id,
-            client_id: currentOrder.client_id || null,
-            ticket_number: i + 1,
-            qr_code_hash: qrHash,
-            status: 'valid',
-            created_at: new Date().toISOString(),
-          });
-        }
-
-        await supabase.from('app_event_tickets').insert(ticketsToInsert);
-      }
-
-      // Se a ordem usou cupom de desconto, registrar utilização definitiva
-      if (currentOrder.coupon_code || currentOrder.coupon_id) {
-        try {
-          const { applyCouponOnOrder } = await import('./couponService');
-          await applyCouponOnOrder({
-            couponId: currentOrder.coupon_id || '',
-            code: currentOrder.coupon_code || '',
-            eventId: currentOrder.event_id,
-            orderId: cleanOrderId,
-            batchIndex: currentOrder.batch_index || 0,
-            originalAmount: Number(currentOrder.amount_total || 0) + Number(currentOrder.discount_amount || 0),
-            clientName: currentOrder.client_name || undefined,
-            clientDocument: currentOrder.client_document || undefined,
-            clientPhone: currentOrder.client_phone || undefined,
-            clientEmail: currentOrder.client_email || undefined,
-          });
-        } catch (couponErr) {
-          console.warn('Aviso ao registrar uso do cupom no pedido aprovado:', couponErr);
-        }
-      }
-
-      // Disparar notificações automáticas de Pagamento Confirmado (WhatsApp + E-mail)
-      sendOrderNotifications({
-        type: 'confirmed',
-        orderId: cleanOrderId,
-        orderData: { ...currentOrder, status: 'paid' },
-      }).catch(() => {});
-
+      await completeMercadoPagoOrder(cleanOrderId, paymentId);
       return { paid: true, paymentId, status: 'approved' };
     }
 
