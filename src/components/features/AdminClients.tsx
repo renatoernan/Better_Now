@@ -324,10 +324,11 @@ const AdminClients: React.FC = () => {
     }
   }, [fetchDeletedClients]);
 
-  // Carregar clientes ativos na montagem
+  // Carregar clientes ativos e da lixeira na montagem inicial
   useEffect(() => {
     fetchClients();
-  }, [fetchClients]);
+    fetchDeletedClients();
+  }, [fetchClients, fetchDeletedClients]);
 
   useEffect(() => {
     if (activeTab === 'trash') {
@@ -687,13 +688,11 @@ const AdminClients: React.FC = () => {
         hasWhatsapp: 'all'
       };
 
-      // Recarregar clientes ativos com filtros atuais
-      await searchClients(searchTerm, filters);
-
-      // Recarregar clientes deletados se estivermos na aba trash
-      if (activeTab === 'trash') {
-        await fetchDeletedClients();
-      }
+      // Recarregar clientes ativos e da lixeira
+      await Promise.all([
+        searchClients(searchTerm, filters),
+        fetchDeletedClients()
+      ]);
 
       toast.success('Lista de clientes atualizada!');
     } catch (error) {

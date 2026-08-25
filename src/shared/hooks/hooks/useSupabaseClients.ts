@@ -200,27 +200,31 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       const sevenDaysAgo = new Date(now);
       sevenDaysAgo.setDate(now.getDate() - 7);
 
-      // Total de clientes na tabela app_people
+      // Total de clientes ativos na tabela app_people (não excluídos)
       const { count: total } = await supabase
         .from('app_people')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null);
 
       // Clientes criados este mês
       const { count: thisMonth } = await supabase
         .from('app_people')
         .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
         .gte('created_at', startOfMonth.toISOString());
 
       // Clientes criados esta semana
       const { count: thisWeek } = await supabase
         .from('app_people')
         .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
         .gte('created_at', startOfWeek.toISOString());
 
       // Clientes com WhatsApp / Telefone
       const { count: withWhatsApp } = await supabase
         .from('app_people')
         .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
         .not('whatsapp', 'is', null)
         .neq('whatsapp', '');
 
@@ -228,6 +232,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       const { count: withEmail } = await supabase
         .from('app_people')
         .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
         .not('email', 'is', null)
         .neq('email', '');
 
@@ -235,6 +240,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       const { count: recentlyAdded } = await supabase
         .from('app_people')
         .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
         .gte('created_at', sevenDaysAgo.toISOString());
 
       const activeClients = total || 0;
@@ -266,6 +272,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       let query = supabase
         .from('app_people')
         .select('*', { count: 'exact' })
+        .is('deleted_at', null)
         .order('nome', { ascending: true })
         .range(offset, offset + limit - 1);
 
@@ -337,8 +344,8 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       const { data, error } = await supabase
         .from('app_people')
         .select('*')
-        .eq('is_active', false)
-        .order('updated_at', { ascending: false });
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false });
 
       if (error) throw error;
       setDeletedClients((data || []).map(mapRowToClient));
@@ -375,6 +382,8 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
         notes: clientData.notes?.trim() || clientData.observacoes?.trim() || null,
         validated: clientData.validated !== false,
         is_active: clientData.is_active !== false,
+        ativo: clientData.is_active !== false,
+        deleted_at: null,
         tipo: clientData.tipo?.trim() || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -478,6 +487,7 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
       }
       if (clientData.is_active !== undefined) {
         payload.is_active = Boolean(clientData.is_active);
+        payload.ativo = Boolean(clientData.is_active);
       }
       if (clientData.tipo !== undefined) {
         payload.tipo = clientData.tipo?.trim() || null;
@@ -514,17 +524,20 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
     }
   }, [calculateStats, handleError]);
 
-  // Soft delete client
+  // Soft delete client (Mover para Lixeira)
   const deleteClient = useCallback(async (id: string): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
 
+      const nowIso = new Date().toISOString();
       const { data, error } = await supabase
         .from('app_people')
         .update({
+          deleted_at: nowIso,
           is_active: false,
-          updated_at: new Date().toISOString(),
+          ativo: false,
+          updated_at: nowIso,
         })
         .eq('id', id)
         .select()
@@ -534,33 +547,36 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       const deletedItem = mapRowToClient(data);
       setClients(prev => prev.filter(client => client.id !== id));
-      setDeletedClients(prev => [deletedItem, ...prev]);
+      setDeletedClients(prev => [deletedItem, ...prev.filter(c => c.id !== id)]);
       await calculateStats();
 
-      toast.success('Cliente desativado!');
-      ActivityLogger.log('client_deleted', 'Cliente desativado', 'system', 'warning', {
+      toast.success('Cliente movido para a lixeira!');
+      ActivityLogger.log('client_deleted', 'Cliente movido para a lixeira', 'system', 'warning', {
         clientId: id,
         name: deletedItem.name
       });
     } catch (err: any) {
-      handleError(err, 'Erro ao desativar cliente');
+      handleError(err, 'Erro ao mover cliente para a lixeira');
       throw err;
     } finally {
       setLoading(false);
     }
   }, [calculateStats, handleError]);
 
-  // Restore client from trash
+  // Restore client from trash (Reativar da Lixeira)
   const restoreClient = useCallback(async (id: string): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
 
+      const nowIso = new Date().toISOString();
       const { data, error } = await supabase
         .from('app_people')
         .update({
+          deleted_at: null,
           is_active: true,
-          updated_at: new Date().toISOString(),
+          ativo: true,
+          updated_at: nowIso,
         })
         .eq('id', id)
         .select()
@@ -570,11 +586,11 @@ export const useSupabaseClients = (): UseSupabaseClientsReturn => {
 
       const restoredItem = mapRowToClient(data);
       setDeletedClients(prev => prev.filter(client => client.id !== id));
-      setClients(prev => [restoredItem, ...prev]);
+      setClients(prev => [restoredItem, ...prev.filter(c => c.id !== id)]);
       await calculateStats();
 
-      toast.success('Cliente reativado com sucesso!');
-      ActivityLogger.log('client_restored', 'Cliente reativado', 'system', 'success', {
+      toast.success('Cliente restaurado com sucesso!');
+      ActivityLogger.log('client_restored', 'Cliente restaurado da lixeira', 'system', 'success', {
         clientId: id,
         name: restoredItem.name
       });
