@@ -25,6 +25,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { getOrderBySessionId, getTicketsByOrderId, EventOrder, EventTicket } from '../../shared/services/stripeService';
 import { checkMercadoPagoPaymentStatus } from '../../shared/services/mercadoPagoService';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
+import { formatCPF } from '../../shared/utils/utils/cpfUtils';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 interface PaymentSuccessModalProps {
@@ -40,6 +42,7 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
   sessionId,
   eventTitle,
 }) => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState<boolean>(true);
   const [rechecking, setRechecking] = useState<boolean>(false);
   const [order, setOrder] = useState<EventOrder | null>(null);
@@ -114,12 +117,13 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
 
   const handleShareWhatsApp = (ticket: EventTicket, index: number) => {
     const title = eventTitle || order?.batch_name || 'Evento Better Now';
-    const client = order?.client_name || 'Participante';
+    const client = ticket.client?.nome || (index === 0 ? order?.client_name : '') || 'Participante';
+    const doc = ticket.client?.documento ? formatCPF(ticket.client.documento) : (index === 0 && order?.client_document ? formatCPF(order.client_document) : '');
     const hash = ticket.qr_code_hash;
     const ticketNum = ticket.ticket_number || `${index + 1}`;
 
     const text = `🎟️ *Ingresso Confirmado - ${title}*\n\n` +
-      `👤 *Participante:* ${client}\n` +
+      `👤 *Participante:* ${client}${doc ? `\n📄 *Documento:* ${doc}` : ''}\n` +
       `🏷️ *Lote:* ${order?.batch_name || 'Geral'}\n` +
       `🔢 *Ingresso:* #${ticketNum}\n` +
       `🔑 *Código de Check-in:* ${hash}\n\n` +
@@ -127,6 +131,13 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
 
     const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(whatsappUrl, '_blank');
+  };
+
+  const handleFinish = () => {
+    onClose();
+    if (isOrderPaid) {
+      navigate('/');
+    }
   };
 
   return (
@@ -320,9 +331,16 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
                                 </span>
                               </div>
 
-                              <p className="text-xs text-gray-700 font-semibold truncate">
-                                Titular: {order?.client_name || 'Participante'}
-                              </p>
+                              <div className="space-y-0.5">
+                                <p className="text-xs text-gray-900 font-bold truncate">
+                                  Titular: <span className="text-indigo-950 font-extrabold">{t.client?.nome || (idx === 0 ? order?.client_name : '') || `Participante ${idx + 1}`}</span>
+                                </p>
+                                {(t.client?.documento || (idx === 0 && order?.client_document)) && (
+                                  <p className="text-[11px] text-gray-500 font-medium">
+                                    CPF: {formatCPF(t.client?.documento || order?.client_document || '')}
+                                  </p>
+                                )}
+                              </div>
 
                               <div className="flex items-center gap-2 pt-0.5">
                                 <code className="text-[11px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 truncate max-w-[180px] sm:max-w-xs">
@@ -437,7 +455,7 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
         <div className="p-4 sm:p-5 bg-gray-50 border-t border-gray-100 flex justify-end">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleFinish}
             className={`w-full sm:w-auto px-6 py-3 text-sm font-bold text-white rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer ${
               isOrderPaid 
                 ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20' 

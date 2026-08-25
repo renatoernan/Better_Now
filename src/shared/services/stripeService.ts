@@ -36,6 +36,7 @@ export interface EventOrder {
   client_name?: string;
   client_email?: string;
   client_phone?: string;
+  client_document?: string;
   stripe_session_id?: string;
   stripe_payment_intent_id?: string;
   amount_total: number;
@@ -63,6 +64,13 @@ export interface EventTicket {
   status: 'valid' | 'used' | 'canceled';
   used_at?: string;
   created_at: string;
+  client?: {
+    id?: string;
+    nome?: string;
+    documento?: string;
+    whatsapp?: string;
+    email?: string;
+  };
 }
 
 /**
@@ -159,12 +167,12 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
   try {
     if (!orderId) return [];
 
-    // 1. Busca os tickets já cadastrados
+    // 1. Busca os tickets já cadastrados trazendo os dados do titular na app_people
     const { data: tickets, error } = await supabase
       .from('app_event_tickets')
-      .select('*')
+      .select('*, client:app_people(id, nome, documento, whatsapp, email)')
       .eq('order_id', orderId)
-      .order('created_at', { ascending: true });
+      .order('ticket_number', { ascending: true });
 
     if (!error && tickets && tickets.length > 0) {
       return tickets as EventTicket[];
@@ -185,13 +193,23 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
       const qty = order.quantity || 1;
       const ticketsToInsert: any[] = [];
 
+      let attendees: any[] = [];
+      if ((order as any).cancellation_reason) {
+        try {
+          const parsed = JSON.parse((order as any).cancellation_reason);
+          if (Array.isArray(parsed)) attendees = parsed;
+        } catch {}
+      }
+
       for (let i = 0; i < qty; i++) {
         const qrHash = `BN-${order.event_id?.slice(0, 8) || 'EV'}-${order.id.slice(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
+        const att = attendees[i] || null;
+        const attendeeClientId = att?.person_id || att?.client_id || (i === 0 ? order.client_id : null);
 
         ticketsToInsert.push({
           order_id: order.id,
           event_id: order.event_id,
-          client_id: order.client_id || null,
+          client_id: attendeeClientId || null,
           ticket_number: i + 1,
           qr_code_hash: qrHash,
           status: 'valid',
@@ -202,7 +220,7 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
       const { data: inserted, error: insertErr } = await supabase
         .from('app_event_tickets')
         .insert(ticketsToInsert)
-        .select();
+        .select('*, client:app_people(id, nome, documento, whatsapp, email)');
 
       if (!insertErr && inserted && inserted.length > 0) {
         return inserted as EventTicket[];

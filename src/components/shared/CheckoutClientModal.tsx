@@ -32,6 +32,8 @@ export interface CheckoutClientData {
   uf?: string;
   observacoes?: string;
   notes?: string;
+  person_id?: string | null;
+  client_id?: string | null;
 }
 
 interface CheckoutClientModalProps {
@@ -663,6 +665,9 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
             if (simpleInserted?.id) savedId = simpleInserted.id;
           }
         }
+
+        attendees[i].person_id = savedId;
+        attendees[i].client_id = savedId;
 
         if (i === 0) {
           buyerPersonId = savedId;

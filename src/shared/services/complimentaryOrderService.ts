@@ -169,10 +169,12 @@ export const createComplimentaryOrder = async (
         documento: cleanDoc,
       };
 
+      const attendeeClientId = (att as any)?.person_id || (att as any)?.client_id || (i === 0 ? params.client_id : null);
+
       ticketsToInsert.push({
         order_id: orderId,
         event_id: params.event_id,
-        client_id: params.client_id || null,
+        client_id: attendeeClientId || null,
         ticket_number: i + 1,
         qr_code_hash: qrHash,
         status: 'valid',

@@ -52,6 +52,7 @@ export interface CreatePixPaymentParams {
   coupon_id?: string;
   coupon_code?: string;
   discount_amount?: number;
+  attendees?: any[];
 }
 
 export interface PixPaymentResponse {
@@ -86,6 +87,7 @@ export interface ProcessCardPaymentParams {
   paymentMethodId: string;
   issuerId?: string;
   installments: number;
+  attendees?: any[];
 }
 
 export interface CardPaymentResponse {
@@ -158,13 +160,23 @@ export const completeMercadoPagoOrder = async (
       const qty = currentOrder.quantity || 1;
       const ticketsToInsert = [];
 
+      let attendees: any[] = [];
+      if (currentOrder.cancellation_reason) {
+        try {
+          const parsed = JSON.parse(currentOrder.cancellation_reason);
+          if (Array.isArray(parsed)) attendees = parsed;
+        } catch {}
+      }
+
       for (let i = 0; i < qty; i++) {
         const qrHash = `MP-${paymentId.slice(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
+        const att = attendees[i] || null;
+        const attendeeClientId = att?.person_id || att?.client_id || (i === 0 ? currentOrder.client_id : null);
 
         ticketsToInsert.push({
           order_id: cleanOrderId,
           event_id: currentOrder.event_id,
-          client_id: currentOrder.client_id || null,
+          client_id: attendeeClientId || null,
           ticket_number: i + 1,
           qr_code_hash: qrHash,
           status: 'valid',
@@ -286,6 +298,7 @@ export const createMercadoPagoPixPayment = async (
           coupon_id: params.coupon_id || null,
           coupon_code: params.coupon_code || null,
           discount_amount: discount,
+          cancellation_reason: params.attendees ? JSON.stringify(params.attendees) : null,
           ip_address: clientIp,
           updated_at: new Date().toISOString(),
         })
@@ -318,6 +331,7 @@ export const createMercadoPagoPixPayment = async (
           coupon_id: params.coupon_id || null,
           coupon_code: params.coupon_code || null,
           discount_amount: discount,
+          cancellation_reason: params.attendees ? JSON.stringify(params.attendees) : null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -450,6 +464,7 @@ export const processMercadoPagoCardPayment = async (
           coupon_id: params.coupon_id || null,
           coupon_code: params.coupon_code || null,
           discount_amount: discount,
+          cancellation_reason: params.attendees ? JSON.stringify(params.attendees) : null,
           ip_address: clientIp,
           updated_at: new Date().toISOString(),
         })
@@ -482,6 +497,7 @@ export const processMercadoPagoCardPayment = async (
           coupon_id: params.coupon_id || null,
           coupon_code: params.coupon_code || null,
           discount_amount: discount,
+          cancellation_reason: params.attendees ? JSON.stringify(params.attendees) : null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -622,11 +638,15 @@ export const findPendingOrderForClient = async (params: {
     const cleanDoc = params.client_document?.replace(/\D/g, '');
     const cleanPhone = params.client_phone?.replace(/\D/g, '');
 
+    // Apenas pedidos gerados nos últimos 20 minutos (janela ativa de expiração)
+    const recentThreshold = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+
     let query = supabase
       .from('app_event_orders')
       .select('*')
       .eq('event_id', params.event_id)
       .eq('status', 'pending')
+      .gte('created_at', recentThreshold)
       .order('created_at', { ascending: false })
       .limit(1);
 
@@ -645,7 +665,13 @@ export const findPendingOrderForClient = async (params: {
     const { data, error } = await query;
     if (error || !data || data.length === 0) return null;
 
-    return data[0];
+    const order = data[0];
+    // Garantia estrita: se a ordem não for 'pending' (ex: 'paid', 'approved', etc.), ignora completamente
+    if (order.status !== 'pending' || ['paid', 'approved', 'completed', 'cancelled', 'canceled'].includes(order.status)) {
+      return null;
+    }
+
+    return order;
   } catch (err) {
     console.warn('Erro ao buscar ordem pendente:', err);
     return null;

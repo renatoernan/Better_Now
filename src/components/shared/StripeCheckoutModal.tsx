@@ -60,6 +60,7 @@ interface StripeCheckoutModalProps {
   errorMessage?: string | null;
   awaitingPayment?: boolean;
   checkoutUrl?: string | null;
+  attendees?: any[];
 }
 
 const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
@@ -90,6 +91,7 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
   errorMessage: externalErrorMessage,
   awaitingPayment: externalAwaitingPayment = false,
   checkoutUrl,
+  attendees = [],
 }) => {
   if (!isOpen) return null;
 
@@ -203,6 +205,7 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
         coupon_id: appliedCoupon?.coupon_id,
         coupon_code: appliedCoupon?.code,
         discount_amount: discount,
+        attendees: attendees,
       });
 
       if (res.success && res.qrCode) {
@@ -336,6 +339,7 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
         cardToken,
         paymentMethodId,
         installments: Number(installments) || 1,
+        attendees: attendees,
       });
 
       if (paymentResult.success && paymentResult.status === 'approved') {

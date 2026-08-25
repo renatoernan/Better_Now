@@ -771,7 +771,7 @@ const EventDetails: React.FC = () => {
         ip_address: clientIp,
       });
 
-      if (existingPending) {
+      if (existingPending && existingPending.status === 'pending' && !['paid', 'approved', 'completed', 'cancelled', 'canceled'].includes(existingPending.status)) {
         if (Number(existingPending.quantity) === quantity) {
           // Quantidade é igual: abre o modal para o usuário escolher continuar ou desconsiderar
           setPendingOrderFound(existingPending);
@@ -1024,6 +1024,7 @@ const EventDetails: React.FC = () => {
         errorMessage={stripeErrorMessage}
         awaitingPayment={!!awaitingPaymentOrderId}
         checkoutUrl={mercadoPagoCheckoutUrl}
+        attendees={attendeesList}
       />
 
       {/* Modal de Pagamento Pix Chave (QR Code Próprio) */}
