@@ -468,26 +468,26 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
     : 0;
 
   return (
-    <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden space-y-6 print:border-none print:shadow-none">
+    <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden space-y-4 sm:space-y-6 print:border-none print:shadow-none">
       {/* Barra de Filtros e Controles de Exportação */}
-      <div className="p-5 sm:p-6 border-b border-gray-100 bg-gray-50/50 space-y-4 print:hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-4 sm:p-6 border-b border-gray-100 bg-gray-50/60 space-y-4 print:hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+            <div className="p-2 sm:p-2.5 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
               <BarChart3 className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900 leading-tight">Relatórios de Eventos</h2>
-              <p className="text-xs text-gray-500">Métricas financeiras, presença e dados consolidados em tempo real</p>
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 leading-tight">Relatórios de Eventos</h2>
+              <p className="text-[11px] sm:text-xs text-gray-500">Métricas financeiras, presença e dados consolidados em tempo real</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => selectedEvent && loadEventData(selectedEvent)}
               disabled={loading || !selectedEvent}
-              className="p-2.5 text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-all disabled:opacity-50 shadow-2xs cursor-pointer"
+              className="p-2.5 text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-all disabled:opacity-50 shadow-2xs cursor-pointer shrink-0"
               title="Atualizar dados"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
@@ -497,7 +497,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
               type="button"
               onClick={handleExportReport}
               disabled={loading || !reportData}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl font-semibold text-xs sm:text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm shadow-indigo-600/20 cursor-pointer"
+              className="flex-1 sm:flex-initial px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl font-semibold text-xs sm:text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm shadow-indigo-600/20 cursor-pointer"
             >
               <Download className="w-4 h-4" />
               <span>Exportar</span>
@@ -506,16 +506,16 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
         </div>
 
         {/* Linha de Filtros */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
               <Calendar className="w-3.5 h-3.5 inline mr-1 text-indigo-500" />
               Selecionar Evento
             </label>
             <select
               value={selectedEvent}
               onChange={(e) => setSelectedEvent(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
+              className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
             >
               <option value="">Selecione um evento</option>
               {events.map(event => (
@@ -527,14 +527,14 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
               <FileText className="w-3.5 h-3.5 inline mr-1 text-indigo-500" />
               Tipo de Visualização
             </label>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value as typeof reportType)}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
+              className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
             >
               <option value="summary">Resumo Executivo & Vendas</option>
               <option value="detailed">Participantes & Ingressos</option>
@@ -543,14 +543,14 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
               <Download className="w-3.5 h-3.5 inline mr-1 text-indigo-500" />
               Formato de Exportação
             </label>
             <select
               value={exportFormat}
               onChange={(e) => setExportFormat(e.target.value as typeof exportFormat)}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
+              className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
             >
               <option value="csv">CSV (Excel com Acentos)</option>
               <option value="excel">Excel (CSV Estruturado)</option>
@@ -560,7 +560,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
               <Filter className="w-3.5 h-3.5 inline mr-1 text-indigo-500" />
               Data Inicial
             </label>
@@ -568,59 +568,59 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
               type="date"
               value={dateRange.start}
               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
+              className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
             />
           </div>
         </div>
       </div>
 
       {/* Conteúdo Principal */}
-      <div className="p-5 sm:p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-3">
-            <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin" />
-            <span className="text-sm font-medium text-gray-600">Carregando dados consolidados do evento...</span>
+          <div className="flex flex-col items-center justify-center py-16 sm:py-20 space-y-3">
+            <RefreshCw className="w-9 h-9 text-indigo-600 animate-spin" />
+            <span className="text-xs sm:text-sm font-medium text-gray-600">Carregando dados consolidados do evento...</span>
           </div>
         ) : !selectedEvent ? (
-          <div className="text-center py-16">
-            <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-gray-900 mb-1">Selecione um Evento</h3>
-            <p className="text-sm text-gray-500">Escolha um evento na barra acima para visualizar as análises e estatísticas em tempo real.</p>
+          <div className="text-center py-12 sm:py-16">
+            <BarChart3 className="w-14 h-14 text-gray-300 mx-auto mb-3" />
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1">Selecione um Evento</h3>
+            <p className="text-xs sm:text-sm text-gray-500 max-w-md mx-auto">Escolha um evento na barra acima para visualizar as análises e estatísticas em tempo real.</p>
           </div>
         ) : !reportData ? (
-          <div className="text-center py-16">
-            <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-gray-900 mb-1">Nenhum dado encontrado</h3>
-            <p className="text-sm text-gray-500">Não há dados registrados para o período ou evento selecionado.</p>
+          <div className="text-center py-12 sm:py-16">
+            <FileText className="w-14 h-14 text-gray-300 mx-auto mb-3" />
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1">Nenhum dado encontrado</h3>
+            <p className="text-xs sm:text-sm text-gray-500">Não há dados registrados para o período ou evento selecionado.</p>
           </div>
         ) : (
-          <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-200">
             {/* Banner de Informações do Evento */}
             {currentEvent && (
-              <div className="relative overflow-hidden bg-gradient-to-r from-indigo-700 via-indigo-800 to-purple-800 rounded-2xl p-5 sm:p-6 text-white shadow-md">
+              <div className="relative overflow-hidden bg-gradient-to-r from-indigo-700 via-indigo-800 to-purple-800 rounded-2xl p-4 sm:p-6 text-white shadow-md">
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-semibold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full backdrop-blur-xs">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full backdrop-blur-xs">
                         {currentEvent.status === 'active' ? 'Evento Ativo' : currentEvent.status === 'completed' ? 'Finalizado' : 'Publicado'}
                       </span>
                     </div>
-                    <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{currentEvent.title}</h3>
+                    <h3 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight break-words">{currentEvent.title}</h3>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs sm:text-sm bg-white/10 p-3.5 rounded-xl backdrop-blur-xs border border-white/10">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 text-xs sm:text-sm bg-white/10 p-3 sm:p-3.5 rounded-xl backdrop-blur-xs border border-white/10">
                     <div>
-                      <p className="text-indigo-200 font-medium">Data do Evento</p>
+                      <p className="text-indigo-200 text-[11px] sm:text-xs font-medium">Data do Evento</p>
                       <p className="font-bold text-white mt-0.5">{formatBrazilDate(currentEvent.event_date)}</p>
                     </div>
                     <div>
-                      <p className="text-indigo-200 font-medium">Local</p>
-                      <p className="font-bold text-white mt-0.5 truncate max-w-[150px]" title={currentEvent.location || 'Não informado'}>
+                      <p className="text-indigo-200 text-[11px] sm:text-xs font-medium">Local</p>
+                      <p className="font-bold text-white mt-0.5 break-words leading-tight">
                         {currentEvent.location || 'Não informado'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-indigo-200 font-medium">Capacidade</p>
+                      <p className="text-indigo-200 text-[11px] sm:text-xs font-medium">Capacidade</p>
                       <p className="font-bold text-white mt-0.5">
                         {capacityNumber > 0 ? `${capacityNumber} lugares (${occupancyPercentage}%)` : 'Ilimitada'}
                       </p>
@@ -631,76 +631,76 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
             )}
 
             {/* Cards de Métricas Principais (KPIs) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
               {/* Total de Participantes / Ingressos */}
-              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ingressos Confirmados</p>
-                  <p className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">{reportData.totalParticipants}</p>
-                  <span className="text-xs text-gray-400 mt-0.5 block">
-                    {reportData.confirmedOrdersCount} pedidos pagos
+              <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-gray-100 shadow-xs flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider truncate">Ingressos</p>
+                  <p className="text-lg sm:text-2xl lg:text-3xl font-black text-gray-900 mt-0.5 sm:mt-1">{reportData.totalParticipants}</p>
+                  <span className="text-[10px] sm:text-xs text-gray-400 mt-0.5 block truncate">
+                    {reportData.confirmedOrdersCount} pagos
                   </span>
                 </div>
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                  <Ticket className="w-6 h-6" />
+                <div className="p-2 sm:p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+                  <Ticket className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
               </div>
 
               {/* Receita Total Arrecadada */}
-              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Arrecadação Total</p>
-                  <p className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1">
+              <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-gray-100 shadow-xs flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider truncate">Arrecadação</p>
+                  <p className="text-base sm:text-2xl lg:text-3xl font-black text-emerald-600 mt-0.5 sm:mt-1 truncate">
                     {formatPrice(reportData.totalRevenue)}
                   </p>
-                  <span className="text-xs text-emerald-700/80 mt-0.5 block">
-                    {reportData.totalDiscount > 0 ? `Economia: ${formatPrice(reportData.totalDiscount)}` : 'Sem descontos'}
+                  <span className="text-[10px] sm:text-xs text-emerald-700/80 mt-0.5 block truncate">
+                    {reportData.totalDiscount > 0 ? `-${formatPrice(reportData.totalDiscount)}` : 'Sem desc.'}
                   </span>
                 </div>
-                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <DollarSign className="w-6 h-6" />
+                <div className="p-2 sm:p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
+                  <DollarSign className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
               </div>
 
               {/* Taxa de Confirmação */}
-              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Taxa de Conversão</p>
-                  <p className="text-2xl sm:text-3xl font-black text-indigo-600 mt-1">
+              <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-gray-100 shadow-xs flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider truncate">Conversão</p>
+                  <p className="text-lg sm:text-2xl lg:text-3xl font-black text-indigo-600 mt-0.5 sm:mt-1">
                     {reportData.confirmationRate.toFixed(1)}%
                   </p>
-                  <span className="text-xs text-gray-400 mt-0.5 block">
-                    {reportData.totalOrdersCount} intenções de compra
+                  <span className="text-[10px] sm:text-xs text-gray-400 mt-0.5 block truncate">
+                    {reportData.totalOrdersCount} pedidos
                   </span>
                 </div>
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <TrendingUp className="w-6 h-6" />
+                <div className="p-2 sm:p-3 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+                  <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
               </div>
 
               {/* Check-ins Realizados */}
-              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Check-in Realizado</p>
-                  <p className="text-2xl sm:text-3xl font-black text-purple-600 mt-1">
+              <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-gray-100 shadow-xs flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider truncate">Check-in</p>
+                  <p className="text-lg sm:text-2xl lg:text-3xl font-black text-purple-600 mt-0.5 sm:mt-1">
                     {reportData.checkedInParticipants}
                   </p>
-                  <span className="text-xs text-purple-600/80 font-medium mt-0.5 block">
-                    Taxa de presença: {reportData.checkInRate.toFixed(1)}%
+                  <span className="text-[10px] sm:text-xs text-purple-600/80 font-medium mt-0.5 block truncate">
+                    Presença: {reportData.checkInRate.toFixed(0)}%
                   </span>
                 </div>
-                <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
-                  <UserCheck className="w-6 h-6" />
+                <div className="p-2 sm:p-3 bg-purple-50 text-purple-600 rounded-xl shrink-0">
+                  <UserCheck className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
               </div>
             </div>
 
             {/* Painéis de Distribuição (Status, Formas de Pagamento e Lotes) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* Distribuição por Status */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Distribuição por Status</h3>
+                  <h3 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wider">Distribuição por Status</h3>
                   <PieChart className="w-4 h-4 text-gray-400" />
                 </div>
 
@@ -708,11 +708,11 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   {/* Confirmados */}
                   <div>
                     <div className="flex items-center justify-between text-xs font-semibold mb-1">
-                      <span className="text-emerald-700 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700 flex items-center gap-1.5 truncate">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                         Confirmados / Pagos
                       </span>
-                      <span className="text-gray-900">{reportData.confirmedParticipants} ingressos</span>
+                      <span className="text-gray-900 shrink-0 ml-2">{reportData.confirmedParticipants} ingressos</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                       <div
@@ -729,11 +729,11 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   {/* Pendentes */}
                   <div>
                     <div className="flex items-center justify-between text-xs font-semibold mb-1">
-                      <span className="text-amber-700 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      <span className="text-amber-700 flex items-center gap-1.5 truncate">
+                        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         Aguardando Pagamento
                       </span>
-                      <span className="text-gray-900">{reportData.pendingParticipants} ingressos</span>
+                      <span className="text-gray-900 shrink-0 ml-2">{reportData.pendingParticipants} ingressos</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                       <div
@@ -750,11 +750,11 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   {/* Cancelados */}
                   <div>
                     <div className="flex items-center justify-between text-xs font-semibold mb-1">
-                      <span className="text-red-700 flex items-center gap-1.5">
-                        <XCircle className="w-3.5 h-3.5 text-red-600" />
+                      <span className="text-red-700 flex items-center gap-1.5 truncate">
+                        <XCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
                         Cancelados / Recusados
                       </span>
-                      <span className="text-gray-900">{reportData.cancelledParticipants} ingressos</span>
+                      <span className="text-gray-900 shrink-0 ml-2">{reportData.cancelledParticipants} ingressos</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                       <div
@@ -771,11 +771,11 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                   {/* Check-in Feito */}
                   <div className="pt-2 border-t border-gray-100">
                     <div className="flex items-center justify-between text-xs font-semibold mb-1">
-                      <span className="text-purple-700 flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-purple-600" />
+                      <span className="text-purple-700 flex items-center gap-1.5 truncate">
+                        <UserCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                         Check-in Feito (Presença)
                       </span>
-                      <span className="text-gray-900">{reportData.checkedInParticipants} de {reportData.totalParticipants}</span>
+                      <span className="text-gray-900 shrink-0 ml-2">{reportData.checkedInParticipants} de {reportData.totalParticipants}</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                       <div
@@ -788,9 +788,9 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
               </div>
 
               {/* Formas de Pagamento */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Formas de Pagamento</h3>
+                  <h3 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wider">Formas de Pagamento</h3>
                   <CreditCard className="w-4 h-4 text-gray-400" />
                 </div>
 
@@ -805,8 +805,8 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                       return (
                         <div key={method} className="p-3 bg-gray-50 rounded-xl space-y-1.5">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-gray-800">{method}</span>
-                            <span className="font-mono font-bold text-emerald-600">{formatPrice(data.total)}</span>
+                            <span className="font-bold text-gray-800 truncate mr-2">{method}</span>
+                            <span className="font-mono font-bold text-emerald-600 shrink-0">{formatPrice(data.total)}</span>
                           </div>
                           <div className="flex items-center justify-between text-[11px] text-gray-500">
                             <span>{data.count} ingressos</span>
@@ -823,9 +823,9 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
               </div>
 
               {/* Vendas por Lote */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Vendas por Lote</h3>
+                  <h3 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wider">Vendas por Lote</h3>
                   <Tag className="w-4 h-4 text-gray-400" />
                 </div>
 
@@ -840,8 +840,8 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                       return (
                         <div key={batch} className="p-3 bg-gray-50 rounded-xl space-y-1.5">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-gray-800">{data.name}</span>
-                            <span className="font-mono font-bold text-indigo-700">{formatPrice(data.total)}</span>
+                            <span className="font-bold text-gray-800 truncate mr-2">{data.name}</span>
+                            <span className="font-mono font-bold text-indigo-700 shrink-0">{formatPrice(data.total)}</span>
                           </div>
                           <div className="flex items-center justify-between text-[11px] text-gray-500">
                             <span>{data.count} vendidos</span>
@@ -859,51 +859,57 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
             </div>
 
             {/* Tendência de Inscrições e Distribuição Geográfica */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Tendência de Inscrições / Vendas (Linha do Tempo) */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Tendência de Inscrições / Vendas (Linha do Tempo 100% Fluida sem Scrollbar) */}
+              <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4 overflow-hidden">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Tendência de Inscrições</h3>
-                    <p className="text-xs text-gray-400">Ingressos emitidos nos últimos 14 dias</p>
+                    <h3 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wider">Tendência de Inscrições</h3>
+                    <p className="text-[11px] sm:text-xs text-gray-400">Ingressos emitidos nos últimos dias</p>
                   </div>
                   <TrendingUp className="w-4 h-4 text-indigo-500" />
                 </div>
 
-                <div className="h-44 flex items-end justify-between gap-1.5 pt-4">
-                  {reportData.registrationTrend.map((item, index) => {
-                    const maxCount = Math.max(...reportData.registrationTrend.map(i => i.count), 1);
-                    const height = (item.count / maxCount) * 100;
+                <div className="w-full">
+                  <div className="h-36 sm:h-44 w-full flex items-end justify-between gap-1 sm:gap-1.5 pt-4">
+                    {reportData.registrationTrend.map((item, index) => {
+                      const maxCount = Math.max(...reportData.registrationTrend.map(i => i.count), 1);
+                      const height = (item.count / maxCount) * 100;
+                      // Em telas muito estreitas, oculta labels ímpares para não sobrepor
+                      const isVisibleOnMobile = index % 2 === 0 || index === reportData.registrationTrend.length - 1;
 
-                    return (
-                      <div key={index} className="flex flex-col items-center flex-1 h-full justify-end group/bar relative">
-                        {/* Tooltip ao passar o mouse */}
-                        <div className="opacity-0 group-hover/bar:opacity-100 absolute bottom-full mb-1.5 pointer-events-none transition-opacity bg-gray-900 text-white text-[10px] rounded-md px-2 py-1 z-20 whitespace-nowrap shadow-lg">
-                          <p className="font-bold">{item.displayDate}: {item.count} ingressos</p>
-                          <p className="text-emerald-300 font-mono">{formatPrice(item.amount)}</p>
+                      return (
+                        <div key={index} className="flex flex-col items-center flex-1 h-full justify-end group/bar relative">
+                          {/* Tooltip ao passar o mouse ou tocar */}
+                          <div className="opacity-0 group-hover/bar:opacity-100 absolute bottom-full mb-1.5 pointer-events-none transition-opacity bg-gray-900 text-white text-[10px] rounded-md px-2 py-1 z-20 whitespace-nowrap shadow-lg">
+                            <p className="font-bold">{item.displayDate}: {item.count} ingressos</p>
+                            <p className="text-emerald-300 font-mono">{formatPrice(item.amount)}</p>
+                          </div>
+
+                          <div
+                            className={`w-full rounded-t-md transition-all duration-300 ${
+                              item.count > 0 ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-100'
+                            }`}
+                            style={{ height: `${Math.max(height, 4)}%` }}
+                          ></div>
+                          <span className={`text-[8px] sm:text-[10px] text-gray-400 mt-2 transform -rotate-45 origin-left whitespace-nowrap ${
+                            isVisibleOnMobile ? 'block' : 'hidden sm:block'
+                          }`}>
+                            {item.displayDate}
+                          </span>
                         </div>
-
-                        <div
-                          className={`w-full rounded-t-md transition-all duration-300 ${
-                            item.count > 0 ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-100'
-                          }`}
-                          style={{ height: `${Math.max(height, 4)}%` }}
-                        ></div>
-                        <span className="text-[10px] text-gray-400 mt-2 transform -rotate-45 origin-left">
-                          {item.displayDate}
-                        </span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
               {/* Origem dos Participantes (Distribuição Geográfica por DDD) */}
-              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4 overflow-hidden">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Origem dos Participantes</h3>
-                    <p className="text-xs text-gray-400">Mapeamento regional pelo DDD do WhatsApp</p>
+                    <h3 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wider">Origem dos Participantes</h3>
+                    <p className="text-[11px] sm:text-xs text-gray-400">Mapeamento regional pelo DDD do WhatsApp</p>
                   </div>
                   <MapPin className="w-4 h-4 text-purple-500" />
                 </div>
@@ -919,10 +925,10 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                           ? Math.round((Number(count) / reportData.totalParticipants) * 100)
                           : 0;
                         return (
-                          <div key={location} className="flex items-center justify-between text-xs py-1 border-b border-gray-50 last:border-0">
-                            <span className="text-gray-700 font-medium truncate max-w-[200px]">{location}</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div key={location} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-50 last:border-0 gap-2">
+                            <span className="text-gray-700 font-medium truncate flex-1 min-w-0">{location}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="w-12 sm:w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden">
                                 <div className="bg-purple-600 h-full rounded-full" style={{ width: `${pct}%` }}></div>
                               </div>
                               <span className="font-bold text-gray-900 w-12 text-right">{count} ({pct}%)</span>
@@ -935,130 +941,199 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
               </div>
             </div>
 
-            {/* Check-ins por Horário */}
-            <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+            {/* Check-ins por Horário (100% Fluido sem Scrollbar) */}
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4 overflow-hidden">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Fluxo de Entrada / Check-in por Horário</h3>
-                  <p className="text-xs text-gray-400">Distribuição das validações de QR Code pelas 24 horas</p>
+                  <h3 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wider">Fluxo de Entrada / Check-in por Horário</h3>
+                  <p className="text-[11px] sm:text-xs text-gray-400">Distribuição das validações de QR Code pelas 24 horas</p>
                 </div>
                 <UserCheck className="w-4 h-4 text-emerald-500" />
               </div>
 
-              <div className="h-36 flex items-end justify-between gap-1 pt-2">
-                {reportData.checkInTrend.filter((_, index) => index % 2 === 0).map((item, index) => {
-                  const maxCount = Math.max(...reportData.checkInTrend.map(i => i.count), 1);
-                  const height = (item.count / maxCount) * 100;
+              <div className="w-full">
+                <div className="h-32 sm:h-36 w-full flex items-end justify-between gap-1 sm:gap-1.5 pt-2">
+                  {reportData.checkInTrend.filter((_, index) => index % 2 === 0).map((item, index) => {
+                    const maxCount = Math.max(...reportData.checkInTrend.map(i => i.count), 1);
+                    const height = (item.count / maxCount) * 100;
+                    // Mostra apenas 6 horários principais no mobile
+                    const isVisibleHour = index % 2 === 0;
 
-                  return (
-                    <div key={index} className="flex flex-col items-center flex-1 h-full justify-end group/bar relative">
-                      <div className="opacity-0 group-hover/bar:opacity-100 absolute bottom-full mb-1 pointer-events-none transition-opacity bg-gray-900 text-white text-[10px] rounded-md px-1.5 py-0.5 z-20 whitespace-nowrap">
-                        {item.hour}: {item.count} check-ins
+                    return (
+                      <div key={index} className="flex flex-col items-center flex-1 h-full justify-end group/bar relative">
+                        <div className="opacity-0 group-hover/bar:opacity-100 absolute bottom-full mb-1 pointer-events-none transition-opacity bg-gray-900 text-white text-[10px] rounded-md px-1.5 py-0.5 z-20 whitespace-nowrap">
+                          {item.hour}: {item.count} check-ins
+                        </div>
+                        <div
+                          className={`w-full rounded-t-sm transition-all duration-300 ${
+                            item.count > 0 ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-gray-100'
+                          }`}
+                          style={{ height: `${Math.max(height, 3)}%` }}
+                        ></div>
+                        <span className={`text-[8px] sm:text-[10px] text-gray-400 mt-1.5 ${
+                          isVisibleHour ? 'block' : 'hidden sm:block'
+                        }`}>
+                          {item.hour.split(':')[0]}h
+                        </span>
                       </div>
-                      <div
-                        className={`w-full rounded-t-sm transition-all duration-300 ${
-                          item.count > 0 ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-gray-100'
-                        }`}
-                        style={{ height: `${Math.max(height, 3)}%` }}
-                      ></div>
-                      <span className="text-[10px] text-gray-400 mt-1.5">
-                        {item.hour.split(':')[0]}h
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* Lista dos Últimos Pedidos do Evento */}
+            {/* Lista dos Últimos Pedidos do Evento (Tabela Desktop / Cards no Mobile) */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-              <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Últimos Pedidos / Inscrições</h3>
-                  <p className="text-xs text-gray-400">Registros em tempo real vinculados a este evento</p>
+                  <h3 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wider">Últimos Pedidos / Inscrições</h3>
+                  <p className="text-[11px] sm:text-xs text-gray-400">Registros em tempo real vinculados a este evento</p>
                 </div>
-                <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">
+                <span className="text-[11px] sm:text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">
                   {reportData.recentOrders.length} registros
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-50/70 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-100">
-                    <tr>
-                      <th className="px-5 py-3">Comprador</th>
-                      <th className="px-5 py-3">Contato</th>
-                      <th className="px-5 py-3">Lote</th>
-                      <th className="px-5 py-3">Qtd</th>
-                      <th className="px-5 py-3">Valor</th>
-                      <th className="px-5 py-3">Pagamento</th>
-                      <th className="px-5 py-3">Status</th>
-                      <th className="px-5 py-3">Data</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-gray-700">
-                    {reportData.recentOrders.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="px-5 py-8 text-center text-gray-400">
-                          Nenhum pedido encontrado para este evento.
-                        </td>
-                      </tr>
-                    ) : (
-                      reportData.recentOrders.slice(0, 15).map(order => (
-                        <tr key={order.id} className="hover:bg-gray-50/60 transition-colors">
-                          <td className="px-5 py-3.5">
-                            <p className="font-bold text-gray-900">{order.client_name || 'Comprador'}</p>
+              {reportData.recentOrders.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 text-xs">
+                  Nenhum pedido encontrado para este evento.
+                </div>
+              ) : (
+                <>
+                  {/* VISUALIZAÇÃO MOBILE (CARDS INDIVIDUAIS SEM SCROLL HORIZONTAL) */}
+                  <div className="block md:hidden divide-y divide-gray-100">
+                    {reportData.recentOrders.slice(0, 15).map(order => (
+                      <div key={order.id} className="p-4 space-y-2.5 bg-white hover:bg-gray-50/60 transition-colors">
+                        {/* Linha 1: Nome do Comprador e Status */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-900 text-xs leading-snug">{order.client_name || 'Comprador'}</p>
                             {order.client_document && (
-                              <p className="text-[11px] text-gray-400 font-mono">{order.client_document}</p>
+                              <p className="text-[10px] text-gray-400 font-mono mt-0.5">CPF: {order.client_document}</p>
                             )}
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <p className="font-medium text-gray-800">{order.client_phone || '-'}</p>
-                            {order.client_email && (
-                              <p className="text-[11px] text-gray-400 truncate max-w-[140px]">{order.client_email}</p>
-                            )}
-                          </td>
-                          <td className="px-5 py-3.5 font-medium text-gray-800">
-                            {order.batch_name || `Lote ${(Number(order.batch_index) || 0) + 1}`}
-                          </td>
-                          <td className="px-5 py-3.5 font-bold text-gray-900">
-                            {order.quantity || 1}
-                          </td>
-                          <td className="px-5 py-3.5 font-mono font-bold text-gray-900">
-                            {formatPrice(order.amount_total || 0)}
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <span className="text-[11px] bg-gray-100 text-gray-700 font-medium px-2 py-0.5 rounded">
-                              {formatPaymentMethodName(order.payment_method)}
+                          </div>
+                          {order.status === 'paid' ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              Pago
                             </span>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            {order.status === 'paid' ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                Pago
-                              </span>
-                            ) : order.status === 'pending' || order.status === 'pending_proof' ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                <Clock className="w-3 h-3 text-amber-600" />
-                                Pendente
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200">
-                                <XCircle className="w-3 h-3 text-red-600" />
-                                Cancelado
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap text-[11px]">
-                            {order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '-'}
-                          </td>
+                          ) : order.status === 'pending' || order.status === 'pending_proof' ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 shrink-0">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              Pendente
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200 shrink-0">
+                              <XCircle className="w-3 h-3 text-red-600" />
+                              Cancelado
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Linha 2: Lote, Qtd, Forma de Pagamento e Valor */}
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                          <div>
+                            <span className="text-[10px] text-gray-400 font-medium block">Lote:</span>
+                            <span className="font-semibold text-gray-800">{order.batch_name || `Lote ${(Number(order.batch_index) || 0) + 1}`}</span>
+                            <span className="text-indigo-600 font-bold ml-1">({order.quantity || 1}x)</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-gray-400 font-medium block">Pagamento:</span>
+                            <span className="font-semibold text-gray-800">{formatPaymentMethodName(order.payment_method)}</span>
+                          </div>
+                          {order.client_phone && (
+                            <div className="col-span-2 pt-1 border-t border-gray-200/50 flex items-center justify-between text-[10px] text-gray-500">
+                              <span>WhatsApp: {order.client_phone}</span>
+                              {order.created_at && (
+                                <span>{new Date(order.created_at).toLocaleDateString('pt-BR')}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Linha 3: Valor Total */}
+                        <div className="flex items-center justify-between pt-0.5">
+                          <span className="text-[11px] text-gray-500 font-medium">Total do Pedido:</span>
+                          <span className="text-xs font-black text-emerald-600 font-mono">
+                            {formatPrice(order.amount_total || 0)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* VISUALIZAÇÃO DESKTOP (TABELA COMPLETA) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50/70 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-100">
+                        <tr>
+                          <th className="px-5 py-3">Comprador</th>
+                          <th className="px-5 py-3">Contato</th>
+                          <th className="px-5 py-3">Lote</th>
+                          <th className="px-5 py-3">Qtd</th>
+                          <th className="px-5 py-3">Valor</th>
+                          <th className="px-5 py-3">Pagamento</th>
+                          <th className="px-5 py-3">Status</th>
+                          <th className="px-5 py-3">Data</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-gray-700">
+                        {reportData.recentOrders.slice(0, 15).map(order => (
+                          <tr key={order.id} className="hover:bg-gray-50/60 transition-colors">
+                            <td className="px-5 py-3.5">
+                              <p className="font-bold text-gray-900">{order.client_name || 'Comprador'}</p>
+                              {order.client_document && (
+                                <p className="text-[11px] text-gray-400 font-mono">{order.client_document}</p>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <p className="font-medium text-gray-800">{order.client_phone || '-'}</p>
+                              {order.client_email && (
+                                <p className="text-[11px] text-gray-400 truncate max-w-[140px]">{order.client_email}</p>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 font-medium text-gray-800 whitespace-nowrap">
+                              {order.batch_name || `Lote ${(Number(order.batch_index) || 0) + 1}`}
+                            </td>
+                            <td className="px-5 py-3.5 font-bold text-gray-900">
+                              {order.quantity || 1}
+                            </td>
+                            <td className="px-5 py-3.5 font-mono font-bold text-gray-900 whitespace-nowrap">
+                              {formatPrice(order.amount_total || 0)}
+                            </td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              <span className="text-[11px] bg-gray-100 text-gray-700 font-medium px-2 py-0.5 rounded">
+                                {formatPaymentMethodName(order.payment_method)}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              {order.status === 'paid' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  Pago
+                                </span>
+                              ) : order.status === 'pending' || order.status === 'pending_proof' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                  <Clock className="w-3 h-3 text-amber-600" />
+                                  Pendente
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                                  <XCircle className="w-3 h-3 text-red-600" />
+                                  Cancelado
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap text-[11px]">
+                              {order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

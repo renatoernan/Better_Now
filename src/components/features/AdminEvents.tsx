@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin } from 'lucide-react';
+import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin, ArrowLeft } from 'lucide-react';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { Event } from '../../shared/types/types/event';
 import { toast } from 'sonner';
@@ -298,16 +298,31 @@ const AdminEvents: React.FC = () => {
   if (viewMode === 'reports' && selectedEvent) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Relatórios - {selectedEvent.title}</h2>
-            <p className="text-gray-600">Análises e estatísticas do evento</p>
+            <button
+              onClick={() => setViewMode('list')}
+              className="inline-flex items-center text-xs font-semibold text-gray-500 hover:text-indigo-600 transition-colors mb-2 gap-1 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Voltar para Lista de Eventos</span>
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+                <BarChart3 className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{selectedEvent.title}</h1>
+                <p className="text-xs text-gray-500">Relatórios, métricas de vendas e engajamento do evento</p>
+              </div>
+            </div>
           </div>
           <button
             onClick={() => setViewMode('list')}
-            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
+            className="w-full sm:w-auto px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
           >
-            Voltar
+            <ArrowLeft className="w-4 h-4" />
+            <span>Voltar aos Eventos</span>
           </button>
         </div>
         <EventReports eventId={selectedEvent.id} />
