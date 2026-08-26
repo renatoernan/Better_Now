@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '../../shared/contexts/contexts/LanguageContext';
 import { useAppSettings } from '../../shared/hooks/hooks/useAppSettings';
+import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEventTypes';
 import { Mail, Phone, MapPin, Clock, Send, AlertCircle } from 'lucide-react';
 import { supabase } from '../../shared/services/lib/supabase';
 import { ActivityLogger } from '../../shared/utils/utils/activityLogger';
@@ -13,7 +14,12 @@ import { PhoneInput } from '../ui/PhoneInput';
 const ContactForm: React.FC = () => {
     const { translations } = useLanguage();
     const { settings } = useAppSettings();
+    const { eventTypes, fetchEventTypes, loading: loadingEventTypes } = useSupabaseEventTypes();
     const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        fetchEventTypes(true);
+    }, []);
 
     const {
         register,
@@ -195,14 +201,14 @@ const ContactForm: React.FC = () => {
                         {/* Nome e Email */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                             <div>
-                                <label htmlFor="contact-name" className="sr-only">
-                                    {translations.contactForm.name}
+                                <label htmlFor="contact-name" className="block text-xs sm:text-sm font-semibold text-[#2c3e50] mb-1.5">
+                                    {translations.contactForm.name} <span className="text-red-500" title="Campo obrigatório">*</span>
                                 </label>
                                 <input 
                                     {...register('name')}
                                     id="contact-name"
                                     type="text" 
-                                    placeholder={translations.contactForm.name}
+                                    placeholder="Digite seu nome completo"
                                     aria-label={translations.contactForm.name}
                                     aria-invalid={errors.name ? 'true' : 'false'}
                                     aria-describedby={errors.name ? 'name-error' : undefined}
@@ -228,14 +234,14 @@ const ContactForm: React.FC = () => {
                             </div>
                             
                             <div>
-                                <label htmlFor="contact-email" className="sr-only">
-                                    {translations.contactForm.email}
+                                <label htmlFor="contact-email" className="block text-xs sm:text-sm font-semibold text-[#2c3e50] mb-1.5">
+                                    {translations.contactForm.email} <span className="text-red-500" title="Campo obrigatório">*</span>
                                 </label>
                                 <input 
                                     {...register('email')}
                                     id="contact-email"
                                     type="email" 
-                                    placeholder={translations.contactForm.email}
+                                    placeholder="seu.email@exemplo.com"
                                     aria-label={translations.contactForm.email}
                                     aria-invalid={errors.email ? 'true' : 'false'}
                                     aria-describedby={errors.email ? 'email-error' : undefined}
@@ -263,7 +269,11 @@ const ContactForm: React.FC = () => {
 
                         {/* Telefone */}
                         <div>
+                            <label htmlFor="contact-phone" className="block text-xs sm:text-sm font-semibold text-[#2c3e50] mb-1.5">
+                                {translations.contactForm.phone} <span className="text-gray-400 font-normal text-xs">(opcional)</span>
+                            </label>
                             <PhoneInput
+                                id="contact-phone"
                                 value={watch('phone')}
                                 onChange={(value) => setValue('phone', value)}
                                 onBlur={() => trigger('phone')}
@@ -281,20 +291,32 @@ const ContactForm: React.FC = () => {
 
                         {/* Tipo de Evento */}
                         <div>
+                            <label htmlFor="contact-event-type" className="block text-xs sm:text-sm font-semibold text-[#2c3e50] mb-1.5">
+                                {translations.contactForm.eventType} <span className="text-red-500" title="Campo obrigatório">*</span>
+                            </label>
                             <select 
                                 {...register('event_type')}
+                                id="contact-event-type"
                                 className={`w-full p-3 sm:p-4 
                                            text-sm sm:text-base 
                                            rounded-md border 
                                            ${errors.event_type ? 'border-red-500 bg-red-50' : 'border-gray-300'} 
                                            focus:outline-none focus:ring-2 
                                            ${errors.event_type ? 'focus:ring-red-500' : 'focus:ring-blue-600'}
-                                           transition-colors duration-200 text-gray-700`}
+                                           transition-colors duration-200 text-gray-700 bg-white`}
                             >
-                                <option value="" disabled>{translations.contactForm.eventType}</option>
-                                {translations.contactForm.eventTypes.map(type => (
-                                    <option key={type} value={type}>{type}</option>
-                                ))}
+                                <option value="" disabled>
+                                    {loadingEventTypes ? 'Carregando tipos de eventos...' : translations.contactForm.eventType}
+                                </option>
+                                {eventTypes.length > 0 ? (
+                                    eventTypes.map(type => (
+                                        <option key={type.id} value={type.name}>{type.name}</option>
+                                    ))
+                                ) : (
+                                    translations.contactForm.eventTypes.map(type => (
+                                        <option key={type} value={type}>{type}</option>
+                                    ))
+                                )}
                             </select>
                             {errors.event_type && (
                                 <div className="flex items-center gap-1 mt-1 text-red-600">
@@ -307,8 +329,12 @@ const ContactForm: React.FC = () => {
                         {/* Convidados e Data */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                             <div>
+                                <label htmlFor="contact-guests" className="block text-xs sm:text-sm font-semibold text-[#2c3e50] mb-1.5">
+                                    {translations.contactForm.guests} <span className="text-red-500" title="Campo obrigatório">*</span>
+                                </label>
                                 <input 
                                     {...register('guests', { valueAsNumber: true })}
+                                    id="contact-guests"
                                     type="number" 
                                     min="1"
                                     placeholder={translations.contactForm.guests}
@@ -329,8 +355,12 @@ const ContactForm: React.FC = () => {
                             </div>
                             
                             <div>
+                                <label htmlFor="contact-event-date" className="block text-xs sm:text-sm font-semibold text-[#2c3e50] mb-1.5">
+                                    {translations.contactForm.date} <span className="text-red-500" title="Campo obrigatório">*</span>
+                                </label>
                                 <input 
                                     {...register('event_date')}
+                                    id="contact-event-date"
                                     type="date" 
                                     aria-label={translations.contactForm.date}
                                     className={`w-full p-3 sm:p-4 
@@ -339,7 +369,7 @@ const ContactForm: React.FC = () => {
                                                ${errors.event_date ? 'border-red-500 bg-red-50' : 'border-gray-300'} 
                                                focus:outline-none focus:ring-2 
                                                ${errors.event_date ? 'focus:ring-red-500' : 'focus:ring-blue-600'}
-                                               transition-colors duration-200 text-gray-700`}
+                                               transition-colors duration-200 text-gray-700 bg-white`}
                                 />
                                 {errors.event_date && (
                                     <div className="flex items-center gap-1 mt-1 text-red-600">
@@ -352,9 +382,13 @@ const ContactForm: React.FC = () => {
 
                         {/* Mensagem */}
                         <div>
+                            <label htmlFor="contact-message" className="block text-xs sm:text-sm font-semibold text-[#2c3e50] mb-1.5">
+                                {translations.contactForm.message} <span className="text-gray-400 font-normal text-xs">(opcional)</span>
+                            </label>
                             <textarea 
                                 {...register('message')}
-                                placeholder="Mensagem adicional (opcional)" 
+                                id="contact-message"
+                                placeholder="Conte-nos mais sobre como imagina o seu evento..." 
                                 rows={4}
                                 className={`w-full p-3 sm:p-4 
                                            text-sm sm:text-base 

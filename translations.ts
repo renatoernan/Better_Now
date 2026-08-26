@@ -68,6 +68,7 @@ export const translations = {
         ],
         guests: 'Estimated Number of Guests',
         date: 'Event Date',
+        message: 'Additional Message',
         submit: 'I Want an Unforgettable Event!'
     },
 
@@ -220,6 +221,7 @@ export const translations = {
         ],
         guests: 'Número Estimado de Convidados',
         date: 'Data do Evento',
+        message: 'Mensagem Adicional',
         submit: 'Quero um Evento Inesquecível!'
     },
 
@@ -372,6 +374,7 @@ export const translations = {
         ],
         guests: 'Número Estimado de Invitados',
         date: 'Fecha del Evento',
+        message: 'Mensaje Adicional',
         submit: '¡Quiero un Evento Inolvidable!'
     },
 

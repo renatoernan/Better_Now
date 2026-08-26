@@ -10,6 +10,7 @@ interface CountryCode {
 }
 
 interface PhoneInputProps {
+  id?: string;
   value?: string;
   onChange?: (value: string) => void;
   onBlur?: () => void;
@@ -72,7 +73,7 @@ const parsePhoneValue = (fullValue: string): { countryCode: string; phoneNumber:
 };
 
 export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
-  ({ value = '', onChange, onBlur, placeholder, className, error, disabled, name }, ref) => {
+  ({ id, value = '', onChange, onBlur, placeholder, className, error, disabled, name }, ref) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [selectedCountry, setSelectedCountry] = useState('+55');
     const [phoneNumber, setPhoneNumber] = useState('');
@@ -156,6 +157,7 @@ export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
         {/* Input do número */}
         <input
           ref={ref}
+          id={id}
           type="tel"
           name={name}
           value={phoneNumber}
