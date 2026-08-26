@@ -69,7 +69,15 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
         setOrder(orderData);
         if (orderData.status === 'paid' || orderData.status === 'approved') {
           const ticketsData = await getTicketsByOrderId(orderData.id, orderData);
-          setTickets(ticketsData || []);
+          const map = new Map<string, EventTicket>();
+          (ticketsData || []).forEach((t) => {
+            const key = String(t.ticket_number || t.id);
+            if (!map.has(key)) map.set(key, t);
+          });
+          const uniqueList = Array.from(map.values()).sort(
+            (a, b) => Number(a.ticket_number || 0) - Number(b.ticket_number || 0)
+          );
+          setTickets(uniqueList);
         } else {
           setTickets([]);
         }

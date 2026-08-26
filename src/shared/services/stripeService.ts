@@ -217,20 +217,26 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
         });
       }
 
-      const { data: inserted, error: insertErr } = await supabase
+      // Upsert seguro contra concorrência
+      const { error: insertErr } = await supabase
         .from('app_event_tickets')
-        .insert(ticketsToInsert)
-        .select('*, client:app_people(id, nome, documento, whatsapp, email)');
-
-      if (!insertErr && inserted && inserted.length > 0) {
-        return inserted as EventTicket[];
-      }
+        .upsert(ticketsToInsert, { onConflict: 'order_id,ticket_number', ignoreDuplicates: true });
 
       if (insertErr) {
         console.warn('Aviso ao persistir ingressos no banco:', insertErr.message);
       }
 
-      // Retorna os tickets gerados mesmo em caso de erro transitório de insert
+      // Reconsulta os tickets oficiais no banco
+      const { data: finalTickets } = await supabase
+        .from('app_event_tickets')
+        .select('*, client:app_people(id, nome, documento, whatsapp, email)')
+        .eq('order_id', orderId)
+        .order('ticket_number', { ascending: true });
+
+      if (finalTickets && finalTickets.length > 0) {
+        return finalTickets as EventTicket[];
+      }
+
       return ticketsToInsert.map((t, idx) => ({
         id: `local-${order.id}-${idx + 1}`,
         ...t

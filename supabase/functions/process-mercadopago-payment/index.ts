@@ -150,7 +150,9 @@ serve(async (req: Request) => {
             });
           }
 
-          await supabase.from("app_event_tickets").insert(ticketsToInsert);
+          await supabase
+            .from("app_event_tickets")
+            .upsert(ticketsToInsert, { onConflict: "order_id,ticket_number", ignoreDuplicates: true });
         }
 
         // Disparar notificações de confirmação de pagamento de forma independente (E-mail + WhatsApp)

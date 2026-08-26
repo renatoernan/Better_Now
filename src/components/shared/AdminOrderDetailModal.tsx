@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   X, Ticket, User, Phone, Mail, CreditCard, Calendar, Globe, 
   QrCode, CheckCircle2, AlertCircle, Ban, ArrowRight, ShieldCheck, 
@@ -30,6 +30,18 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
   onTransferTicket,
   onRefundOrder,
 }) => {
+  const uniqueTickets = useMemo(() => {
+    if (!order?.tickets || order.tickets.length === 0) return [];
+    const map = new Map<string, EventTicketRecord>();
+    for (const t of order.tickets) {
+      const key = String(t.ticket_number || t.id);
+      if (!map.has(key)) {
+        map.set(key, t);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => Number(a.ticket_number || 0) - Number(b.ticket_number || 0));
+  }, [order?.tickets]);
+
   if (!isOpen || !order) return null;
 
   const formatDate = (isoString?: string) => {
@@ -211,7 +223,7 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                Ingressos Emitidos ({order.tickets?.length || 0})
+                Ingressos Emitidos ({uniqueTickets.length})
               </h3>
               {isPaid && onTransferTicket && (
                 <span className="text-[11px] text-indigo-600 font-semibold">
@@ -220,9 +232,9 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
               )}
             </div>
 
-            {order.tickets && order.tickets.length > 0 ? (
+            {uniqueTickets.length > 0 ? (
               <div className="space-y-2.5">
-                {order.tickets.map((ticket, idx) => {
+                {uniqueTickets.map((ticket, idx) => {
                   // Fallback para participantes no JSON se person não estiver populado
                   let attendeeData: any = null;
                   if (order.cancellation_reason && order.cancellation_reason.trim().startsWith('[')) {

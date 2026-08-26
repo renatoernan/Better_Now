@@ -343,7 +343,9 @@ export const createComplimentaryOrder = async (
       });
     }
 
-    const { error: ticketErr } = await supabase.from('app_event_tickets').insert(ticketsToInsert);
+    const { error: ticketErr } = await supabase
+      .from('app_event_tickets')
+      .upsert(ticketsToInsert, { onConflict: 'order_id,ticket_number', ignoreDuplicates: true });
     if (ticketErr) {
       console.warn('Aviso ao emitir ingressos cortesia:', ticketErr);
     }

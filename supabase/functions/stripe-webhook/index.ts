@@ -123,7 +123,7 @@ serve(async (req) => {
 
           const { data: createdTickets, error: ticketError } = await supabase
             .from("app_event_tickets")
-            .insert(ticketsToInsert)
+            .upsert(ticketsToInsert, { onConflict: "order_id,ticket_number", ignoreDuplicates: true })
             .select();
 
           if (ticketError) {

@@ -193,7 +193,9 @@ export const completeMercadoPagoOrder = async (
         });
       }
 
-      await supabase.from('app_event_tickets').insert(ticketsToInsert);
+      await supabase
+        .from('app_event_tickets')
+        .upsert(ticketsToInsert, { onConflict: 'order_id,ticket_number', ignoreDuplicates: true });
     }
 
     if (currentOrder.coupon_code || currentOrder.coupon_id) {

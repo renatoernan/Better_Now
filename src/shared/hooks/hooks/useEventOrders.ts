@@ -140,14 +140,24 @@ export const useEventOrders = (eventId?: string) => {
         console.warn('Erro ao buscar tickets:', ticketsError);
       }
 
-      // Mapear tickets por order_id
+      // Mapear tickets por order_id desduplicando por ticket_number
       const ticketsByOrder = (ticketsData || []).reduce((acc: Record<string, EventTicketRecord[]>, ticket: any) => {
         if (!acc[ticket.order_id]) {
           acc[ticket.order_id] = [];
         }
-        acc[ticket.order_id].push(ticket);
+        const alreadyExists = acc[ticket.order_id].some(
+          (t) => String(t.ticket_number) === String(ticket.ticket_number)
+        );
+        if (!alreadyExists) {
+          acc[ticket.order_id].push(ticket);
+        }
         return acc;
       }, {});
+
+      // Ordenar os tickets de cada ordem por ticket_number
+      Object.keys(ticketsByOrder).forEach((orderId) => {
+        ticketsByOrder[orderId].sort((a, b) => Number(a.ticket_number || 0) - Number(b.ticket_number || 0));
+      });
 
       const combinedOrders: EventOrderRecord[] = (ordersData || []).map((order) => ({
         ...order,
@@ -319,7 +329,9 @@ export const useEventOrders = (eventId?: string) => {
           });
         }
 
-        await supabase.from('app_event_tickets').insert(ticketsToInsert);
+        await supabase
+          .from('app_event_tickets')
+          .upsert(ticketsToInsert, { onConflict: 'order_id,ticket_number', ignoreDuplicates: true });
       }
 
       // Se a ordem possuir cupom de desconto, registrar uso definitivo
@@ -689,7 +701,9 @@ export const useEventOrders = (eventId?: string) => {
             });
           }
 
-          await supabase.from('app_event_tickets').insert(ticketsToInsert);
+          await supabase
+            .from('app_event_tickets')
+            .upsert(ticketsToInsert, { onConflict: 'order_id,ticket_number', ignoreDuplicates: true });
         }
       } else {
         // Se reativado para 'pending', tickets continuam cancelados ou aguardando
