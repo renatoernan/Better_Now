@@ -454,29 +454,41 @@ export const checkMercadoPagoPaymentStatus = async (
 
     const cleanOrderId = orderId.trim();
 
-    const { data: currentOrder, error } = await supabase
+    // 1. Consulta rápida no banco de dados
+    const { data: currentOrder } = await supabase
       .from('app_event_orders')
-      .select('status, stripe_session_id, payment_id')
+      .select('id, status, stripe_session_id, stripe_payment_intent_id')
       .eq('id', cleanOrderId)
       .maybeSingle();
 
-    if (error || !currentOrder) {
-      return { paid: false, status: 'not_found' };
-    }
-
-    if (currentOrder.status === 'paid' || currentOrder.status === 'approved') {
+    if (currentOrder && (currentOrder.status === 'paid' || currentOrder.status === 'approved')) {
       return {
         paid: true,
-        paymentId: currentOrder.stripe_session_id || currentOrder.payment_id,
+        paymentId: currentOrder.stripe_session_id || currentOrder.stripe_payment_intent_id,
         status: 'approved',
       };
     }
 
-    if (currentOrder.status === 'failed' || currentOrder.status === 'canceled') {
-      return { paid: false, status: 'failed' };
+    // 2. Sincronização segura via Edge Function do Supabase
+    const { data: edgeData } = await supabase.functions.invoke(
+      'process-mercadopago-payment',
+      {
+        body: {
+          action: 'check_status',
+          order_id: cleanOrderId,
+        },
+      }
+    );
+
+    if (edgeData && edgeData.paid) {
+      return {
+        paid: true,
+        paymentId: edgeData.paymentId || currentOrder?.stripe_session_id,
+        status: 'approved',
+      };
     }
 
-    return { paid: false, status: currentOrder.status || 'pending' };
+    return { paid: false, status: edgeData?.status || currentOrder?.status || 'pending' };
   } catch (err) {
     console.warn('Aviso ao consultar status do pedido:', err);
     return { paid: false, status: 'error' };

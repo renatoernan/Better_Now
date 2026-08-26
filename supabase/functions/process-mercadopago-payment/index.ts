@@ -35,6 +35,138 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json().catch(() => ({}));
+
+    // =========================================================================
+    // AÇÃO: CONSULTA DE STATUS SEGURA (CHECK_STATUS)
+    // Sincroniza o status do pedido com a API do Mercado Pago via Servidor
+    // =========================================================================
+    if (body.action === "check_status") {
+      const orderId = body.order_id;
+      if (!orderId) {
+        return new Response(
+          JSON.stringify({ paid: false, error: "order_id é obrigatório." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: order, error: orderErr } = await supabase
+        .from("app_event_orders")
+        .select("*")
+        .eq("id", orderId)
+        .maybeSingle();
+
+      if (orderErr || !order) {
+        return new Response(
+          JSON.stringify({ paid: false, status: "not_found" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (order.status === "paid" || order.status === "approved") {
+        return new Response(
+          JSON.stringify({ paid: true, status: "approved", paymentId: order.stripe_session_id }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Se ainda está pendente, consultar a API oficial do Mercado Pago
+      let mpStatus = null;
+      let mpPaymentId = order.stripe_session_id;
+
+      if (mpPaymentId) {
+        const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${mpPaymentId}`, {
+          headers: { Authorization: `Bearer ${mpAccessToken}` },
+        });
+        if (mpRes.ok) {
+          const mpData = await mpRes.json();
+          mpStatus = mpData.status;
+        }
+      }
+
+      if (!mpStatus || mpStatus === "pending") {
+        // Buscar por external_reference
+        const searchRes = await fetch(
+          `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(orderId)}&sort=date_created&criteria=desc`,
+          { headers: { Authorization: `Bearer ${mpAccessToken}` } }
+        );
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          const list = Array.isArray(searchData.results) ? searchData.results : [];
+          const approved = list.find((p: any) => p.status === "approved");
+          if (approved) {
+            mpStatus = "approved";
+            mpPaymentId = String(approved.id);
+          } else if (list[0]) {
+            mpStatus = list[0].status;
+            mpPaymentId = String(list[0].id);
+          }
+        }
+      }
+
+      // Se foi aprovado no Mercado Pago, atualizar o banco e gerar ingressos
+      if (mpStatus === "approved") {
+        await supabase
+          .from("app_event_orders")
+          .update({
+            status: "paid",
+            stripe_session_id: mpPaymentId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", orderId);
+
+        // Gerar ingressos se não existirem
+        const { data: existingTickets } = await supabase
+          .from("app_event_tickets")
+          .select("id")
+          .eq("order_id", orderId);
+
+        if (!existingTickets || existingTickets.length === 0) {
+          const qty = order.quantity || 1;
+          const ticketsToInsert = [];
+
+          let attendees: any[] = [];
+          if (order.cancellation_reason) {
+            try {
+              const parsed = JSON.parse(order.cancellation_reason);
+              if (Array.isArray(parsed)) attendees = parsed;
+            } catch {}
+          }
+
+          for (let i = 0; i < qty; i++) {
+            const randomCode = crypto.randomUUID().split("-")[0].toUpperCase();
+            const qrHash = `MP-${mpPaymentId?.slice(0, 8) || "PIX"}-${i + 1}-${randomCode}`;
+            const att = attendees[i] || null;
+            const attendeeClientId = att?.person_id || att?.client_id || (i === 0 ? order.client_id : null);
+
+            ticketsToInsert.push({
+              order_id: orderId,
+              event_id: order.event_id,
+              client_id: attendeeClientId || null,
+              ticket_number: i + 1,
+              qr_code_hash: qrHash,
+              status: "valid",
+              created_at: new Date().toISOString(),
+            });
+          }
+
+          await supabase.from("app_event_tickets").insert(ticketsToInsert);
+        }
+
+        return new Response(
+          JSON.stringify({ paid: true, status: "approved", paymentId: mpPaymentId }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ paid: false, status: mpStatus || order.status || "pending" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // =========================================================================
+    // CRIAÇÃO / PROCESSAMENTO DE PAGAMENTO (CARTÃO / PIX)
+    // =========================================================================
     const {
       event_id,
       batch_index = 0,
