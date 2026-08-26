@@ -33,6 +33,158 @@ export interface CreateComplimentaryOrderParams {
   send_whatsapp?: boolean;
 }
 
+/**
+ * Localiza ou cadastra uma pessoa na tabela app_people para vincular ao client_id
+ */
+export const findOrCreatePerson = async (data: {
+  nome: string;
+  documento?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  clientId?: string | null;
+}): Promise<string | null> => {
+  try {
+    const cleanDoc = data.documento?.replace(/\D/g, '') || null;
+    const rawDoc = data.documento?.trim() || null;
+    const cleanPhone = data.whatsapp?.replace(/\D/g, '') || null;
+    const rawPhone = data.whatsapp?.trim() || null;
+
+    let existingPerson: any = null;
+
+    // 1. Se já veio um clientId válido, buscar o registro existente
+    if (data.clientId) {
+      const { data: existing } = await supabase
+        .from('app_people')
+        .select('*')
+        .eq('id', data.clientId)
+        .maybeSingle();
+      if (existing?.id) existingPerson = existing;
+    }
+
+    // 2. Se não encontrou por ID, tentar encontrar por CPF/Documento
+    if (!existingPerson && cleanDoc) {
+      let { data: byDoc } = await supabase
+        .from('app_people')
+        .select('*')
+        .or(`documento.eq.${cleanDoc},documento.eq.${rawDoc}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (!byDoc) {
+        const { data: directDoc } = await supabase
+          .from('app_people')
+          .select('*')
+          .eq('documento', cleanDoc)
+          .limit(1)
+          .maybeSingle();
+        if (directDoc) byDoc = directDoc;
+      }
+
+      if (byDoc?.id) existingPerson = byDoc;
+    }
+
+    // 3. Se não encontrou por CPF, tentar por WhatsApp / Telefone
+    if (!existingPerson && cleanPhone) {
+      const { data: byPhone } = await supabase
+        .from('app_people')
+        .select('*')
+        .or(`whatsapp.eq.${rawPhone},whatsapp.eq.${cleanPhone},whatsapp.eq.+55${cleanPhone},telefone.eq.${cleanPhone}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (byPhone?.id) existingPerson = byPhone;
+    }
+
+    // 4. Se a pessoa já existe na base, atualizar qualquer informação alterada no modal
+    if (existingPerson) {
+      const updatePayload: Record<string, any> = {};
+
+      const inputName = data.nome?.trim();
+      if (inputName && inputName !== existingPerson.nome && inputName !== existingPerson.name) {
+        updatePayload.nome = inputName;
+      }
+
+      const inputPhone = rawPhone || cleanPhone;
+      const existingCleanPhone = (existingPerson.whatsapp || existingPerson.telefone || '').replace(/\D/g, '');
+      if (cleanPhone && cleanPhone !== existingCleanPhone) {
+        updatePayload.whatsapp = inputPhone;
+      }
+
+      const inputEmail = data.email !== undefined ? data.email?.trim() || null : undefined;
+      if (inputEmail !== undefined && inputEmail !== (existingPerson.email || null)) {
+        updatePayload.email = inputEmail;
+      }
+
+      if (cleanDoc && cleanDoc !== existingPerson.documento) {
+        updatePayload.documento = cleanDoc;
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        updatePayload.updated_at = new Date().toISOString();
+        const { error: updateErr } = await supabase
+          .from('app_people')
+          .update(updatePayload)
+          .eq('id', existingPerson.id);
+
+        if (updateErr) {
+          console.warn('Aviso ao atualizar dados do cliente em app_people:', updateErr.message);
+        }
+      }
+
+      return existingPerson.id;
+    }
+
+    // 5. Se não existir, cadastrar nova pessoa em app_people
+    if (data.nome?.trim()) {
+      const insertPayload = {
+        nome: data.nome.trim(),
+        documento: cleanDoc || rawDoc || null,
+        whatsapp: rawPhone || cleanPhone || null,
+        email: data.email?.trim() || null,
+        ativo: true,
+        is_active: true,
+        validated: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: inserted, error: insertErr } = await supabase
+        .from('app_people')
+        .insert(insertPayload)
+        .select('id')
+        .maybeSingle();
+
+      if (!insertErr && inserted?.id) {
+        return inserted.id;
+      }
+
+      // Fallback simplificado caso alguma coluna gere divergência no schema
+      if (insertErr) {
+        console.warn('Tentativa com payload simplificado ao inserir em app_people:', insertErr.message);
+        const { data: simpleInserted } = await supabase
+          .from('app_people')
+          .insert({
+            nome: data.nome.trim(),
+            documento: cleanDoc || rawDoc || null,
+            whatsapp: rawPhone || cleanPhone || null,
+            email: data.email?.trim() || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .select('id')
+          .maybeSingle();
+
+        if (simpleInserted?.id) return simpleInserted.id;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('Erro ao resolver pessoa em app_people:', err);
+    return data.clientId || null;
+  }
+};
+
 export interface ComplimentaryOrderResponse {
   success: boolean;
   orderId?: string;
@@ -95,12 +247,21 @@ export const createComplimentaryOrder = async (
       }
     }
 
+    // 1.1 Sincronizar / Obter ID da pessoa na tabela app_people
+    const resolvedClientId = await findOrCreatePerson({
+      nome: params.client_name,
+      documento: cleanDoc || params.client_document,
+      whatsapp: params.client_phone,
+      email: params.client_email,
+      clientId: params.client_id,
+    });
+
     // 2. Inserir a ordem com status 'paid' (R$ 0,00 / Cortesia)
     const { data: newOrder, error: orderErr } = await supabase
       .from('app_event_orders')
       .insert({
         event_id: params.event_id,
-        client_id: params.client_id || null,
+        client_id: resolvedClientId || params.client_id || null,
         client_name: params.client_name || 'Convidado VIP',
         client_email: params.client_email || '',
         client_phone: params.client_phone || '',
@@ -169,7 +330,7 @@ export const createComplimentaryOrder = async (
         documento: cleanDoc,
       };
 
-      const attendeeClientId = (att as any)?.person_id || (att as any)?.client_id || (i === 0 ? params.client_id : null);
+      const attendeeClientId = (att as any)?.person_id || (att as any)?.client_id || (i === 0 ? (resolvedClientId || params.client_id) : resolvedClientId) || null;
 
       ticketsToInsert.push({
         order_id: orderId,
