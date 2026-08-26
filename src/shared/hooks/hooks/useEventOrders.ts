@@ -582,23 +582,55 @@ export const useEventOrders = (eventId?: string) => {
     }
   };
 
-  // Reenviar notificação de WhatsApp e E-mail manualmente
-  const sendManualOrderNotification = async (orderId: string, type: OrderNotificationType) => {
+  // Reenviar notificação de WhatsApp e/ou E-mail manualmente
+  const sendManualOrderNotification = async (
+    orderId: string, 
+    type: OrderNotificationType,
+    channels: { whatsapp: boolean; email: boolean } = { whatsapp: true, email: true }
+  ): Promise<boolean> => {
     try {
+      if (!channels.whatsapp && !channels.email) {
+        toast.error('Selecione pelo menos um canal (WhatsApp ou E-mail) para envio.');
+        return false;
+      }
+
       const typeLabel = type === 'created' ? 'Pedido Criado' : type === 'confirmed' ? 'Pagamento Confirmado' : 'Pedido Cancelado';
-      toast.info(`Enviando notificações de ${typeLabel} (WhatsApp / E-mail)...`);
-      const res = await sendOrderNotifications({ type, orderId });
-      
+      const channelLabels = [];
+      if (channels.whatsapp) channelLabels.push('WhatsApp');
+      if (channels.email) channelLabels.push('E-mail');
+
+      toast.info(`Disparando notificação de ${typeLabel} via ${channelLabels.join(' e ')}...`);
+
+      let whatsappSuccess = false;
+      let emailSuccess = false;
+      let errorMsg = '';
+
+      if (channels.whatsapp && channels.email) {
+        const res = await sendOrderNotifications({ type, orderId });
+        whatsappSuccess = !!res.whatsapp?.success;
+        emailSuccess = !!res.email?.success;
+        if (!whatsappSuccess && !emailSuccess) {
+          errorMsg = res.whatsapp?.message || res.email?.message || 'Falha no envio';
+        }
+      } else if (channels.whatsapp) {
+        const res = await sendOrderWhatsAppNotification({ type, orderId });
+        whatsappSuccess = !!res.success;
+        if (!whatsappSuccess) errorMsg = res.message;
+      } else if (channels.email) {
+        const res = await sendOrderEmailNotification({ type, orderId });
+        emailSuccess = !!res.success;
+        if (!emailSuccess) errorMsg = res.message;
+      }
+
       const successChannels: string[] = [];
-      if (res.whatsapp?.success) successChannels.push('WhatsApp 📱');
-      if (res.email?.success) successChannels.push('E-mail ✉️');
+      if (whatsappSuccess) successChannels.push('WhatsApp 📱');
+      if (emailSuccess) successChannels.push('E-mail ✉️');
 
       if (successChannels.length > 0) {
-        toast.success(`Notificação de ${typeLabel} enviada via ${successChannels.join(' e ')}!`);
+        toast.success(`Notificação de ${typeLabel} enviada via ${successChannels.join(' e ')} com sucesso! 🎉`);
         return true;
       } else {
-        const errorMsg = res.email?.message || res.whatsapp?.message || 'Falha no envio';
-        toast.error(`Falha no envio da notificação: ${errorMsg}`);
+        toast.error(`Falha no envio da notificação: ${errorMsg || 'Erro na entrega'}`);
         return false;
       }
     } catch (err: any) {

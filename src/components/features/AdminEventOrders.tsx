@@ -15,6 +15,7 @@ import AdminRestoreOrderConfirmModal from '../shared/AdminRestoreOrderConfirmMod
 import AdminIssueComplimentaryModal from '../shared/AdminIssueComplimentaryModal';
 import AdminRefundOrderModal from '../shared/AdminRefundOrderModal';
 import AdminTransferTicketModal from '../shared/AdminTransferTicketModal';
+import AdminSendOrderNotificationModal from '../shared/AdminSendOrderNotificationModal';
 import { toast } from 'sonner';
 
 interface AdminEventOrdersProps {
@@ -74,6 +75,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
   const [orderToCancel, setOrderToCancel] = useState<EventOrderRecord | null>(null);
   const [orderToRestore, setOrderToRestore] = useState<EventOrderRecord | null>(null);
   const [orderToRefund, setOrderToRefund] = useState<EventOrderRecord | null>(null);
+  const [orderToNotify, setOrderToNotify] = useState<EventOrderRecord | null>(null);
   const [ticketToTransfer, setTicketToTransfer] = useState<{ ticket: EventTicketRecord; order: EventOrderRecord } | null>(null);
   const [showComplimentaryModal, setShowComplimentaryModal] = useState<boolean>(false);
 
@@ -854,20 +856,13 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                               </button>
                             )}
 
-                            {/* Botão de Enviar / Reenviar Notificação WhatsApp */}
-                            {order.client_phone && (
+                            {/* Botão de Enviar / Reenviar Notificação (WhatsApp e E-mail) */}
+                            {(order.client_phone || order.client_email) && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const notifType = (order.status === 'paid' || (order.status as string) === 'approved')
-                                    ? 'confirmed'
-                                    : order.status === 'cancelled'
-                                    ? 'cancelled'
-                                    : 'created';
-                                  sendManualOrderNotification(order.id, notifType);
-                                }}
+                                onClick={() => setOrderToNotify(order)}
                                 className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                                title="Enviar / Reenviar mensagem no WhatsApp do comprador"
+                                title="Enviar / Reenviar Notificação (WhatsApp e E-mail)"
                               >
                                 <MessageSquare className="w-4 h-4" />
                               </button>
@@ -1038,16 +1033,13 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                               </button>
                             )}
 
-                            {/* Notificação WhatsApp */}
-                            {(holderPhone || buyerPhone) && (
+                            {/* Botão de Enviar / Reenviar Notificação (WhatsApp e E-mail) */}
+                            {(holderPhone || buyerPhone || order.client_phone || order.client_email) && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const notifType = isPaid ? 'confirmed' : order.status === 'cancelled' ? 'cancelled' : 'created';
-                                  sendManualOrderNotification(order.id, notifType);
-                                }}
+                                onClick={() => setOrderToNotify(order)}
                                 className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                                title="Reenviar notificação de WhatsApp"
+                                title="Enviar / Reenviar Notificação (WhatsApp e E-mail)"
                               >
                                 <MessageSquare className="w-4 h-4" />
                               </button>
@@ -1086,6 +1078,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
           if (target) setOrderToCancel(target);
         }}
         onSendWhatsApp={(orderId, type) => sendManualOrderNotification(orderId, type)}
+        onOpenNotificationModal={(ord) => setOrderToNotify(ord)}
         onTransferTicket={(ticket, ord) => setTicketToTransfer({ ticket, order: ord })}
         onRefundOrder={(ord) => setOrderToRefund(ord)}
       />
@@ -1097,6 +1090,15 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         order={selectedOrderForProof}
         onApprove={approvePixProof}
         onReject={rejectPixProof}
+      />
+
+      {/* Modal de Envio de Notificações com Seleção de Canais */}
+      <AdminSendOrderNotificationModal
+        isOpen={!!orderToNotify}
+        onClose={() => setOrderToNotify(null)}
+        order={orderToNotify}
+        eventTitle={event.title}
+        onSend={sendManualOrderNotification}
       />
 
       {/* Modal de Confirmação de Cancelamento de Pedido */}
