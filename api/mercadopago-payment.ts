@@ -1,11 +1,12 @@
 export default async function handler(req: any, res: any) {
   // CORS Headers
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, X-Idempotency-Key'
   );
 
   if (req.method === 'OPTIONS') {
@@ -19,10 +20,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const accessToken =
-      process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-      process.env.MERCADOPAGO_ACCESS_TOKEN ||
-      'APP_USR-1264360358076296-081717-ffb3d55789b1665111c7d2c6e33a856f-68352240';
+    const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
 
     if (!accessToken) {
       res.status(500).json({ error: 'Token do Mercado Pago não configurado no servidor.' });

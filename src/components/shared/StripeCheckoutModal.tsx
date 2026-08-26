@@ -318,7 +318,11 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
       const cardToken = tokenResponse.id;
       const paymentMethodId = detectedBrand || 'visa';
 
-      // Processar pagamento direto na API do Mercado Pago
+      // Sanitização Imediata de Memória (PCI DSS): remove dados brutos do estado React
+      setCardNumber('');
+      setCardCvv('');
+
+      // Processar pagamento seguro via Edge Function do Supabase
       const paymentResult = await processMercadoPagoCardPayment({
         event_id: eventId,
         batch_index: batchIndex,
@@ -572,6 +576,9 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
                   <input
                     type="text"
                     required
+                    name="cc-number"
+                    autoComplete="cc-number"
+                    inputMode="numeric"
                     placeholder="0000 0000 0000 0000"
                     value={cardNumber}
                     onChange={handleCardNumberChange}
@@ -593,6 +600,8 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
                   <input
                     type="text"
                     required
+                    name="cc-name"
+                    autoComplete="cc-name"
                     placeholder="NOME COMO NO CARTÃO"
                     value={cardHolder}
                     onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
@@ -610,6 +619,9 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
                     <input
                       type="text"
                       required
+                      name="cc-exp"
+                      autoComplete="cc-exp"
+                      inputMode="numeric"
                       placeholder="MM/AA"
                       value={cardExpiry}
                       onChange={handleCardExpiryChange}
@@ -622,10 +634,13 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
                   <label className="block text-xs font-bold text-gray-700 mb-1">CVV / Segurança</label>
                   <div className="relative">
                     <input
-                      type="text"
+                      type="password"
                       required
+                      name="cc-csc"
+                      autoComplete="cc-csc"
+                      inputMode="numeric"
                       maxLength={4}
-                      placeholder="123"
+                      placeholder="•••"
                       value={cardCvv}
                       onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
                       className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm font-mono"
@@ -641,6 +656,9 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
                 <input
                   type="text"
                   required
+                  name="cpf"
+                  autoComplete="off"
+                  inputMode="numeric"
                   placeholder="000.000.000-00"
                   value={cardCpf}
                   onChange={handleCardCpfChange}

@@ -3,10 +3,61 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-signature, x-request-id",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-serve(async (req) => {
+// Função para validar a assinatura criptográfica x-signature do Mercado Pago (HMAC SHA-256)
+async function verifyMercadoPagoSignature(
+  req: Request,
+  webhookSecret?: string
+): Promise<boolean> {
+  if (!webhookSecret) return true; // Se a chave secreta de webhook não estiver configurada, não bloqueia
+
+  const xSignature = req.headers.get("x-signature");
+  const xRequestId = req.headers.get("x-request-id");
+  if (!xSignature || !xRequestId) return false;
+
+  const parts = xSignature.split(",");
+  let ts = "";
+  let v1 = "";
+  for (const part of parts) {
+    const [k, v] = part.trim().split("=");
+    if (k === "ts") ts = v;
+    if (k === "v1") v1 = v;
+  }
+
+  if (!ts || !v1) return false;
+
+  const url = new URL(req.url);
+  const dataId = url.searchParams.get("data.id") || "";
+
+  // Template de assinatura Mercado Pago: id:[data.id_url];request-id:[x-request-id_header];ts:[ts_header];
+  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+
+  try {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(webhookSecret);
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyData,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signature = await crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(manifest));
+    const hashHex = Array.from(new Uint8Array(signature))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    return hashHex === v1;
+  } catch (err) {
+    console.warn("Aviso ao validar assinatura x-signature:", err);
+    return false;
+  }
+}
+
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -14,7 +65,23 @@ serve(async (req) => {
   try {
     const mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN");
     if (!mpAccessToken) {
-      throw new Error("MERCADOPAGO_ACCESS_TOKEN não configurada.");
+      console.error("MERCADOPAGO_ACCESS_TOKEN não configurada.");
+      return new Response(JSON.stringify({ error: "Configuração do gateway ausente." }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const webhookSecret = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
+    if (webhookSecret) {
+      const isValid = await verifyMercadoPagoSignature(req, webhookSecret);
+      if (!isValid) {
+        console.warn("Assinatura x-signature do Webhook Mercado Pago inválida ou forjada.");
+        return new Response(JSON.stringify({ error: "Assinatura do webhook inválida." }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -46,7 +113,7 @@ serve(async (req) => {
       });
     }
 
-    // Consultar dados do pagamento no Mercado Pago
+    // Consultar dados do pagamento de forma autenticada no Mercado Pago
     const mpPaymentRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: {
         Authorization: `Bearer ${mpAccessToken}`,
@@ -79,7 +146,6 @@ serve(async (req) => {
     let orderData = null;
 
     if (externalRef) {
-      // Buscar pedido por ID direto ou por stripe_session_id / external_reference
       const { data: order, error: orderErr } = await supabase
         .from("app_event_orders")
         .select("*")
@@ -146,7 +212,7 @@ serve(async (req) => {
           } else {
             console.log(`${createdTickets?.length || 0} ingressos gerados com sucesso para o pedido ${orderData.id}`);
 
-            // Disparar Webhook para n8n (WhatsApp / E-mail)
+            // Disparar Webhook para n8n (WhatsApp / E-mail) se configurado
             const n8nWebhookUrl = Deno.env.get("N8N_PURCHASE_WEBHOOK_URL");
             if (n8nWebhookUrl) {
               try {
@@ -187,7 +253,7 @@ serve(async (req) => {
   } catch (err: any) {
     console.error("Erro no Webhook Mercado Pago:", err);
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 200, // Retornar 200 para o Mercado Pago não retentar indefinidamente em erro de parse
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

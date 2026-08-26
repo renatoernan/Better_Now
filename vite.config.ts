@@ -30,10 +30,12 @@ export default defineConfig(({ mode }) => {
               req.on('end', async () => {
                 try {
                   const parsed = JSON.parse(body || '{}');
-                  const accessToken =
-                    env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-                    env.MERCADOPAGO_ACCESS_TOKEN ||
-                    'APP_USR-1264360358076296-081717-ffb3d55789b1665111c7d2c6e33a856f-68352240';
+                  const accessToken = env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
+                  if (!accessToken) {
+                    res.statusCode = 500;
+                    res.end(JSON.stringify({ error: 'MERCADOPAGO_ACCESS_TOKEN não configurada no ambiente.' }));
+                    return;
+                  }
 
                   const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
                     method: 'POST',
