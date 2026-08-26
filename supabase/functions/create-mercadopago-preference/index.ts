@@ -47,22 +47,14 @@ serve(async (req) => {
     }
 
     // Buscar dados do evento no banco
-    let { data: event, error: eventError } = await supabase
+    const { data: event, error: eventError } = await supabase
       .from("app_events")
-      .select("id, title, price_batches, image_url")
+      .select("*")
       .eq("id", event_id)
-      .single();
+      .maybeSingle();
 
     if (eventError || !event) {
-      const fallback = await supabase
-        .from("events")
-        .select("id, title, price_batches, image_url")
-        .eq("id", event_id)
-        .single();
-      event = fallback.data;
-    }
-
-    if (!event) {
+      console.error("Erro ao buscar evento:", eventError);
       return new Response(
         JSON.stringify({ error: "Evento não encontrado." }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -70,14 +62,31 @@ serve(async (req) => {
     }
 
     // Determinar o preço do lote selecionado
+    let batches: any[] = [];
+    let imageUrl = "";
+    if (event.observations) {
+      try {
+        const parsed = typeof event.observations === "string" ? JSON.parse(event.observations) : event.observations;
+        if (Array.isArray(parsed?.price_batches)) {
+          batches = parsed.price_batches;
+        }
+        if (parsed?.image_url) {
+          imageUrl = parsed.image_url;
+        }
+      } catch {}
+    }
+    if (batches.length === 0 && Array.isArray((event as any).price_batches)) {
+      batches = (event as any).price_batches;
+    }
+
     let unitPrice = 0;
     let batchName = "Lote Geral";
 
-    if (event.price_batches && Array.isArray(event.price_batches) && event.price_batches.length > 0) {
+    if (batches.length > 0) {
       const idx = batch_index !== undefined ? Number(batch_index) : 0;
-      const batch = event.price_batches[idx] || event.price_batches[0];
-      unitPrice = Number(batch.price) || 0;
-      batchName = batch.name || `Lote ${idx + 1}`;
+      const batch = batches[idx] || batches[0];
+      unitPrice = Number(batch?.price) || 0;
+      batchName = batch?.name || `Lote ${idx + 1}`;
     }
 
     const subtotal = unitPrice * quantity;

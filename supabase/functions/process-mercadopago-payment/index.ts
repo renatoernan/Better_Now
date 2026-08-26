@@ -72,42 +72,39 @@ serve(async (req: Request) => {
       );
     }
 
-    // 2. Buscar dados oficiais do evento e lote no banco de dados (ZERO-TRUST CLIENT)
-    let { data: event, error: eventError } = await supabase
+    // 2. Buscar dados oficiais do evento no banco de dados (ZERO-TRUST CLIENT)
+    const { data: event, error: eventError } = await supabase
       .from("app_events")
-      .select("id, title, price_batches, observations")
+      .select("*")
       .eq("id", event_id)
-      .single();
+      .maybeSingle();
 
     if (eventError || !event) {
-      const fallback = await supabase
-        .from("events")
-        .select("id, title, price_batches, observations")
-        .eq("id", event_id)
-        .single();
-      event = fallback.data;
-    }
-
-    if (!event) {
+      console.error("Erro ao buscar evento no banco:", eventError);
       return new Response(
         JSON.stringify({ error: "Evento não encontrado ou indisponível." }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Identificar lote oficial e preço real no banco
-    let batches: any[] = Array.isArray(event.price_batches) ? event.price_batches : [];
-    if (batches.length === 0 && event.observations) {
+    // Identificar lote oficial e preço real a partir de observations (ou price_batches se existir)
+    let batches: any[] = [];
+    if (event.observations) {
       try {
-        const parsed = JSON.parse(event.observations);
-        if (Array.isArray(parsed.price_batches)) batches = parsed.price_batches;
+        const parsed = typeof event.observations === "string" ? JSON.parse(event.observations) : event.observations;
+        if (Array.isArray(parsed?.price_batches)) {
+          batches = parsed.price_batches;
+        }
       } catch {
         // Ignora erro de parse
       }
     }
+    if (batches.length === 0 && Array.isArray((event as any).price_batches)) {
+      batches = (event as any).price_batches;
+    }
 
     const bIndex = Number(batch_index) || 0;
-    const targetBatch = batches[bIndex] || batches[0];
+    const targetBatch = batches[bIndex] || batches[0] || {};
     const unitPrice = Number(targetBatch?.price) || 0;
     const batchName = targetBatch?.name || `Lote ${bIndex + 1}`;
 
@@ -143,39 +140,45 @@ serve(async (req: Request) => {
 
     const rawSubtotal = unitPrice * Number(quantity);
 
-    // 4. Validação Segura do Cupom de Desconto (no servidor)
+    // 4. Validação Segura do Cupom de Desconto em app_event_coupons
     let validatedDiscount = 0;
     let validCouponId = coupon_id || null;
+    let appliedCouponCode = coupon_code || null;
 
     if (coupon_code || coupon_id) {
-      let query = supabase.from("app_coupons").select("*").eq("is_active", true);
-      if (coupon_id) {
-        query = query.eq("id", coupon_id);
-      } else if (coupon_code) {
-        query = query.ilike("code", coupon_code.trim());
-      }
+      try {
+        let query = supabase.from("app_event_coupons").select("*").eq("is_active", true);
+        if (coupon_id) {
+          query = query.eq("id", coupon_id);
+        } else if (coupon_code) {
+          query = query.ilike("code", String(coupon_code).trim());
+        }
 
-      const { data: couponData } = await query.maybeSingle();
+        const { data: couponData } = await query.maybeSingle();
 
-      if (couponData) {
-        const now = new Date();
-        const isValidDate =
-          (!couponData.valid_from || new Date(couponData.valid_from) <= now) &&
-          (!couponData.valid_until || new Date(couponData.valid_until) >= now);
-        const isValidEvent = !couponData.event_id || couponData.event_id === event_id;
-        const hasUsesLeft =
-          couponData.max_uses === null ||
-          couponData.max_uses === undefined ||
-          couponData.current_uses < couponData.max_uses;
+        if (couponData) {
+          const now = new Date();
+          const isValidDate =
+            (!couponData.valid_from || new Date(couponData.valid_from) <= now) &&
+            (!couponData.valid_until || new Date(couponData.valid_until) >= now);
+          const isValidEvent = !couponData.event_id || couponData.event_id === event_id;
+          const hasUsesLeft =
+            couponData.max_uses === null ||
+            couponData.max_uses === undefined ||
+            Number(couponData.current_uses || 0) < Number(couponData.max_uses);
 
-        if (isValidDate && isValidEvent && hasUsesLeft) {
-          validCouponId = couponData.id;
-          if (couponData.discount_type === "percentage") {
-            validatedDiscount = (rawSubtotal * Number(couponData.discount_value)) / 100;
-          } else {
-            validatedDiscount = Math.min(rawSubtotal, Number(couponData.discount_value));
+          if (isValidDate && isValidEvent && hasUsesLeft) {
+            validCouponId = couponData.id;
+            appliedCouponCode = couponData.code;
+            if (couponData.discount_type === "percentage") {
+              validatedDiscount = (rawSubtotal * Number(couponData.discount_value)) / 100;
+            } else {
+              validatedDiscount = Math.min(rawSubtotal, Number(couponData.discount_value));
+            }
           }
         }
+      } catch (couponErr) {
+        console.warn("Aviso ao validar cupom de desconto:", couponErr);
       }
     }
 
@@ -212,7 +215,7 @@ serve(async (req: Request) => {
           convenience_fee: feeAmount,
           convenience_fee_percentage: feeRate,
           coupon_id: validCouponId,
-          coupon_code: coupon_code || null,
+          coupon_code: appliedCouponCode,
           discount_amount: validatedDiscount,
           cancellation_reason: attendees ? JSON.stringify(attendees) : null,
           ip_address: ip_address || null,
@@ -246,7 +249,7 @@ serve(async (req: Request) => {
           convenience_fee: feeAmount,
           convenience_fee_percentage: feeRate,
           coupon_id: validCouponId,
-          coupon_code: coupon_code || null,
+          coupon_code: appliedCouponCode,
           discount_amount: validatedDiscount,
           cancellation_reason: attendees ? JSON.stringify(attendees) : null,
           created_at: new Date().toISOString(),
@@ -272,7 +275,7 @@ serve(async (req: Request) => {
 
     let mpPayload: any = {
       transaction_amount: totalAmount,
-      description: `Ingresso - ${event.title} (${batchName}) [${quantity}x]`,
+      description: `Ingresso - ${event.title || "Evento"} (${batchName}) [${quantity}x]`,
       payer: {
         email: payerEmail,
         first_name: firstName,
@@ -366,12 +369,23 @@ serve(async (req: Request) => {
 
     // 9. Processamento de Sucesso / Aprovação Imediata
     if (paymentStatus === "approved") {
-      // Incrementar uso de cupom se aplicável
+      // Incrementar uso do cupom se aplicável
       if (validCouponId) {
         try {
-          await supabase.rpc("increment_coupon_usage", { coupon_id: validCouponId });
+          const { data: cpn } = await supabase
+            .from("app_event_coupons")
+            .select("current_uses")
+            .eq("id", validCouponId)
+            .single();
+
+          if (cpn) {
+            await supabase
+              .from("app_event_coupons")
+              .update({ current_uses: (Number(cpn.current_uses) || 0) + 1 })
+              .eq("id", validCouponId);
+          }
         } catch {
-          // Ignora se a RPC não existir
+          // Silencioso
         }
       }
 
