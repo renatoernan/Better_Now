@@ -31,6 +31,7 @@ import {
   checkMercadoPagoPaymentStatus,
   PixPaymentResponse,
 } from '../../shared/services/mercadoPagoService';
+import { sendOrderNotifications } from '../../shared/services/orderNotificationService';
 
 interface StripeCheckoutModalProps {
   isOpen: boolean;
@@ -167,6 +168,15 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
         if (res.paid && !paymentConfirmedRef.current) {
           paymentConfirmedRef.current = true;
           if (pollInterval) clearInterval(pollInterval);
+
+          // Disparar notificações de confirmação (WhatsApp + E-mail)
+          sendOrderNotifications({
+            type: 'confirmed',
+            orderId: pixData.orderId,
+          }).catch((notifErr) => {
+            console.warn('Aviso no envio de notificações do Pix:', notifErr);
+          });
+
           if (onPaymentSuccess) {
             onPaymentSuccess(pixData.orderId);
           }
@@ -211,6 +221,16 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
       if (res.success && res.qrCode) {
         setPixData(res);
         setPixTimer(900);
+
+        if (res.orderId) {
+          // Disparar notificação de pedido gerado (Aguardando Pagamento)
+          sendOrderNotifications({
+            type: 'created',
+            orderId: res.orderId,
+          }).catch((notifErr) => {
+            console.warn('Aviso no envio de notificação de pedido criado:', notifErr);
+          });
+        }
       } else {
         setPixError(res.error || 'Não foi possível gerar a chave Pix. Tente novamente.');
       }

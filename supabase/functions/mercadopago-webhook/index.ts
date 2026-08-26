@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendOrderNotificationsFromBackend } from "../_shared/orderNotifier.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -212,36 +213,26 @@ serve(async (req: Request) => {
           } else {
             console.log(`${createdTickets?.length || 0} ingressos gerados com sucesso para o pedido ${orderData.id}`);
 
-            // Disparar Webhook para n8n (WhatsApp / E-mail) se configurado
-            const n8nWebhookUrl = Deno.env.get("N8N_PURCHASE_WEBHOOK_URL");
-            if (n8nWebhookUrl) {
-              try {
-                await fetch(n8nWebhookUrl, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    event: "ticket_purchased",
-                    payment_gateway: "mercadopago",
-                    order: orderData,
-                    tickets: createdTickets,
-                    payment_info: {
-                      payment_id: paymentId,
-                      payment_type: payment.payment_type_id,
-                      payment_method: payment.payment_method_id,
-                      installments: payment.installments,
-                    },
-                    client: {
-                      name: orderData.client_name,
-                      email: orderData.client_email,
-                      phone: orderData.client_phone,
-                    },
-                  }),
-                });
-              } catch (n8nErr) {
-                console.error("Erro ao disparar webhook para n8n:", n8nErr);
-              }
-            }
+            // Disparar notificações automáticas e independentes (E-mail SMTP + WhatsApp WAHA)
+            sendOrderNotificationsFromBackend({
+              supabase,
+              orderId: orderData.id,
+              orderData,
+              type: "confirmed",
+            }).catch((notifErr) => {
+              console.warn("Aviso no disparo assíncrono de notificações:", notifErr);
+            });
           }
+        } else {
+          // Se já existiam ingressos gerados mas a notificação precisa ser garantida
+          sendOrderNotificationsFromBackend({
+            supabase,
+            orderId: orderData.id,
+            orderData,
+            type: "confirmed",
+          }).catch((notifErr) => {
+            console.warn("Aviso no disparo assíncrono de notificações:", notifErr);
+          });
         }
       }
     }

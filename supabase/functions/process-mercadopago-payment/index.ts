@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendOrderNotificationsFromBackend } from "../_shared/orderNotifier.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -151,6 +152,16 @@ serve(async (req: Request) => {
 
           await supabase.from("app_event_tickets").insert(ticketsToInsert);
         }
+
+        // Disparar notificações de confirmação de pagamento de forma independente (E-mail + WhatsApp)
+        sendOrderNotificationsFromBackend({
+          supabase,
+          orderId,
+          orderData: { ...order, status: "paid" },
+          type: "confirmed",
+        }).catch((notifErr) => {
+          console.warn("Aviso no envio de notificações em check_status:", notifErr);
+        });
 
         return new Response(
           JSON.stringify({ paid: true, status: "approved", paymentId: mpPaymentId }),
@@ -521,6 +532,16 @@ serve(async (req: Request) => {
         }
       }
 
+      // Disparar notificações de confirmação de pagamento de forma independente (E-mail + WhatsApp)
+      sendOrderNotificationsFromBackend({
+        supabase,
+        orderId: orderId || orderRecord?.id,
+        orderData: { ...orderRecord, status: "paid" },
+        type: "confirmed",
+      }).catch((notifErr) => {
+        console.warn("Aviso no envio de notificações de aprovação de cartão:", notifErr);
+      });
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -543,6 +564,16 @@ serve(async (req: Request) => {
       const qrCodeBase64 = transactionData?.qr_code_base64;
       const ticketUrl = transactionData?.ticket_url;
       const expirationDate = mpData.date_of_expiration;
+
+      // Disparar notificação de pedido criado (Aguardando pagamento Pix)
+      sendOrderNotificationsFromBackend({
+        supabase,
+        orderId: orderId || orderRecord?.id,
+        orderData: { ...orderRecord, payment_url: ticketUrl },
+        type: "created",
+      }).catch((notifErr) => {
+        console.warn("Aviso no envio de notificações de criação de Pix:", notifErr);
+      });
 
       return new Response(
         JSON.stringify({

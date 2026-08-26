@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import Stripe from "https://esm.sh/stripe@16.0.0?target=deno";
+import { sendOrderNotificationsFromBackend } from "../_shared/orderNotifier.ts";
 
 serve(async (req) => {
   if (req.method !== "POST") {
@@ -130,28 +131,15 @@ serve(async (req) => {
           } else {
             console.log(`${createdTickets?.length || 0} ingressos gerados com sucesso.`);
 
-            // 3. Notificar n8n (opcional) para confirmação de compra por WhatsApp/Email
-            const n8nWebhookUrl = Deno.env.get("N8N_PURCHASE_WEBHOOK_URL");
-            if (n8nWebhookUrl) {
-              try {
-                await fetch(n8nWebhookUrl, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    event: "ticket_purchased",
-                    order: orderData,
-                    tickets: createdTickets,
-                    client: {
-                      name: orderData.client_name,
-                      email: orderData.client_email,
-                      phone: orderData.client_phone,
-                    },
-                  }),
-                });
-              } catch (n8nErr) {
-                console.error("Erro ao disparar webhook para n8n:", n8nErr);
-              }
-            }
+            // 3. Disparar notificações automáticas e independentes (E-mail SMTP + WhatsApp WAHA)
+            sendOrderNotificationsFromBackend({
+              supabase,
+              orderId: orderData.id,
+              orderData,
+              type: "confirmed",
+            }).catch((notifErr) => {
+              console.warn("Aviso no disparo de notificações Stripe:", notifErr);
+            });
           }
         }
         break;

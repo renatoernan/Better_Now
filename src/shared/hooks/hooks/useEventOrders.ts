@@ -212,6 +212,12 @@ export const useEventOrders = (eventId?: string) => {
       const result = await checkMercadoPagoPaymentStatus(orderId);
 
       if (result.paid) {
+        // Disparar notificações de confirmação (WhatsApp + E-mail)
+        sendOrderNotifications({
+          type: 'confirmed',
+          orderId: orderId,
+        }).catch(() => {});
+
         toast.success('Pagamento identificado e confirmado no Mercado Pago! 🎉');
         await fetchOrders();
         return true;
@@ -245,6 +251,10 @@ export const useEventOrders = (eventId?: string) => {
           const res = await checkMercadoPagoPaymentStatus(ord.id);
           if (res.paid) {
             updatedCount += 1;
+            sendOrderNotifications({
+              type: 'confirmed',
+              orderId: ord.id,
+            }).catch(() => {});
           }
         } catch {
           // Continua para o próximo
