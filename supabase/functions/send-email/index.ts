@@ -107,15 +107,23 @@ serve(async (req) => {
       }
     }
 
+    const replyToAddress = from_address || smtp_user;
+
     const info = await transporter.sendMail({
       from: sender,
       to: to,
+      replyTo: replyToAddress,
       subject: emailSubject,
       text: emailText,
       html: emailHtml,
+      headers: {
+        'X-Mailer': 'Better Now Event Platform',
+        'X-Priority': '1',
+        'Importance': 'high',
+      },
     });
 
-    console.log("E-mail enviado com sucesso:", info.messageId);
+    console.log("E-mail enviado com sucesso:", info.messageId, "Response:", info.response);
 
     return new Response(
       JSON.stringify({

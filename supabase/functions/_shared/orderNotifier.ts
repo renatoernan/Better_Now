@@ -386,9 +386,15 @@ export async function sendOrderNotificationsFromBackend(params: OrderNotifierPar
       const info = await transporter.sendMail({
         from: sender,
         to: recipientEmail,
+        replyTo: fromAddress,
         subject: finalSubject,
         text: finalBody,
         html: emailHtml,
+        headers: {
+          'X-Mailer': 'Better Now Event Platform',
+          'X-Priority': '1',
+          'Importance': 'high',
+        },
       });
 
       console.log(`[Notifier Backend] E-mail enviado para ${recipientEmail} (MsgId: ${info.messageId})`);
