@@ -186,6 +186,15 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
               </div>
             </div>
 
+            {/* Detalhamento de Taxas / Valor Líquido quando houver taxa no pedido */}
+            {Number(order.convenience_fee || 0) > 0 && (
+              <div className="pt-2.5 border-t border-indigo-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-700 bg-white/70 p-2.5 rounded-xl border border-indigo-100/60">
+                <span>Subtotal Ingressos: <strong className="text-gray-900">{formatPrice(Number(order.amount_total || 0) - Number(order.convenience_fee || 0))}</strong></span>
+                <span className="text-amber-700 font-semibold">+ Taxa de Serviço: <strong>{formatPrice(order.convenience_fee || 0)}</strong> {order.convenience_fee_percentage ? `(${order.convenience_fee_percentage}%)` : ''}</span>
+                <span className="text-indigo-900 font-bold">Líquido do Evento: <strong>{formatPrice(Number(order.amount_total || 0) - Number(order.convenience_fee || 0))}</strong></span>
+              </div>
+            )}
+
             {/* Informações de Reembolso se houver */}
             {(order.status === 'refunded' || order.refunded_at || order.refund_amount) && (
               <div className="p-3.5 bg-purple-50 border border-purple-200 rounded-2xl text-xs text-purple-900 space-y-1.5 shadow-2xs">

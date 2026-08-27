@@ -62,6 +62,8 @@ export interface EventTicketRecord {
 
 export interface EventOrderKPIs {
   totalRevenue: number;
+  totalFees: number;
+  netRevenue: number;
   totalOrders: number;
   paidOrders: number;
   pendingOrders: number;
@@ -104,6 +106,8 @@ export const useEventOrders = (eventId?: string) => {
   const [syncing, setSyncing] = useState<boolean>(false);
   const [kpis, setKpis] = useState<EventOrderKPIs>({
     totalRevenue: 0,
+    totalFees: 0,
+    netRevenue: 0,
     totalOrders: 0,
     paidOrders: 0,
     pendingOrders: 0,
@@ -168,6 +172,7 @@ export const useEventOrders = (eventId?: string) => {
 
       // Calcular KPIs
       let revenue = 0;
+      let fees = 0;
       let paidCount = 0;
       let pendingCount = 0;
       let cancelledCount = 0;
@@ -183,7 +188,10 @@ export const useEventOrders = (eventId?: string) => {
         }
 
         if (o.status === 'paid' || (o.status as string) === 'approved') {
-          revenue += Number(o.amount_total || 0);
+          const orderTotal = Number(o.amount_total || 0);
+          const orderFee = Number(o.convenience_fee || 0);
+          revenue += orderTotal;
+          fees += orderFee;
           paidCount += 1;
           ticketsSold += Number(o.quantity || 1);
         } else if (o.status === 'pending' || o.status === 'pending_proof') {
@@ -193,8 +201,12 @@ export const useEventOrders = (eventId?: string) => {
         }
       });
 
+      const netRevenue = Math.max(0, revenue - fees);
+
       setKpis({
         totalRevenue: revenue,
+        totalFees: fees,
+        netRevenue: netRevenue,
         totalOrders: combinedOrders.length,
         paidOrders: paidCount,
         pendingOrders: pendingCount,

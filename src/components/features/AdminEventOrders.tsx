@@ -3,7 +3,8 @@ import {
   ArrowLeft, Search, Filter, Download, Ticket, DollarSign, Clock, 
   CheckCircle2, XCircle, Eye, FileText, Globe, RefreshCw, User, Phone, 
   Calendar, Layers, CreditCard, ChevronRight, AlertCircle, Ban, Trash2, 
-  RotateCcw, Zap, MessageSquare, Gift, Users, ArrowRightLeft, QrCode, ShoppingBag
+  RotateCcw, Zap, MessageSquare, Gift, Users, ArrowRightLeft, QrCode, ShoppingBag,
+  Receipt, Wallet, Percent
 } from 'lucide-react';
 import { Event } from '../../shared/types/types/event';
 import { useEventOrders, EventOrderRecord, EventTicketRecord } from '../../shared/hooks/hooks/useEventOrders';
@@ -506,67 +507,91 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         </div>
       </div>
 
-      {/* Cards de KPIs no Topo (5 Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Receita Total */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <DollarSign className="w-6 h-6" />
+      {/* Cards de KPIs no Topo (7 Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3.5">
+        {/* Receita Bruta */}
+        <div className="bg-white p-4.5 rounded-2xl shadow-xs border border-gray-100 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <DollarSign className="w-5 h-5" />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500">Receita Confirmada</p>
-            <h3 className="text-xl font-black text-gray-900">{formatPrice(kpis.totalRevenue)}</h3>
-            <p className="text-[11px] text-emerald-600 font-semibold">{kpis.paidOrders} pedidos pagos</p>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-gray-500 truncate">Receita Bruta</p>
+            <h3 className="text-lg font-black text-gray-900 truncate">{formatPrice(kpis.totalRevenue)}</h3>
+            <p className="text-[11px] text-emerald-600 font-semibold truncate">{kpis.paidOrders} pedidos pagos</p>
+          </div>
+        </div>
+
+        {/* Taxas Cobradas */}
+        <div className="bg-white p-4.5 rounded-2xl shadow-xs border border-gray-100 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Receipt className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-gray-500 truncate">Taxas Cobradas</p>
+            <h3 className="text-lg font-black text-amber-700 truncate">{formatPrice(kpis.totalFees)}</h3>
+            <p className="text-[11px] text-amber-600 font-medium truncate">Taxas de serviço</p>
+          </div>
+        </div>
+
+        {/* Receita Líquida */}
+        <div className="bg-white p-4.5 rounded-2xl shadow-xs border border-indigo-100/70 bg-gradient-to-br from-white to-indigo-50/30 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 shadow-2xs">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-indigo-900 truncate">Receita Líquida</p>
+            <h3 className="text-lg font-black text-indigo-950 truncate">{formatPrice(kpis.netRevenue)}</h3>
+            <p className="text-[11px] text-indigo-600 font-semibold truncate">Bruto menos taxas</p>
           </div>
         </div>
 
         {/* Ingressos Vendidos */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <Ticket className="w-6 h-6" />
+        <div className="bg-white p-4.5 rounded-2xl shadow-xs border border-gray-100 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <Ticket className="w-5 h-5" />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500">Ingressos Vendidos</p>
-            <h3 className="text-xl font-black text-gray-900">{kpis.totalTicketsSold}</h3>
-            <p className="text-[11px] text-gray-500">
-              {event.max_guests ? `de ${event.max_guests} disponíveis` : 'Lotação livre'}
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-gray-500 truncate">Ingressos Vendidos</p>
+            <h3 className="text-lg font-black text-gray-900 truncate">{kpis.totalTicketsSold}</h3>
+            <p className="text-[11px] text-gray-500 truncate">
+              {event.max_guests ? `de ${event.max_guests} disp.` : 'Lotação livre'}
             </p>
           </div>
         </div>
 
         {/* Pedidos Pendentes */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <Clock className="w-6 h-6" />
+        <div className="bg-white p-4.5 rounded-2xl shadow-xs border border-gray-100 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Clock className="w-5 h-5" />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500">Aguardando Pagamento</p>
-            <h3 className="text-xl font-black text-amber-600">{kpis.pendingOrders}</h3>
-            <p className="text-[11px] text-amber-700">Pix Chave / Mercado Pago</p>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-gray-500 truncate">Aguardando Pagto</p>
+            <h3 className="text-lg font-black text-amber-600 truncate">{kpis.pendingOrders}</h3>
+            <p className="text-[11px] text-amber-700 truncate">Pix / Mercado Pago</p>
           </div>
         </div>
 
         {/* Pedidos Cancelados */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-            <XCircle className="w-6 h-6" />
+        <div className="bg-white p-4.5 rounded-2xl shadow-xs border border-gray-100 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+            <XCircle className="w-5 h-5" />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500">Cancelados / Recusados</p>
-            <h3 className="text-xl font-black text-gray-900">{kpis.cancelledOrders}</h3>
-            <p className="text-[11px] text-gray-400">Total: {kpis.totalOrders} pedidos</p>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-gray-500 truncate">Cancelados / Recusados</p>
+            <h3 className="text-lg font-black text-gray-900 truncate">{kpis.cancelledOrders}</h3>
+            <p className="text-[11px] text-gray-400 truncate">Total: {kpis.totalOrders} pedidos</p>
           </div>
         </div>
 
         {/* Card KPI de Reembolsos */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-            <RotateCcw className="w-6 h-6" />
+        <div className="bg-white p-4.5 rounded-2xl shadow-xs border border-gray-100 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+            <RotateCcw className="w-5 h-5" />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500">Reembolsos / Devoluções</p>
-            <h3 className="text-xl font-black text-purple-900">{formatPrice(kpis.totalRefundAmount)}</h3>
-            <p className="text-[11px] text-purple-700 font-semibold">{kpis.refundedOrders} pedido(s) devolvido(s)</p>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-gray-500 truncate">Reembolsos</p>
+            <h3 className="text-lg font-black text-purple-900 truncate">{formatPrice(kpis.totalRefundAmount)}</h3>
+            <p className="text-[11px] text-purple-700 font-semibold truncate">{kpis.refundedOrders} pedido(s)</p>
           </div>
         </div>
       </div>

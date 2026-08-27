@@ -48,6 +48,17 @@ interface TicketWithOrder {
   status: 'valid' | 'used' | 'cancelled';
   used_at?: string;
   created_at: string;
+  person?: {
+    id?: string;
+    nome: string;
+    documento?: string;
+    whatsapp?: string;
+    email?: string;
+  };
+  holder_name?: string;
+  holder_document?: string;
+  holder_phone?: string;
+  holder_email?: string;
   order?: {
     id: string;
     client_name?: string;
@@ -58,6 +69,7 @@ interface TicketWithOrder {
     amount_total?: number;
     quantity?: number;
     status?: string;
+    cancellation_reason?: string;
   };
 }
 
@@ -206,23 +218,26 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
     if (!eventId) return;
     setLoading(true);
     try {
-      // 1. Buscar ingressos do evento
+      // 1. Buscar ingressos do evento trazendo dados da pessoa associada
       const { data: ticketsData, error: ticketsErr } = await supabase
         .from('app_event_tickets')
-        .select('*')
+        .select(`
+          *,
+          person:app_people(id, nome, documento, whatsapp, email)
+        `)
         .eq('event_id', eventId)
         .order('created_at', { ascending: false });
 
       if (ticketsErr) throw ticketsErr;
 
-      // 2. Buscar ordens relacionadas para enriquecer com dados do comprador
+      // 2. Buscar ordens relacionadas para enriquecer com dados do comprador e participantes nominais
       const orderIds = Array.from(new Set((ticketsData || []).map(t => t.order_id).filter(Boolean)));
       let ordersMap: Record<string, any> = {};
 
       if (orderIds.length > 0) {
         const { data: ordersData } = await supabase
           .from('app_event_orders')
-          .select('id, client_name, client_document, client_phone, client_email, batch_name, amount_total, quantity, status')
+          .select('id, client_name, client_document, client_phone, client_email, batch_name, amount_total, quantity, status, cancellation_reason')
           .in('id', orderIds);
 
         (ordersData || []).forEach(o => {
@@ -230,11 +245,44 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
         });
       }
 
-      // 3. Montar lista de ingressos enriquecidos
-      const enriched: TicketWithOrder[] = (ticketsData || []).map(t => ({
-        ...t,
-        order: ordersMap[t.order_id] || undefined
-      }));
+      // 3. Desduplicar tickets por (order_id, ticket_number) caso existam duplicatas no banco
+      const seenTicketKeys = new Set<string>();
+      const deduplicatedTickets = (ticketsData || []).filter(t => {
+        const key = `${t.order_id}-${t.ticket_number}`;
+        if (seenTicketKeys.has(key)) return false;
+        seenTicketKeys.add(key);
+        return true;
+      });
+
+      // 4. Montar lista de ingressos enriquecidos priorizando o titular nominal
+      const enriched: TicketWithOrder[] = deduplicatedTickets.map(t => {
+        const order = ordersMap[t.order_id];
+        const ticketIdx = Math.max(0, (Number(t.ticket_number) || 1) - 1);
+
+        let attendeeData: any = null;
+        if (order?.cancellation_reason && order.cancellation_reason.trim().startsWith('[')) {
+          try {
+            const parsed = JSON.parse(order.cancellation_reason);
+            if (Array.isArray(parsed) && parsed[ticketIdx]) {
+              attendeeData = parsed[ticketIdx];
+            }
+          } catch {}
+        }
+
+        const holderName = t.person?.nome || attendeeData?.nome || (ticketIdx === 0 ? order?.client_name : null) || order?.client_name || `Participante ${ticketIdx + 1}`;
+        const holderDoc = t.person?.documento || attendeeData?.documento || attendeeData?.cpf || (ticketIdx === 0 ? order?.client_document : null) || order?.client_document;
+        const holderPhone = t.person?.whatsapp || attendeeData?.whatsapp || attendeeData?.telefone || (ticketIdx === 0 ? order?.client_phone : null) || order?.client_phone;
+        const holderEmail = t.person?.email || attendeeData?.email || (ticketIdx === 0 ? order?.client_email : null) || order?.client_email;
+
+        return {
+          ...t,
+          holder_name: holderName,
+          holder_document: holderDoc,
+          holder_phone: holderPhone,
+          holder_email: holderEmail,
+          order: order || undefined
+        };
+      });
 
       setTickets(enriched);
     } catch (err) {
@@ -495,9 +543,16 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
   const nameFilteredTickets = tickets.filter(t => {
     const term = nameQuery.toLowerCase().trim();
     if (!term) return false;
+    const holderName = (t.holder_name || t.person?.nome || t.order?.client_name || '').toLowerCase();
+    const holderDoc = (t.holder_document || t.person?.documento || t.order?.client_document || '').toLowerCase();
     const buyerName = (t.order?.client_name || '').toLowerCase();
     const buyerDoc = (t.order?.client_document || '').toLowerCase();
-    return buyerName.includes(term) || buyerDoc.includes(term);
+    return (
+      holderName.includes(term) ||
+      holderDoc.includes(term) ||
+      buyerName.includes(term) ||
+      buyerDoc.includes(term)
+    );
   });
 
   // Lista geral de ingressos filtrada
@@ -505,6 +560,9 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
     const term = listSearchQuery.toLowerCase().trim();
     if (!term) return true;
 
+    const holderName = (t.holder_name || t.person?.nome || t.order?.client_name || '').toLowerCase();
+    const holderDoc = (t.holder_document || t.person?.documento || t.order?.client_document || '').toLowerCase();
+    const holderPhone = (t.holder_phone || t.person?.whatsapp || t.order?.client_phone || '').toLowerCase();
     const buyerName = (t.order?.client_name || '').toLowerCase();
     const buyerPhone = (t.order?.client_phone || '').toLowerCase();
     const buyerDoc = (t.order?.client_document || '').toLowerCase();
@@ -513,6 +571,9 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
     const batch = (t.order?.batch_name || '').toLowerCase();
 
     return (
+      holderName.includes(term) ||
+      holderDoc.includes(term) ||
+      holderPhone.includes(term) ||
       buyerName.includes(term) ||
       buyerPhone.includes(term) ||
       buyerDoc.includes(term) ||
@@ -925,7 +986,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                 <div>
                   <h3 className="text-sm sm:text-base font-bold text-gray-900">Buscar por Nome do Titular</h3>
                   <p className="text-xs text-gray-500">
-                    Digite o nome do comprador para localizar o ingresso
+                    Digite o nome do titular ou comprador para localizar o ingresso
                   </p>
                 </div>
               </div>
@@ -937,7 +998,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                 <input
                   ref={nameInputRef}
                   type="text"
-                  placeholder="Digite o nome do comprador (ex: Renato, Maria...)"
+                  placeholder="Digite o nome do titular do ingresso ou comprador..."
                   value={nameQuery}
                   onChange={(e) => setNameQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs sm:text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-purple-500 shadow-2xs"
@@ -953,6 +1014,9 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
 
                   {nameFilteredTickets.map((t) => {
                     const isChecked = t.status === 'used' || Boolean(t.used_at);
+                    const holder = t.holder_name || t.person?.nome || t.order?.client_name || 'Nome não informado';
+                    const isDifferentFromBuyer = t.order?.client_name && t.order.client_name.trim().toLowerCase() !== holder.trim().toLowerCase();
+
                     return (
                       <div
                         key={t.id}
@@ -961,12 +1025,18 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                       >
                         <div className="space-y-0.5 min-w-0 flex-1 pr-2">
                           <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">
-                            {t.order?.client_name || 'Nome não informado'}
+                            {holder}
                           </p>
                           <div className="flex items-center gap-1.5 text-[11px] text-gray-500 truncate">
-                            <span>Ingresso #{t.ticket_number}</span>
+                            <span className="font-semibold text-purple-950">Ingresso #{t.ticket_number}</span>
                             <span>•</span>
                             <span>{t.order?.batch_name || 'Lote Padrão'}</span>
+                            {isDifferentFromBuyer && (
+                              <>
+                                <span>•</span>
+                                <span className="text-gray-400">Comprador: {t.order?.client_name}</span>
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -1087,27 +1157,32 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                   </span>
 
                   <div className="space-y-2">
-                    {/* Nome Completo */}
+                    {/* Nome do Titular Nominal */}
                     <div className="bg-white p-3 rounded-xl border border-gray-200/70 shadow-2xs">
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">NOME COMPLETO</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">NOME DO TITULAR (INGRESSO)</p>
                       <p className="text-sm sm:text-base font-extrabold text-gray-900 mt-0.5 truncate">
-                        {selectedTicket.order?.client_name || 'Nome não informado'}
+                        {selectedTicket.holder_name || selectedTicket.person?.nome || selectedTicket.order?.client_name || 'Nome não informado'}
                       </p>
+                      {selectedTicket.order?.client_name && selectedTicket.order.client_name.trim().toLowerCase() !== (selectedTicket.holder_name || selectedTicket.person?.nome || '').trim().toLowerCase() && (
+                        <p className="text-[11px] text-purple-700 font-semibold mt-1">
+                          Comprador do Pedido: {selectedTicket.order.client_name}
+                        </p>
+                      )}
                     </div>
 
                     {/* Grid CPF e Telefone Mascarados */}
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-white p-2.5 rounded-xl border border-gray-200/70 shadow-2xs">
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">CPF (MASCARADO)</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">CPF DO TITULAR</p>
                         <p className="text-xs sm:text-sm font-mono font-bold text-gray-800 mt-0.5 truncate">
-                          {maskCpf(selectedTicket.order?.client_document)}
+                          {maskCpf(selectedTicket.holder_document || selectedTicket.person?.documento || selectedTicket.order?.client_document)}
                         </p>
                       </div>
 
                       <div className="bg-white p-2.5 rounded-xl border border-gray-200/70 shadow-2xs">
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">TELEFONE (MASCARADO)</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">TELEFONE DO TITULAR</p>
                         <p className="text-xs sm:text-sm font-mono font-bold text-gray-800 mt-0.5 truncate">
-                          {maskPhone(selectedTicket.order?.client_phone)}
+                          {maskPhone(selectedTicket.holder_phone || selectedTicket.person?.whatsapp || selectedTicket.order?.client_phone)}
                         </p>
                       </div>
                     </div>
@@ -1184,7 +1259,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                 <div>
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Titular do Ingresso</p>
                   <p className="text-base font-black text-gray-900 mt-0.5 truncate">
-                    {checkInSuccessTicket.order?.client_name || 'Participante'}
+                    {checkInSuccessTicket.holder_name || checkInSuccessTicket.person?.nome || checkInSuccessTicket.order?.client_name || 'Participante'}
                   </p>
                 </div>
 
@@ -1240,12 +1315,18 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
             <div className="grid grid-cols-1 gap-2.5 sm:hidden">
               {listFilteredTickets.map(t => {
                 const isChecked = t.status === 'used' || Boolean(t.used_at);
+                const holder = t.holder_name || t.person?.nome || t.order?.client_name || 'Participante';
+                const isDifferentFromBuyer = t.order?.client_name && t.order.client_name.trim().toLowerCase() !== holder.trim().toLowerCase();
+
                 return (
                   <div key={t.id} className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs space-y-2">
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="font-bold text-gray-900 text-xs">{t.order?.client_name || 'Participante'}</p>
-                        <p className="text-[11px] text-gray-500">Ingresso #{t.ticket_number} • {t.order?.batch_name || 'Lote Padrão'}</p>
+                        <p className="font-bold text-gray-900 text-xs">{holder}</p>
+                        <p className="text-[11px] text-gray-500">
+                          Ingresso #{t.ticket_number} • {t.order?.batch_name || 'Lote Padrão'}
+                          {isDifferentFromBuyer && ` • Comprador: ${t.order?.client_name}`}
+                        </p>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                         isChecked ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-800'
@@ -1255,8 +1336,8 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                     </div>
 
                     <div className="flex justify-between text-[11px] text-gray-500 font-mono">
-                      <span>CPF: {maskCpf(t.order?.client_document)}</span>
-                      <span>Tel: {maskPhone(t.order?.client_phone)}</span>
+                      <span>CPF: {maskCpf(t.holder_document || t.person?.documento || t.order?.client_document)}</span>
+                      <span>Tel: {maskPhone(t.holder_phone || t.person?.whatsapp || t.order?.client_phone)}</span>
                     </div>
 
                     <div className="pt-2 border-t border-gray-100 flex justify-end gap-1.5">
@@ -1297,8 +1378,9 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                 <thead className="bg-slate-50 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
                   <tr>
                     <th className="py-3 px-4">Ingresso / Lote</th>
+                    <th className="py-3 px-4">Titular do Ingresso</th>
                     <th className="py-3 px-4">Comprador</th>
-                    <th className="py-3 px-4">CPF (Mascarado)</th>
+                    <th className="py-3 px-4">CPF do Titular</th>
                     <th className="py-3 px-4">Telefone</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4 text-right">Ações</th>
@@ -1307,6 +1389,8 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                 <tbody className="divide-y divide-gray-100">
                   {listFilteredTickets.map(t => {
                     const isChecked = t.status === 'used' || Boolean(t.used_at);
+                    const holder = t.holder_name || t.person?.nome || t.order?.client_name || 'Não informado';
+
                     return (
                       <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-4">
@@ -1314,16 +1398,20 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
                           <span className="text-[11px] text-gray-500">{t.order?.batch_name || 'Lote Padrão'}</span>
                         </td>
 
-                        <td className="py-3 px-4 font-semibold text-gray-800">
-                          {t.order?.client_name || 'Não informado'}
+                        <td className="py-3 px-4 font-bold text-gray-900">
+                          {holder}
+                        </td>
+
+                        <td className="py-3 px-4 text-gray-600 font-medium">
+                          {t.order?.client_name || 'Mesmo titular'}
                         </td>
 
                         <td className="py-3 px-4 font-mono text-gray-600">
-                          {maskCpf(t.order?.client_document)}
+                          {maskCpf(t.holder_document || t.person?.documento || t.order?.client_document)}
                         </td>
 
                         <td className="py-3 px-4 font-mono text-gray-600">
-                          {maskPhone(t.order?.client_phone)}
+                          {maskPhone(t.holder_phone || t.person?.whatsapp || t.order?.client_phone)}
                         </td>
 
                         <td className="py-3 px-4">
