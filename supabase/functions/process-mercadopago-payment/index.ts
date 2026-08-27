@@ -38,8 +38,8 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
 
     // =========================================================================
-    // AÇÃO: CONSULTA DE STATUS SEGURA (CHECK_STATUS)
-    // Sincroniza o status do pedido com a API do Mercado Pago via Servidor
+    // AÇÃO: CONSULTA DE STATUS SEGURA E TAXAS REAIS (CHECK_STATUS)
+    // Sincroniza o status do pedido e a taxa real cobrada pelo Mercado Pago
     // =========================================================================
     if (body.action === "check_status") {
       const orderId = body.order_id;
@@ -63,29 +63,23 @@ serve(async (req: Request) => {
         );
       }
 
-      if (order.status === "paid" || order.status === "approved") {
-        return new Response(
-          JSON.stringify({ paid: true, status: "approved", paymentId: order.stripe_session_id }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Se ainda está pendente, consultar a API oficial do Mercado Pago
       let mpStatus = null;
       let mpPaymentId = order.stripe_session_id;
+      let mpData: any = null;
 
+      // 1. Consultar a API do Mercado Pago pelo ID do pagamento se existir
       if (mpPaymentId) {
         const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${mpPaymentId}`, {
           headers: { Authorization: `Bearer ${mpAccessToken}` },
         });
         if (mpRes.ok) {
-          const mpData = await mpRes.json();
+          mpData = await mpRes.json();
           mpStatus = mpData.status;
         }
       }
 
+      // 2. Se não encontrou pelo ID direto, buscar por external_reference (ID do pedido)
       if (!mpStatus || mpStatus === "pending") {
-        // Buscar por external_reference
         const searchRes = await fetch(
           `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(orderId)}&sort=date_created&criteria=desc`,
           { headers: { Authorization: `Bearer ${mpAccessToken}` } }
@@ -95,24 +89,49 @@ serve(async (req: Request) => {
           const list = Array.isArray(searchData.results) ? searchData.results : [];
           const approved = list.find((p: any) => p.status === "approved");
           if (approved) {
+            mpData = approved;
             mpStatus = "approved";
             mpPaymentId = String(approved.id);
           } else if (list[0]) {
+            mpData = list[0];
             mpStatus = list[0].status;
             mpPaymentId = String(list[0].id);
           }
         }
       }
 
-      // Se foi aprovado no Mercado Pago, atualizar o banco e gerar ingressos
-      if (mpStatus === "approved") {
+      // 3. Se o pagamento foi aprovado no Mercado Pago ou já estava marcado como pago
+      if (mpStatus === "approved" || order.status === "paid" || order.status === "approved") {
+        // Extrair a taxa real cobrada pelo Mercado Pago a partir de mpData
+        let realMpFee = 0;
+        if (mpData) {
+          if (Array.isArray(mpData.fee_details) && mpData.fee_details.length > 0) {
+            realMpFee = mpData.fee_details.reduce((acc: number, item: any) => acc + (Number(item.amount) || 0), 0);
+          } else if (mpData.transaction_details?.total_paid_amount && mpData.transaction_details?.net_received_amount) {
+            realMpFee = Number(mpData.transaction_details.total_paid_amount) - Number(mpData.transaction_details.net_received_amount);
+          } else if (Array.isArray(mpData.charges_details)) {
+            realMpFee = mpData.charges_details.reduce((acc: number, item: any) => acc + (Number(item.amounts?.original) || 0), 0);
+          }
+        }
+        realMpFee = Number(realMpFee.toFixed(2));
+
+        const orderAmount = Number(order.amount_total || mpData?.transaction_amount || 0);
+        const realMpFeePct = orderAmount > 0 && realMpFee > 0 ? Number(((realMpFee / orderAmount) * 100).toFixed(2)) : 0;
+
+        const updatePayload: any = {
+          status: "paid",
+          stripe_session_id: mpPaymentId || order.stripe_session_id,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (realMpFee > 0) {
+          updatePayload.convenience_fee = realMpFee;
+          updatePayload.convenience_fee_percentage = realMpFeePct;
+        }
+
         await supabase
           .from("app_event_orders")
-          .update({
-            status: "paid",
-            stripe_session_id: mpPaymentId,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("id", orderId);
 
         // Gerar ingressos se não existirem
@@ -155,18 +174,26 @@ serve(async (req: Request) => {
             .upsert(ticketsToInsert, { onConflict: "order_id,ticket_number", ignoreDuplicates: true });
         }
 
-        // Disparar notificações de confirmação de pagamento de forma independente (E-mail + WhatsApp)
-        sendOrderNotificationsFromBackend({
-          supabase,
-          orderId,
-          orderData: { ...order, status: "paid" },
-          type: "confirmed",
-        }).catch((notifErr) => {
-          console.warn("Aviso no envio de notificações em check_status:", notifErr);
-        });
+        // Disparar notificações de confirmação se o status era diferente
+        if (order.status !== "paid" && order.status !== "approved") {
+          sendOrderNotificationsFromBackend({
+            supabase,
+            orderId,
+            orderData: { ...order, status: "paid" },
+            type: "confirmed",
+          }).catch((notifErr) => {
+            console.warn("Aviso no envio de notificações em check_status:", notifErr);
+          });
+        }
 
         return new Response(
-          JSON.stringify({ paid: true, status: "approved", paymentId: mpPaymentId }),
+          JSON.stringify({ 
+            paid: true, 
+            status: "approved", 
+            paymentId: mpPaymentId || order.stripe_session_id,
+            fee: realMpFee,
+            feePercentage: realMpFeePct 
+          }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -328,8 +355,21 @@ serve(async (req: Request) => {
     }
 
     const subtotal = Math.max(0, rawSubtotal - validatedDiscount);
-    const feeRate = Number(convenience_fee_percentage) || 0;
-    const feeAmount = subtotal * (feeRate / 100);
+    let feeRate = Number(convenience_fee_percentage) || 0;
+    if (feeRate === 0) {
+      // Buscar formas de pagamento configuradas no lote ou no evento
+      const batchMethods = (targetBatch?.use_custom_payment_methods && Array.isArray(targetBatch?.payment_methods) && targetBatch.payment_methods.length > 0)
+        ? targetBatch.payment_methods
+        : (Array.isArray(event.payment_methods) ? event.payment_methods : []);
+      const matchedMethod = (batchMethods || []).find((pm: any) => 
+        pm.method === payment_method || 
+        (payment_method === 'pix' && (pm.method === 'pix_stripe' || pm.method === 'pix_chave'))
+      );
+      if (matchedMethod && Number(matchedMethod.fee_percentage) > 0) {
+        feeRate = Number(matchedMethod.fee_percentage);
+      }
+    }
+    const feeAmount = Number((subtotal * (feeRate / 100)).toFixed(2));
     const totalAmount = Number((subtotal + feeAmount).toFixed(2));
 
     if (totalAmount <= 0) {

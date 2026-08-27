@@ -814,9 +814,15 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                         </td>
 
                         <td className="px-5 py-4 font-black text-gray-900 text-sm">
-                          {formatPrice(order.amount_total)}
+                          <div>{formatPrice(order.amount_total)}</div>
+                          {Number(order.convenience_fee || 0) > 0 && (
+                            <div className="text-[10px] text-amber-700 font-medium flex items-center gap-0.5 mt-0.5">
+                              <span>Taxa: {formatPrice(order.convenience_fee || 0)}</span>
+                              {order.convenience_fee_percentage ? <span className="text-gray-400">({order.convenience_fee_percentage}%)</span> : null}
+                            </div>
+                          )}
                           {order.refund_amount && (
-                            <div className="text-[10px] text-purple-700 font-bold">
+                            <div className="text-[10px] text-purple-700 font-bold mt-0.5">
                               Devolvido: {formatPrice(order.refund_amount)}
                             </div>
                           )}

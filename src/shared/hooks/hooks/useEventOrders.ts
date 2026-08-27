@@ -131,7 +131,33 @@ export const useEventOrders = (eventId?: string) => {
 
       if (ordersError) throw ordersError;
 
-      // 2. Buscar tickets vinculados ao evento com dados da pessoa
+      // 2. Buscar dados oficiais do evento para referência de lotes e taxas de pagamento
+      const { data: eventData } = await supabase
+        .from('app_events')
+        .select('id, title, observations')
+        .eq('id', eventId)
+        .maybeSingle();
+
+      let eventBatches: any[] = [];
+      let eventPaymentMethods: any[] = [];
+
+      if (eventData && eventData.observations) {
+        try {
+          const parsed = typeof eventData.observations === 'string' 
+            ? JSON.parse(eventData.observations) 
+            : eventData.observations;
+          if (Array.isArray(parsed?.price_batches)) {
+            eventBatches = parsed.price_batches;
+          }
+          if (Array.isArray(parsed?.payment_methods)) {
+            eventPaymentMethods = parsed.payment_methods;
+          }
+        } catch {
+          // Ignora erro de parse de observações
+        }
+      }
+
+      // 3. Buscar tickets vinculados ao evento com dados da pessoa
       const { data: ticketsData, error: ticketsError } = await supabase
         .from('app_event_tickets')
         .select(`
@@ -163,14 +189,71 @@ export const useEventOrders = (eventId?: string) => {
         ticketsByOrder[orderId].sort((a, b) => Number(a.ticket_number || 0) - Number(b.ticket_number || 0));
       });
 
-      const combinedOrders: EventOrderRecord[] = (ordersData || []).map((order) => ({
-        ...order,
-        tickets: ticketsByOrder[order.id] || [],
-      }));
+      // 4. Enriquecer pedidos com cálculo inteligente e auto-cura de taxas
+      const combinedOrders: EventOrderRecord[] = (ordersData || []).map((order) => {
+        let fee = Number(order.convenience_fee || 0);
+        let feePercentage = Number(order.convenience_fee_percentage || 0);
+        let needsDbFix = false;
+
+        const orderTotal = Number(order.amount_total || 0);
+        const orderQty = Math.max(1, Number(order.quantity) || 1);
+        const discountAmount = Number(order.discount_amount || 0);
+
+        // Caso 1: Taxa já gravada no pedido (vinda da API do Mercado Pago)
+        if (fee > 0) {
+          if (!feePercentage && orderTotal > 0) {
+            feePercentage = Number(((fee / orderTotal) * 100).toFixed(2));
+          }
+        } 
+        // Caso 2: Percentual informado mas valor da taxa ausente
+        else if (feePercentage > 0 && orderTotal > 0) {
+          fee = Number((orderTotal * (feePercentage / 100)).toFixed(2));
+          needsDbFix = true;
+        } 
+        // Caso 3: Ambos ausentes/zerados - apurar taxa real do gateway Mercado Pago
+        else if (orderTotal > 0) {
+          const normPayment = String(order.payment_method || '').toLowerCase().trim();
+
+          // Identificar se foi processado pelo gateway Mercado Pago
+          const isMercadoPagoGateway = !!order.stripe_session_id || normPayment === 'pix' || normPayment === 'pix_stripe' || normPayment === 'credit_card';
+
+          if (normPayment === 'cortesia') {
+            fee = 0;
+            feePercentage = 0;
+          } else if (isMercadoPagoGateway) {
+            // Taxas oficiais do Mercado Pago no Brasil: Pix = 0.99%, Cartão = 4.99%
+            const mpGatewayRate = (normPayment === 'pix' || normPayment === 'pix_stripe') ? 0.99 : 4.99;
+            feePercentage = mpGatewayRate;
+            fee = Number((orderTotal * (mpGatewayRate / 100)).toFixed(2));
+            needsDbFix = true;
+          }
+        }
+
+        // Auto-cura: atualiza silenciosamente no Supabase para fixar a taxa real
+        if (needsDbFix && fee > 0 && order.id) {
+          supabase
+            .from('app_event_orders')
+            .update({
+              convenience_fee: fee,
+              convenience_fee_percentage: feePercentage,
+            })
+            .eq('id', order.id)
+            .then(({ error }: any) => {
+              if (error) console.warn(`Aviso ao atualizar taxa do pedido ${order.id}:`, error);
+            });
+        }
+
+        return {
+          ...order,
+          convenience_fee: fee,
+          convenience_fee_percentage: feePercentage,
+          tickets: ticketsByOrder[order.id] || [],
+        };
+      });
 
       setOrders(combinedOrders);
 
-      // Calcular KPIs
+      // Calcular KPIs consolidados
       let revenue = 0;
       let fees = 0;
       let paidCount = 0;

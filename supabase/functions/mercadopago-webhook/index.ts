@@ -168,14 +168,36 @@ serve(async (req: Request) => {
     }
 
     if (orderData) {
-      // Atualizar status do pedido
+      // Extrair taxa real cobrada pelo Mercado Pago
+      let realMpFee = 0;
+      if (Array.isArray(payment.fee_details) && payment.fee_details.length > 0) {
+        realMpFee = payment.fee_details.reduce((acc: number, item: any) => acc + (Number(item.amount) || 0), 0);
+      } else if (payment.transaction_details?.total_paid_amount && payment.transaction_details?.net_received_amount) {
+        realMpFee = Number(payment.transaction_details.total_paid_amount) - Number(payment.transaction_details.net_received_amount);
+      } else if (Array.isArray(payment.charges_details)) {
+        realMpFee = payment.charges_details.reduce((acc: number, item: any) => acc + (Number(item.amounts?.original) || 0), 0);
+      }
+      realMpFee = Number(realMpFee.toFixed(2));
+
+      const totalOrderAmount = Number(orderData.amount_total || payment.transaction_amount || 0);
+      const realMpFeePct = totalOrderAmount > 0 && realMpFee > 0 ? Number(((realMpFee / totalOrderAmount) * 100).toFixed(2)) : 0;
+
+      const updatePayload: any = {
+        status: mappedStatus,
+        stripe_payment_intent_id: String(paymentId),
+        stripe_session_id: String(paymentId),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (realMpFee > 0) {
+        updatePayload.convenience_fee = realMpFee;
+        updatePayload.convenience_fee_percentage = realMpFeePct;
+      }
+
+      // Atualizar status e taxas do pedido
       await supabase
         .from("app_event_orders")
-        .update({
-          status: mappedStatus,
-          stripe_payment_intent_id: String(paymentId),
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", orderData.id);
 
       // Se o pagamento foi aprovado e ainda não tem ingressos gerados, gerar agora
