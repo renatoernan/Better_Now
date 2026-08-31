@@ -211,14 +211,24 @@ serve(async (req: Request) => {
           const quantity = orderData.quantity || 1;
           const ticketsToInsert = [];
 
+          let attendees: any[] = [];
+          if (orderData.cancellation_reason && typeof orderData.cancellation_reason === "string" && orderData.cancellation_reason.trim().startsWith("[")) {
+            try {
+              const parsed = JSON.parse(orderData.cancellation_reason);
+              if (Array.isArray(parsed)) attendees = parsed;
+            } catch {}
+          }
+
           for (let i = 1; i <= quantity; i++) {
             const randomCode = crypto.randomUUID().split("-")[0].toUpperCase();
             const qrCodeHash = `BN-${orderData.event_id.slice(0, 4)}-${i}-${randomCode}`;
+            const att = attendees[i - 1] || null;
+            const attendeeClientId = att?.person_id || att?.client_id || (i === 1 ? orderData.client_id : null);
 
             ticketsToInsert.push({
               order_id: orderData.id,
               event_id: orderData.event_id,
-              client_id: orderData.client_id || null,
+              client_id: attendeeClientId || null,
               ticket_number: i,
               qr_code_hash: qrCodeHash,
               status: "valid",

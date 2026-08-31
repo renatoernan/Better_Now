@@ -269,10 +269,10 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
           } catch {}
         }
 
-        const holderName = t.person?.nome || attendeeData?.nome || (ticketIdx === 0 ? order?.client_name : null) || order?.client_name || `Participante ${ticketIdx + 1}`;
-        const holderDoc = t.person?.documento || attendeeData?.documento || attendeeData?.cpf || (ticketIdx === 0 ? order?.client_document : null) || order?.client_document;
-        const holderPhone = t.person?.whatsapp || attendeeData?.whatsapp || attendeeData?.telefone || (ticketIdx === 0 ? order?.client_phone : null) || order?.client_phone;
-        const holderEmail = t.person?.email || attendeeData?.email || (ticketIdx === 0 ? order?.client_email : null) || order?.client_email;
+        const holderName = t.person?.nome || attendeeData?.nome || (ticketIdx === 0 ? order?.client_name : null) || `Participante ${ticketIdx + 1}`;
+        const holderDoc = t.person?.documento || attendeeData?.documento || attendeeData?.cpf || (ticketIdx === 0 ? order?.client_document : null);
+        const holderPhone = t.person?.whatsapp || attendeeData?.whatsapp || attendeeData?.telefone || (ticketIdx === 0 ? order?.client_phone : null);
+        const holderEmail = t.person?.email || attendeeData?.email || (ticketIdx === 0 ? order?.client_email : null);
 
         return {
           ...t,

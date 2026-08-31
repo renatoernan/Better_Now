@@ -396,9 +396,46 @@ export const sendOrderEmailNotification = async ({
       order = fetchedOrder;
     }
 
-    const recipientEmail = order.client_email || order.email;
+    // Buscar e-mail e nome atualizados no cadastro da pessoa em app_people
+    let recipientEmail = order.client_email || order.email;
+    let clientName = order.client_name || 'Cliente';
+
+    try {
+      let personData: any = null;
+      if (order.client_id) {
+        const { data: person } = await supabase
+          .from('app_people')
+          .select('id, nome, email')
+          .eq('id', order.client_id)
+          .maybeSingle();
+        if (person) personData = person;
+      }
+      if (!personData && (order.client_document || order.documento || order.cpf)) {
+        const cleanDoc = (order.client_document || order.documento || order.cpf).replace(/\D/g, '');
+        if (cleanDoc) {
+          const { data: person } = await supabase
+            .from('app_people')
+            .select('id, nome, email')
+            .eq('documento', cleanDoc)
+            .maybeSingle();
+          if (person) personData = person;
+        }
+      }
+
+      if (personData) {
+        if (personData.email) {
+          recipientEmail = personData.email;
+        }
+        if (personData.nome) {
+          clientName = personData.nome;
+        }
+      }
+    } catch (personErr) {
+      console.warn('Aviso ao buscar dados atualizados da pessoa para envio de E-mail:', personErr);
+    }
+
     if (!recipientEmail) {
-      return { success: false, message: 'E-mail do cliente não encontrado no pedido.' };
+      return { success: false, message: 'E-mail do cliente não encontrado no pedido ou cadastro.' };
     }
 
     // 2. Carregar configurações do Servidor de E-mail
@@ -566,9 +603,46 @@ export const sendOrderWhatsAppNotification = async ({
       order = fetchedOrder;
     }
 
-    const recipientPhone = order.client_phone || order.phone;
+    // Buscar telefone atualizado no cadastro da pessoa em app_people
+    let recipientPhone = order.client_phone || order.phone;
+    let clientName = order.client_name || 'Cliente';
+
+    try {
+      let personData: any = null;
+      if (order.client_id) {
+        const { data: person } = await supabase
+          .from('app_people')
+          .select('id, nome, whatsapp, telefone, email')
+          .eq('id', order.client_id)
+          .maybeSingle();
+        if (person) personData = person;
+      }
+      if (!personData && (order.client_document || order.documento || order.cpf)) {
+        const cleanDoc = (order.client_document || order.documento || order.cpf).replace(/\D/g, '');
+        if (cleanDoc) {
+          const { data: person } = await supabase
+            .from('app_people')
+            .select('id, nome, whatsapp, telefone, email')
+            .eq('documento', cleanDoc)
+            .maybeSingle();
+          if (person) personData = person;
+        }
+      }
+
+      if (personData) {
+        if (personData.whatsapp || personData.telefone) {
+          recipientPhone = personData.whatsapp || personData.telefone;
+        }
+        if (personData.nome) {
+          clientName = personData.nome;
+        }
+      }
+    } catch (personErr) {
+      console.warn('Aviso ao buscar dados atualizados da pessoa para envio de WhatsApp:', personErr);
+    }
+
     if (!recipientPhone) {
-      return { success: false, message: 'Telefone do cliente não encontrado no pedido.' };
+      return { success: false, message: 'Telefone do cliente não encontrado no pedido ou cadastro.' };
     }
 
     // 2. Carregar configurações do WAHA
@@ -636,7 +710,7 @@ export const sendOrderWhatsAppNotification = async ({
       link_pagamento: paymentLink,
     });
 
-    // 5. Disparar via WAHA
+    // 5. Disparar via WAHA para o cliente
     const sendResult = await sendWahaTextMessage({
       apiUrl: wahaConfig.apiUrl,
       sessionName: wahaConfig.sessionName,
@@ -649,6 +723,37 @@ export const sendOrderWhatsAppNotification = async ({
       console.log(`[WhatsApp] Notificação "${type}" enviada com sucesso para ${recipientPhone} (Pedido: ${currentOrderId})`);
     } else {
       console.warn(`[WhatsApp] Falha ao enviar notificação "${type}" para ${recipientPhone}:`, sendResult.message);
+    }
+
+    // 6. Disparar cópia automática para o Grupo de WhatsApp do Backstage (se configurado no evento)
+    let backstageGroupId = eventRow?.backstage_whatsapp_group_id;
+    if (!backstageGroupId && eventRow?.observations) {
+      try {
+        const parsedObs = JSON.parse(eventRow.observations);
+        backstageGroupId = parsedObs.backstage_whatsapp_group_id;
+      } catch {
+        // Ignora
+      }
+    }
+
+    if (backstageGroupId && typeof backstageGroupId === 'string' && backstageGroupId.trim() !== '') {
+      sendWahaTextMessage({
+        apiUrl: wahaConfig.apiUrl,
+        sessionName: wahaConfig.sessionName,
+        apiKey: wahaConfig.apiKey,
+        phone: backstageGroupId.trim(),
+        text: formattedMessage,
+      })
+        .then((groupRes) => {
+          if (groupRes.success) {
+            console.log(`[WhatsApp Backstage] Cópia da notificação "${type}" enviada para o grupo ${backstageGroupId} (Pedido: ${currentOrderId})`);
+          } else {
+            console.warn(`[WhatsApp Backstage] Falha ao enviar cópia para o grupo ${backstageGroupId}:`, groupRes.message);
+          }
+        })
+        .catch((groupErr) => {
+          console.warn(`[WhatsApp Backstage] Erro ao enviar cópia para o grupo ${backstageGroupId}:`, groupErr);
+        });
     }
 
     return sendResult;

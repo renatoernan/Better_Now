@@ -26,6 +26,8 @@ import {
 import { supabase } from '../../shared/services/lib/supabase';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { formatBrazilDate, formatPrice } from '../../shared/utils/utils/eventUtils';
+import { formatPhone } from '../../shared/utils/utils/phoneUtils';
+import { formatCPF } from '../../shared/utils/utils/cpfUtils';
 import { toast } from 'sonner';
 
 interface EventReportsProps {
@@ -1043,7 +1045,7 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                           </div>
                           {order.client_phone && (
                             <div className="col-span-2 pt-1 border-t border-gray-200/50 flex items-center justify-between text-[10px] text-gray-500">
-                              <span>WhatsApp: {order.client_phone}</span>
+                              <span>WhatsApp: {formatPhone(order.client_phone)}</span>
                               {order.created_at && (
                                 <span>{new Date(order.created_at).toLocaleDateString('pt-BR')}</span>
                               )}
@@ -1083,11 +1085,11 @@ const EventReports: React.FC<EventReportsProps> = ({ eventId }) => {
                             <td className="px-5 py-3.5">
                               <p className="font-bold text-gray-900">{order.client_name || 'Comprador'}</p>
                               {order.client_document && (
-                                <p className="text-[11px] text-gray-400 font-mono">{order.client_document}</p>
+                                <p className="text-[11px] text-gray-400 font-mono">{formatCPF(order.client_document)}</p>
                               )}
                             </td>
                             <td className="px-5 py-3.5">
-                              <p className="font-medium text-gray-800">{order.client_phone || '-'}</p>
+                              <p className="font-medium text-gray-800">{formatPhone(order.client_phone)}</p>
                               {order.client_email && (
                                 <p className="text-[11px] text-gray-400 truncate max-w-[140px]">{order.client_email}</p>
                               )}

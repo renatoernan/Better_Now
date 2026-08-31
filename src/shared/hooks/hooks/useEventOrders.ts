@@ -189,7 +189,79 @@ export const useEventOrders = (eventId?: string) => {
         ticketsByOrder[orderId].sort((a, b) => Number(a.ticket_number || 0) - Number(b.ticket_number || 0));
       });
 
-      // 4. Enriquecer pedidos com cálculo inteligente e auto-cura de taxas
+      // 4. Buscar dados atualizados de app_people para sincronizar o cadastro da pessoa (nome, whatsapp, email, documento)
+      const peopleMap: Record<string, any> = {};
+      const peopleByDocMap: Record<string, any> = {};
+
+      // Coletar das pessoas já vindas nos tickets
+      (ticketsData || []).forEach((t: any) => {
+        if (t.person) {
+          if (t.person.id) peopleMap[t.person.id] = t.person;
+          if (t.person.documento) {
+            const clean = String(t.person.documento).replace(/\D/g, '');
+            if (clean) peopleByDocMap[clean] = t.person;
+          }
+        }
+      });
+
+      // Coletar client_ids e documentos das ordens que ainda não estão no mapa
+      const orderClientIds = Array.from(new Set((ordersData || []).map(o => o.client_id).filter(Boolean)));
+      const orderDocs = Array.from(new Set((ordersData || []).map(o => (o.client_document || o.documento || o.cpf || '').replace(/\D/g, '')).filter(Boolean)));
+
+      // Coletar também client_ids e CPFs de participantes armazenados em cancellation_reason
+      (ordersData || []).forEach(o => {
+        if (o.cancellation_reason && typeof o.cancellation_reason === 'string' && o.cancellation_reason.trim().startsWith('[')) {
+          try {
+            const parsed = JSON.parse(o.cancellation_reason);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((att: any) => {
+                const attId = att?.person_id || att?.client_id;
+                if (attId) orderClientIds.push(attId);
+                const clean = String(att?.documento || att?.cpf || '').replace(/\D/g, '');
+                if (clean) orderDocs.push(clean);
+              });
+            }
+          } catch {}
+        }
+      });
+
+      const uniqueClientIds = Array.from(new Set(orderClientIds));
+      const uniqueDocs = Array.from(new Set(orderDocs));
+
+      const missingClientIds = uniqueClientIds.filter(id => !peopleMap[id]);
+      const missingDocs = uniqueDocs.filter(doc => !peopleByDocMap[doc]);
+
+      if (missingClientIds.length > 0) {
+        const { data: peopleById } = await supabase
+          .from('app_people')
+          .select('id, nome, documento, whatsapp, email, telefone')
+          .in('id', missingClientIds);
+
+        (peopleById || []).forEach(p => {
+          peopleMap[p.id] = p;
+          if (p.documento) {
+            const clean = String(p.documento).replace(/\D/g, '');
+            if (clean) peopleByDocMap[clean] = p;
+          }
+        });
+      }
+
+      if (missingDocs.length > 0) {
+        const { data: peopleByDoc } = await supabase
+          .from('app_people')
+          .select('id, nome, documento, whatsapp, email, telefone')
+          .in('documento', missingDocs);
+
+        (peopleByDoc || []).forEach(p => {
+          if (p.id) peopleMap[p.id] = p;
+          if (p.documento) {
+            const clean = String(p.documento).replace(/\D/g, '');
+            if (clean) peopleByDocMap[clean] = p;
+          }
+        });
+      }
+
+      // 5. Enriquecer pedidos com dados atualizados do cadastro e cálculo de taxas
       const combinedOrders: EventOrderRecord[] = (ordersData || []).map((order) => {
         let fee = Number(order.convenience_fee || 0);
         let feePercentage = Number(order.convenience_fee_percentage || 0);
@@ -198,6 +270,66 @@ export const useEventOrders = (eventId?: string) => {
         const orderTotal = Number(order.amount_total || 0);
         const orderQty = Math.max(1, Number(order.quantity) || 1);
         const discountAmount = Number(order.discount_amount || 0);
+
+        // Localizar cadastro mais recente do comprador
+        const cleanDoc = (order.client_document || order.documento || order.cpf || '').replace(/\D/g, '');
+        const matchedPerson = (order.client_id ? peopleMap[order.client_id] : null)
+          || (cleanDoc ? peopleByDocMap[cleanDoc] : null)
+          || (ticketsByOrder[order.id]?.[0]?.person);
+
+        const currentPhone = matchedPerson?.whatsapp || matchedPerson?.telefone || order.client_phone;
+        const currentName = matchedPerson?.nome || matchedPerson?.name || order.client_name;
+        const currentEmail = matchedPerson?.email || order.client_email;
+        const currentDoc = matchedPerson?.documento || order.client_document;
+
+        // Extrair participantes gravados no ato da compra
+        let attendeesList: any[] = [];
+        if (order.cancellation_reason && typeof order.cancellation_reason === 'string' && order.cancellation_reason.trim().startsWith('[')) {
+          try {
+            const parsed = JSON.parse(order.cancellation_reason);
+            if (Array.isArray(parsed)) attendeesList = parsed;
+          } catch {}
+        }
+
+        // Enriquecer cada ticket com seu titular nominal correto
+        const orderRawTickets = ticketsByOrder[order.id] || [];
+        const enrichedTickets: EventTicketRecord[] = orderRawTickets.map((ticket: EventTicketRecord, idx: number) => {
+          const attendee = attendeesList[idx] || null;
+
+          if (attendee) {
+            const attPersonId = attendee.person_id || attendee.client_id;
+            const attDoc = String(attendee.documento || attendee.cpf || '').replace(/\D/g, '');
+            const matchedAttPerson = (attPersonId ? peopleMap[attPersonId] : null)
+              || (attDoc ? peopleByDocMap[attDoc] : null);
+
+            return {
+              ...ticket,
+              person: {
+                id: matchedAttPerson?.id || attPersonId || ticket.person?.id,
+                nome: matchedAttPerson?.nome || attendee.nome || ticket.person?.nome || (idx === 0 ? currentName : `Participante ${idx + 1}`),
+                documento: matchedAttPerson?.documento || attendee.documento || attendee.cpf || ticket.person?.documento || (idx === 0 ? currentDoc : undefined),
+                whatsapp: matchedAttPerson?.whatsapp || matchedAttPerson?.telefone || attendee.whatsapp || attendee.telefone || ticket.person?.whatsapp || (idx === 0 ? currentPhone : undefined),
+                email: matchedAttPerson?.email || attendee.email || ticket.person?.email || (idx === 0 ? currentEmail : undefined),
+              }
+            };
+          }
+
+          // Se não houver attendee no JSON mas for o primeiro ingresso, vincula ao comprador
+          if (idx === 0) {
+            return {
+              ...ticket,
+              person: {
+                id: matchedPerson?.id || ticket.person?.id,
+                nome: currentName,
+                documento: currentDoc,
+                whatsapp: currentPhone,
+                email: currentEmail,
+              }
+            };
+          }
+
+          return ticket;
+        });
 
         // Caso 1: Taxa já gravada no pedido (vinda da API do Mercado Pago)
         if (fee > 0) {
@@ -245,9 +377,13 @@ export const useEventOrders = (eventId?: string) => {
 
         return {
           ...order,
+          client_phone: currentPhone,
+          client_name: currentName,
+          client_email: currentEmail,
+          client_document: currentDoc,
           convenience_fee: fee,
           convenience_fee_percentage: feePercentage,
-          tickets: ticketsByOrder[order.id] || [],
+          tickets: enrichedTickets,
         };
       });
 

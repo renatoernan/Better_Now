@@ -31,12 +31,16 @@ function formatPrice(val?: number): string {
 // Sanitização de telefone para o WAHA
 function sanitizePhone(phone?: string): string {
   if (!phone) return "";
-  let digits = phone.replace(/\D/g, "");
+  const trimmed = phone.trim();
+  if (trimmed.endsWith("@g.us") || trimmed.endsWith("@c.us") || trimmed.endsWith("@s.whatsapp.net")) {
+    return trimmed;
+  }
+  let digits = trimmed.replace(/\D/g, "");
   if (!digits) return "";
   if (digits.length === 10 || digits.length === 11) {
     digits = `55${digits}`;
   }
-  return digits;
+  return `${digits}@c.us`;
 }
 
 // Template HTML elegante e responsivo do Better Now
@@ -281,6 +285,48 @@ export async function sendOrderNotificationsFromBackend(params: OrderNotifierPar
     }
     const eventLocation = eventRow?.location || "Local a definir";
 
+    // 3.1 Buscar cadastro atualizado em app_people se disponível
+    let finalClientPhone = order.client_phone;
+    let finalClientEmail = order.client_email;
+    let finalClientName = order.client_name || "Cliente";
+
+    try {
+      let person: any = null;
+      if (order.client_id) {
+        const { data: p } = await supabase
+          .from("app_people")
+          .select("id, nome, whatsapp, telefone, email")
+          .eq("id", order.client_id)
+          .maybeSingle();
+        if (p) person = p;
+      }
+      if (!person && (order.client_document || (order as any).documento || (order as any).cpf)) {
+        const cleanDoc = (order.client_document || (order as any).documento || (order as any).cpf).replace(/\D/g, "");
+        if (cleanDoc) {
+          const { data: p } = await supabase
+            .from("app_people")
+            .select("id, nome, whatsapp, telefone, email")
+            .eq("documento", cleanDoc)
+            .maybeSingle();
+          if (p) person = p;
+        }
+      }
+
+      if (person) {
+        if (person.whatsapp || person.telefone) {
+          finalClientPhone = person.whatsapp || person.telefone;
+        }
+        if (person.email) {
+          finalClientEmail = person.email;
+        }
+        if (person.nome) {
+          finalClientName = person.nome;
+        }
+      }
+    } catch (err) {
+      console.warn("[Notifier] Erro ao sincronizar app_people:", err);
+    }
+
     const origin = "https://betternow.cesire.com.br";
     const accessLink = `${origin}/eventos/${order.event_id}?payment=success&order_id=${order.id}`;
     const paymentLink =
@@ -289,7 +335,7 @@ export async function sendOrderNotificationsFromBackend(params: OrderNotifierPar
       `${origin}/eventos/${order.event_id}?payment=awaiting&order_id=${order.id}`;
     const orderNumber = order.id.substring(0, 8).toUpperCase();
     const formattedTotal = formatPrice(Number(order.amount_total) || 0);
-    const clientName = order.client_name || "Cliente";
+    const clientName = finalClientName;
 
     const templateData: Record<string, any> = {
       cliente: clientName,
@@ -312,7 +358,7 @@ export async function sendOrderNotificationsFromBackend(params: OrderNotifierPar
     // =========================================================================
     const sendEmailTask = async () => {
       const emailEnabled = settings.email_enabled !== false;
-      const recipientEmail = order.client_email?.trim();
+      const recipientEmail = finalClientEmail?.trim();
 
       if (!emailEnabled) {
         return { success: false, message: "E-mail desativado nas configurações." };
@@ -406,13 +452,13 @@ export async function sendOrderNotificationsFromBackend(params: OrderNotifierPar
     // =========================================================================
     const sendWahaTask = async () => {
       const wahaEnabled = settings.waha_enabled !== false;
-      const recipientPhone = sanitizePhone(order.client_phone);
+      const recipientPhone = sanitizePhone(finalClientPhone);
 
       if (!wahaEnabled) {
         return { success: false, message: "WhatsApp WAHA desativado nas configurações." };
       }
       if (!recipientPhone) {
-        return { success: false, message: "Telefone do cliente não informado no pedido." };
+        return { success: false, message: "Telefone do cliente não informado no pedido ou cadastro." };
       }
 
       let apiUrl = settings.waha_api_url || "";
@@ -439,7 +485,7 @@ export async function sendOrderNotificationsFromBackend(params: OrderNotifierPar
           : settings.waha_msg_order_cancelled) || defaultWahaMsg;
 
       const finalWahaText = replacePlaceholders(rawWahaMsg);
-      const chatId = `${recipientPhone}@c.us`;
+      const chatId = recipientPhone;
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -457,6 +503,32 @@ export async function sendOrderNotificationsFromBackend(params: OrderNotifierPar
           text: finalWahaText,
         }),
       });
+
+      // Disparar cópia para o Grupo do Backstage se configurado
+      let backstageGroupId = eventRow?.backstage_whatsapp_group_id;
+      if (!backstageGroupId && eventRow?.observations) {
+        try {
+          const parsed = JSON.parse(eventRow.observations);
+          backstageGroupId = parsed.backstage_whatsapp_group_id;
+        } catch {}
+      }
+
+      if (backstageGroupId && typeof backstageGroupId === "string" && backstageGroupId.trim() !== "") {
+        try {
+          await fetch(`${apiUrl}/api/sendText`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              session: sessionName,
+              chatId: backstageGroupId.trim(),
+              text: finalWahaText,
+            }),
+          });
+          console.log(`[Notifier Backend] Cópia WAHA enviada para o grupo ${backstageGroupId}`);
+        } catch (groupErr) {
+          console.warn(`[Notifier Backend] Erro ao enviar cópia WAHA para grupo ${backstageGroupId}:`, groupErr);
+        }
+      }
 
       if (!wahaRes.ok) {
         const errText = await wahaRes.text();

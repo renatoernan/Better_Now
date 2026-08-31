@@ -40,12 +40,20 @@ export const sanitizeApiUrl = (url: string): string => {
  */
 export const normalizeWhatsAppPhone = (phone: string): string => {
   if (!phone) return '';
+  const trimmed = phone.trim();
+
+  // Se já for ID de grupo do WhatsApp (ex: 120363429569747254@g.us)
+  if (trimmed.endsWith('@g.us')) {
+    return trimmed;
+  }
+
+  // Se já tiver @s.whatsapp.net ou @c.us
+  if (trimmed.endsWith('@s.whatsapp.net') || trimmed.endsWith('@c.us')) {
+    return trimmed;
+  }
   
   // Remove todos os caracteres não numéricos
-  let digits = phone.replace(/\D/g, '');
-
-  // Se já tiver @c.us, remove para tratar
-  digits = digits.replace('@c.us', '');
+  let digits = trimmed.replace(/\D/g, '');
 
   // Se começar com 0, remove
   if (digits.startsWith('0')) {

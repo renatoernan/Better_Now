@@ -130,6 +130,7 @@ const EventForm: React.FC<EventFormProps> = ({
       waha_msg_order_created: DEFAULT_WAHA_MSG_CREATED,
       waha_msg_order_confirmed: DEFAULT_WAHA_MSG_CONFIRMED,
       waha_msg_order_cancelled: DEFAULT_WAHA_MSG_CANCELLED,
+      backstage_whatsapp_group_id: '',
       email_msg_order_created_subject: DEFAULT_EMAIL_MSG_CREATED_SUBJECT,
       email_msg_order_created_body: DEFAULT_EMAIL_MSG_CREATED_BODY,
       email_msg_order_confirmed_subject: DEFAULT_EMAIL_MSG_CONFIRMED_SUBJECT,
@@ -174,6 +175,7 @@ const EventForm: React.FC<EventFormProps> = ({
       setValue('waha_msg_order_created', event.waha_msg_order_created || DEFAULT_WAHA_MSG_CREATED, { shouldValidate: true });
       setValue('waha_msg_order_confirmed', event.waha_msg_order_confirmed || DEFAULT_WAHA_MSG_CONFIRMED, { shouldValidate: true });
       setValue('waha_msg_order_cancelled', event.waha_msg_order_cancelled || DEFAULT_WAHA_MSG_CANCELLED, { shouldValidate: true });
+      setValue('backstage_whatsapp_group_id', event.backstage_whatsapp_group_id || '', { shouldValidate: true });
       setValue('email_msg_order_created_subject', event.email_msg_order_created_subject || DEFAULT_EMAIL_MSG_CREATED_SUBJECT, { shouldValidate: true });
       setValue('email_msg_order_created_body', event.email_msg_order_created_body || DEFAULT_EMAIL_MSG_CREATED_BODY, { shouldValidate: true });
       setValue('email_msg_order_confirmed_subject', event.email_msg_order_confirmed_subject || DEFAULT_EMAIL_MSG_CONFIRMED_SUBJECT, { shouldValidate: true });
@@ -1104,6 +1106,63 @@ const EventForm: React.FC<EventFormProps> = ({
                         disabled={isSubmitting}
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* 7. WhatsApp do Backstage (Notificações da Equipe) */}
+                <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200/80 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-emerald-600" />
+                      WhatsApp do Backstage (Notificações da Equipe)
+                    </h3>
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80">
+                      Cópia Automática
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 bg-emerald-50/60 border border-emerald-200/80 rounded-xl text-xs text-emerald-950 space-y-1">
+                    <p className="font-semibold flex items-center gap-1.5 text-emerald-900">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      Recebimento em Tempo Real de Todas as Notificações
+                    </p>
+                    <p className="text-emerald-800/90 text-[11.5px] leading-relaxed">
+                      Informe o ID do grupo do WhatsApp que receberá uma cópia de todos os disparos do sistema para este evento (pedidos gerados, pagamentos confirmados com QR Code e cancelamentos).
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="backstage_whatsapp_group_id" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                      ID do Grupo de WhatsApp do Backstage
+                    </label>
+                    <input
+                      {...register('backstage_whatsapp_group_id', {
+                        validate: (value) => {
+                          if (!value || value.trim() === '') return true;
+                          const clean = value.trim();
+                          if (!clean.endsWith('@g.us')) {
+                            return 'O ID do grupo de WhatsApp deve terminar com @g.us (ex: 120363429569747254@g.us)';
+                          }
+                          return true;
+                        }
+                      })}
+                      type="text"
+                      id="backstage_whatsapp_group_id"
+                      className={`w-full px-4 py-2.5 border rounded-xl text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors ${
+                        errors.backstage_whatsapp_group_id ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-slate-50/50 focus:bg-white'
+                      }`}
+                      placeholder="120363429569747254@g.us"
+                      disabled={isSubmitting}
+                    />
+                    {errors.backstage_whatsapp_group_id && (
+                      <div className="flex items-center gap-1 mt-1 text-red-600">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span className="text-xs">{errors.backstage_whatsapp_group_id.message}</span>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-gray-400 mt-1.5">
+                      Formato do grupo: identificador numérico seguido de <strong>@g.us</strong> (ex: <code className="text-emerald-700 font-mono">120363429569747254@g.us</code>)
+                    </p>
                   </div>
                 </div>
               </div>

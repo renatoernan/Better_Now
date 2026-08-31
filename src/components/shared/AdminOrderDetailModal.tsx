@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { EventOrderRecord, EventTicketRecord } from '../../shared/hooks/hooks/useEventOrders';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
+import { formatPhone } from '../../shared/utils/utils/phoneUtils';
+import { formatCPF } from '../../shared/utils/utils/cpfUtils';
 
 interface AdminOrderDetailModalProps {
   isOpen: boolean;
@@ -145,7 +147,7 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
               </div>
               <div className="flex items-center gap-2 text-gray-700">
                 <Phone className="w-4 h-4 text-gray-400 shrink-0" />
-                <span>{order.client_phone || 'Não informado'}</span>
+                <span>{formatPhone(order.client_phone)}</span>
               </div>
               <div className="flex items-center gap-2 text-gray-700">
                 <Mail className="w-4 h-4 text-gray-400 shrink-0" />
@@ -158,7 +160,7 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
               {order.client_document && (
                 <div className="flex items-center gap-2 text-gray-700">
                   <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>CPF: <strong>{order.client_document}</strong></span>
+                  <span>CPF: <strong className="font-mono">{formatCPF(order.client_document)}</strong></span>
                 </div>
               )}
             </div>
@@ -253,7 +255,7 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
                     } catch {}
                   }
 
-                  const participantName = ticket.person?.nome || attendeeData?.nome || order.client_name || `Participante ${idx + 1}`;
+                  const participantName = ticket.person?.nome || attendeeData?.nome || (idx === 0 ? order.client_name : `Participante ${idx + 1}`);
                   const participantDoc = ticket.person?.documento || attendeeData?.documento || attendeeData?.cpf || (idx === 0 ? order.client_document : null);
                   const participantPhone = ticket.person?.whatsapp || attendeeData?.whatsapp || attendeeData?.telefone || (idx === 0 ? order.client_phone : null);
 
@@ -278,10 +280,10 @@ export const AdminOrderDetailModal: React.FC<AdminOrderDetailModalProps> = ({
                         </p>
                         <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
                           {participantDoc && (
-                            <span>CPF: <strong>{participantDoc}</strong></span>
+                            <span>CPF: <strong className="font-mono">{formatCPF(participantDoc)}</strong></span>
                           )}
                           {participantPhone && (
-                            <span>WhatsApp: {participantPhone}</span>
+                            <span>WhatsApp: <strong className="text-gray-700">{formatPhone(participantPhone)}</strong></span>
                           )}
                         </div>
                       </div>

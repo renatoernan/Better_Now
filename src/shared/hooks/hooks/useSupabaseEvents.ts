@@ -96,6 +96,9 @@ const enrichEventFromDb = (dbItem: any): Event => {
         if (parsed.waha_msg_order_cancelled) {
           dbItem.waha_msg_order_cancelled = parsed.waha_msg_order_cancelled;
         }
+        if (parsed.backstage_whatsapp_group_id) {
+          dbItem.backstage_whatsapp_group_id = parsed.backstage_whatsapp_group_id;
+        }
         if (parsed.email_msg_order_created_subject) {
           dbItem.email_msg_order_created_subject = parsed.email_msg_order_created_subject;
         }
@@ -169,6 +172,7 @@ const enrichEventFromDb = (dbItem: any): Event => {
     waha_msg_order_created: dbItem.waha_msg_order_created || '',
     waha_msg_order_confirmed: dbItem.waha_msg_order_confirmed || '',
     waha_msg_order_cancelled: dbItem.waha_msg_order_cancelled || '',
+    backstage_whatsapp_group_id: dbItem.backstage_whatsapp_group_id || '',
     email_msg_order_created_subject: dbItem.email_msg_order_created_subject || '',
     email_msg_order_created_body: dbItem.email_msg_order_created_body || '',
     email_msg_order_confirmed_subject: dbItem.email_msg_order_confirmed_subject || '',
@@ -260,6 +264,7 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
   const wahaMsgCreatedVal = eventData.waha_msg_order_created || '';
   const wahaMsgConfirmedVal = eventData.waha_msg_order_confirmed || '';
   const wahaMsgCancelledVal = eventData.waha_msg_order_cancelled || '';
+  const backstageWhatsappGroupIdVal = eventData.backstage_whatsapp_group_id || '';
   const emailMsgCreatedSubjVal = eventData.email_msg_order_created_subject || '';
   const emailMsgCreatedBodyVal = eventData.email_msg_order_created_body || '';
   const emailMsgConfirmedSubjVal = eventData.email_msg_order_confirmed_subject || '';
@@ -278,6 +283,9 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
   if (eventData.waha_msg_order_cancelled !== undefined) {
     payload.waha_msg_order_cancelled = eventData.waha_msg_order_cancelled;
   }
+  if (eventData.backstage_whatsapp_group_id !== undefined) {
+    payload.backstage_whatsapp_group_id = eventData.backstage_whatsapp_group_id;
+  }
 
   payload.observations = JSON.stringify({
     desc: descText,
@@ -295,6 +303,7 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
     waha_msg_order_created: wahaMsgCreatedVal,
     waha_msg_order_confirmed: wahaMsgConfirmedVal,
     waha_msg_order_cancelled: wahaMsgCancelledVal,
+    backstage_whatsapp_group_id: backstageWhatsappGroupIdVal,
     email_msg_order_created_subject: emailMsgCreatedSubjVal,
     email_msg_order_created_body: emailMsgCreatedBodyVal,
     email_msg_order_confirmed_subject: emailMsgConfirmedSubjVal,

@@ -42,6 +42,7 @@ export interface Event {
   waha_msg_order_created?: string;
   waha_msg_order_confirmed?: string;
   waha_msg_order_cancelled?: string;
+  backstage_whatsapp_group_id?: string;
   email_msg_order_created_subject?: string;
   email_msg_order_created_body?: string;
   email_msg_order_confirmed_subject?: string;

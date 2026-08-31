@@ -279,7 +279,7 @@ export const createComplimentaryOrder = async (
         coupon_id: params.coupon_id || null,
         coupon_code: params.coupon_code || null,
         discount_amount: discount,
-        cancellation_reason: params.notes || null,
+        cancellation_reason: params.attendees && params.attendees.length > 0 ? JSON.stringify(params.attendees) : (params.notes || null),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -319,7 +319,6 @@ export const createComplimentaryOrder = async (
     const attendees = params.attendees || [];
 
     for (let i = 0; i < qty; i++) {
-      const ticketNumber = `${orderId.substring(0, 6).toUpperCase()}-${i + 1}`;
       const qrHash = `VIP-${orderId.substring(0, 8)}-${i + 1}-${Date.now().toString(36).toUpperCase()}`;
 
       // Tentar associar pessoa/participante se fornecido
@@ -330,7 +329,18 @@ export const createComplimentaryOrder = async (
         documento: cleanDoc,
       };
 
-      const attendeeClientId = (att as any)?.person_id || (att as any)?.client_id || (i === 0 ? (resolvedClientId || params.client_id) : resolvedClientId) || null;
+      let attendeeClientId = (att as any)?.person_id || (att as any)?.client_id;
+      if (!attendeeClientId && (att.nome || att.whatsapp || att.documento)) {
+        attendeeClientId = await findOrCreatePerson({
+          nome: att.nome,
+          documento: (att.documento || (att as any).cpf || '').replace(/\D/g, ''),
+          whatsapp: att.whatsapp,
+          email: att.email,
+        });
+      }
+      if (!attendeeClientId && i === 0) {
+        attendeeClientId = resolvedClientId || params.client_id || null;
+      }
 
       ticketsToInsert.push({
         order_id: orderId,

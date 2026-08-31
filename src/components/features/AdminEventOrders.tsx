@@ -9,6 +9,8 @@ import {
 import { Event } from '../../shared/types/types/event';
 import { useEventOrders, EventOrderRecord, EventTicketRecord } from '../../shared/hooks/hooks/useEventOrders';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
+import { formatPhone } from '../../shared/utils/utils/phoneUtils';
+import { formatCPF } from '../../shared/utils/utils/cpfUtils';
 import AdminOrderDetailModal from '../shared/AdminOrderDetailModal';
 import AdminPaymentProofAuditModal from '../shared/AdminPaymentProofAuditModal';
 import AdminCancelOrderConfirmModal from '../shared/AdminCancelOrderConfirmModal';
@@ -140,7 +142,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
       if (order.tickets && order.tickets.length > 0) {
         order.tickets.forEach((t, idx) => {
           const attendee = attendeesParsed[idx] || null;
-          const holderName = t.person?.nome || attendee?.nome || order.client_name || `Participante ${idx + 1}`;
+          const holderName = t.person?.nome || attendee?.nome || (idx === 0 ? order.client_name : `Participante ${idx + 1}`);
           const holderDoc = t.person?.documento || attendee?.documento || attendee?.cpf || (idx === 0 ? order.client_document : undefined);
           const holderPhone = t.person?.whatsapp || attendee?.whatsapp || attendee?.telefone || (idx === 0 ? order.client_phone : undefined);
           const holderEmail = t.person?.email || attendee?.email || (idx === 0 ? order.client_email : undefined);
@@ -794,10 +796,10 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
 
                         <td className="px-5 py-4">
                           <div className="font-bold text-gray-900">{order.client_name || 'Anônimo'}</div>
-                          <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                            <span>{order.client_phone || '-'}</span>
+                          <div className="text-[11px] text-gray-500 flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-gray-700">{formatPhone(order.client_phone)}</span>
                             {order.client_document && (
-                              <span className="text-gray-400">({order.client_document})</span>
+                              <span className="text-gray-400 font-mono text-[10.5px]">({formatCPF(order.client_document)})</span>
                             )}
                           </div>
                         </td>
@@ -985,9 +987,9 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                         {/* Comprador */}
                         <td className="px-5 py-4">
                           <div className="font-semibold text-gray-900">{buyerName}</div>
-                          <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                            <span>{buyerPhone || '-'}</span>
-                            {buyerDoc && <span className="text-gray-400">({buyerDoc})</span>}
+                          <div className="text-[11px] text-gray-500 flex items-center gap-1.5 flex-wrap">
+                            <span>{formatPhone(buyerPhone)}</span>
+                            {buyerDoc && <span className="text-gray-400 font-mono text-[10.5px]">({formatCPF(buyerDoc)})</span>}
                           </div>
                         </td>
 
@@ -997,15 +999,15 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                             <User className="w-3.5 h-3.5 text-indigo-500" />
                             <span>{holderName}</span>
                           </div>
-                          <div className="text-[11px] text-gray-500 flex items-center gap-2 mt-0.5">
+                          <div className="text-[11px] text-gray-500 flex items-center gap-2 mt-0.5 flex-wrap">
                             {holderDoc ? (
                               <span className="font-mono text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
-                                CPF: {holderDoc}
+                                CPF: {formatCPF(holderDoc)}
                               </span>
                             ) : (
                               <span className="text-gray-400 italic text-[10px]">CPF não vinculado</span>
                             )}
-                            {holderPhone && <span>{holderPhone}</span>}
+                            {holderPhone && <span>{formatPhone(holderPhone)}</span>}
                           </div>
                         </td>
 

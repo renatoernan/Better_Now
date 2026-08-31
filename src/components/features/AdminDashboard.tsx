@@ -14,7 +14,8 @@ import {
   ArrowRight,
   Sparkles,
   CheckCircle2,
-  Mail
+  Mail,
+  Gift
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDashboardData } from '../../shared/hooks/hooks/useDashboardData';
@@ -273,14 +274,27 @@ const AdminDashboard: React.FC = () => {
                         {icon}
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tagBg}`}>
                             {activity.title}
                           </span>
-                          {activity.amount && activity.amount > 0 && (
-                            <span className="text-[11px] font-bold text-emerald-600 font-mono">
-                              {formatPrice(activity.amount)}
-                            </span>
+                          {activity.type === 'order' ? (
+                            activity.amount && activity.amount > 0 ? (
+                              <span className="text-[11px] font-bold text-emerald-600 font-mono">
+                                {formatPrice(activity.amount)}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 uppercase tracking-wider font-sans inline-flex items-center gap-1 shadow-2xs">
+                                <Gift className="w-2.5 h-2.5 text-purple-600" />
+                                CORTESIA
+                              </span>
+                            )
+                          ) : (
+                            Boolean(activity.amount && activity.amount > 0) && (
+                              <span className="text-[11px] font-bold text-emerald-600 font-mono">
+                                {formatPrice(activity.amount!)}
+                              </span>
+                            )
                           )}
                         </div>
                         <p className="text-xs font-semibold text-gray-800 truncate mt-0.5">

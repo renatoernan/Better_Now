@@ -17,6 +17,7 @@ export interface ActivityItem {
   title: string;
   description: string;
   amount?: number;
+  payment_method?: string;
   created_at: string;
 }
 
@@ -148,7 +149,7 @@ export const useDashboardData = () => {
       // 1. Últimos pedidos de ingressos (sem deleted_at)
       const { data: recentOrders, error: recentOrdersErr } = await supabase
         .from('app_event_orders')
-        .select('id, client_name, amount_total, status, quantity, created_at')
+        .select('id, client_name, amount_total, status, quantity, payment_method, created_at')
         .order('created_at', { ascending: false })
         .limit(8);
 
@@ -158,12 +159,14 @@ export const useDashboardData = () => {
 
       if (recentOrders) {
         recentOrders.forEach(order => {
+          const isPaid = order.status === 'paid' || (order.status as string) === 'approved' || (order.status as string) === 'confirmed';
           activities.push({
             id: `order-${order.id}`,
             type: 'order',
-            title: order.status === 'paid' ? 'Ingresso Confirmado' : 'Pedido de Ingresso',
+            title: isPaid ? 'Ingresso Confirmado' : 'Pedido de Ingresso',
             description: `${order.client_name || 'Comprador'} comprou ${order.quantity || 1} ingresso(s)`,
             amount: Number(order.amount_total) || 0,
+            payment_method: order.payment_method,
             created_at: order.created_at
           });
         });

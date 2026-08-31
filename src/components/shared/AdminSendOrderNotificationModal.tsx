@@ -16,6 +16,8 @@ import {
 import { EventOrderRecord } from '../../shared/hooks/hooks/useEventOrders';
 import { OrderNotificationType } from '../../shared/services/orderNotificationService';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
+import { formatPhone } from '../../shared/utils/utils/phoneUtils';
+import { supabase } from '../../shared/services/lib/supabase';
 
 interface AdminSendOrderNotificationModalProps {
   isOpen: boolean;
@@ -40,10 +42,19 @@ export const AdminSendOrderNotificationModal: React.FC<AdminSendOrderNotificatio
   const [enableWhatsApp, setEnableWhatsApp] = useState<boolean>(true);
   const [enableEmail, setEnableEmail] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
+  const [recipient, setRecipient] = useState<{
+    phone: string;
+    email: string;
+    name: string;
+  }>({
+    phone: '',
+    email: '',
+    name: ''
+  });
 
-  // Inicializa com base no status do pedido e disponibilidade de dados
+  // Inicializa com base no status do pedido e sincroniza com o cadastro mais recente de app_people
   useEffect(() => {
-    if (order) {
+    if (order && isOpen) {
       const isPaid = order.status === 'paid' || (order.status as string) === 'approved';
       if (isPaid) {
         setNotificationType('confirmed');
@@ -53,15 +64,75 @@ export const AdminSendOrderNotificationModal: React.FC<AdminSendOrderNotificatio
         setNotificationType('created');
       }
 
-      setEnableWhatsApp(!!order.client_phone);
-      setEnableEmail(!!order.client_email);
+      const initialPhone = order.client_phone || '';
+      const initialEmail = order.client_email || '';
+      const initialName = order.client_name || '';
+
+      setRecipient({
+        phone: initialPhone,
+        email: initialEmail,
+        name: initialName,
+      });
+
+      setEnableWhatsApp(!!initialPhone.trim());
+      setEnableEmail(!!initialEmail.trim());
+
+      // Buscar dados mais atualizados do cadastro em app_people
+      const syncPerson = async () => {
+        try {
+          let personData: any = null;
+          if (order.client_id) {
+            const { data } = await supabase
+              .from('app_people')
+              .select('id, nome, whatsapp, telefone, email')
+              .eq('id', order.client_id)
+              .maybeSingle();
+            if (data) personData = data;
+          }
+
+          if (!personData && (order.client_document || (order as any).documento || (order as any).cpf)) {
+            const cleanDoc = (order.client_document || (order as any).documento || (order as any).cpf).replace(/\D/g, '');
+            if (cleanDoc) {
+              const { data } = await supabase
+                .from('app_people')
+                .select('id, nome, whatsapp, telefone, email')
+                .eq('documento', cleanDoc)
+                .maybeSingle();
+              if (data) personData = data;
+            }
+          }
+
+          if (personData) {
+            const updatedPhone = personData.whatsapp || personData.telefone || initialPhone;
+            const updatedEmail = personData.email || initialEmail;
+            const updatedName = personData.nome || initialName;
+
+            setRecipient({
+              phone: updatedPhone,
+              email: updatedEmail,
+              name: updatedName,
+            });
+
+            setEnableWhatsApp(!!updatedPhone?.trim());
+            setEnableEmail(!!updatedEmail?.trim());
+          }
+        } catch (err) {
+          console.warn('Erro ao sincronizar dados da pessoa no modal:', err);
+        }
+      };
+
+      syncPerson();
     }
   }, [order, isOpen]);
 
   if (!isOpen || !order) return null;
 
-  const hasPhone = !!order.client_phone?.trim();
-  const hasEmail = !!order.client_email?.trim();
+  const currentPhone = recipient.phone || order.client_phone || '';
+  const currentEmail = recipient.email || order.client_email || '';
+  const currentName = recipient.name || order.client_name || 'Comprador não identificado';
+
+  const hasPhone = !!currentPhone.trim();
+  const hasEmail = !!currentEmail.trim();
   const isPaid = order.status === 'paid' || (order.status as string) === 'approved';
 
   const orderNumber = order.id.substring(0, 8).toUpperCase();
@@ -123,7 +194,7 @@ export const AdminSendOrderNotificationModal: React.FC<AdminSendOrderNotificatio
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4 text-slate-400" />
-                <span className="text-sm font-semibold text-slate-800">{order.client_name || 'Comprador não identificado'}</span>
+                <span className="text-sm font-semibold text-slate-800">{currentName}</span>
               </div>
               <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${
                 isPaid 
@@ -229,8 +300,8 @@ export const AdminSendOrderNotificationModal: React.FC<AdminSendOrderNotificatio
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {hasPhone ? order.client_phone : 'Telefone não cadastrado no pedido'}
+                    <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                      {hasPhone ? formatPhone(currentPhone) : 'Telefone não cadastrado no pedido'}
                     </p>
                   </div>
                 </div>
@@ -287,7 +358,7 @@ export const AdminSendOrderNotificationModal: React.FC<AdminSendOrderNotificatio
                       )}
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[220px]">
-                      {hasEmail ? order.client_email : 'E-mail não cadastrado no pedido'}
+                      {hasEmail ? currentEmail : 'E-mail não cadastrado no pedido'}
                     </p>
                   </div>
                 </div>

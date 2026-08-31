@@ -63,6 +63,7 @@ export const eventSchema = z.object({
   allow_ticket_sales: z.boolean(),
   price_batches: z.array(priceBatchSchema).optional(),
   schedule: z.array(scheduleItemSchema).optional(),
+  backstage_whatsapp_group_id: z.string().max(100, 'ID do grupo muito longo').optional().or(z.literal('')),
 });
 
 // Client schemas
