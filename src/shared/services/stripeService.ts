@@ -174,11 +174,6 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
       .eq('order_id', orderId)
       .order('ticket_number', { ascending: true });
 
-    if (!error && tickets && tickets.length > 0) {
-      return tickets as EventTicket[];
-    }
-
-    // 2. Se ainda não existirem tickets, busca a ordem e gera automaticamente os ingressos APENAS se estiver paga/aprovada
     let order = orderFallbackData;
     if (!order) {
       const { data: ord } = await supabase
@@ -189,6 +184,36 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
       order = ord as EventOrder;
     }
 
+    if (!error && tickets && tickets.length > 0) {
+      let attendees: any[] = [];
+      if ((order as any)?.cancellation_reason && typeof (order as any).cancellation_reason === 'string' && (order as any).cancellation_reason.trim().startsWith('[')) {
+        try {
+          const parsed = JSON.parse((order as any).cancellation_reason);
+          if (Array.isArray(parsed)) attendees = parsed;
+        } catch {}
+      }
+
+      const enrichedTickets = tickets.map((t, idx) => {
+        const att = attendees[idx] || null;
+        if (att) {
+          return {
+            ...t,
+            client: {
+              id: att.person_id || att.client_id || t.client?.id,
+              nome: att.nome || t.client?.nome || (idx === 0 ? order?.client_name : `Participante ${idx + 1}`),
+              documento: att.documento || att.cpf || t.client?.documento || (idx === 0 ? (order as any)?.client_document : undefined),
+              whatsapp: att.whatsapp || att.telefone || t.client?.whatsapp || (idx === 0 ? (order as any)?.client_phone : undefined),
+              email: att.email || t.client?.email || (idx === 0 ? (order as any)?.client_email : undefined),
+            }
+          };
+        }
+        return t;
+      });
+
+      return enrichedTickets as EventTicket[];
+    }
+
+    // 2. Se ainda não existirem tickets, gera automaticamente os ingressos APENAS se a ordem estiver paga/aprovada
     if (order && (order.status === 'paid' || order.status === 'approved')) {
       const qty = order.quantity || 1;
       const ticketsToInsert: any[] = [];

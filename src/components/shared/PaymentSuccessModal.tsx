@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   CheckCircle2,
   Ticket,
@@ -49,6 +49,17 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
   const [tickets, setTickets] = useState<EventTicket[]>([]);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [enlargedTicket, setEnlargedTicket] = useState<EventTicket | null>(null);
+
+  const attendeesParsed = useMemo(() => {
+    const rawReason = (order as any)?.cancellation_reason;
+    if (rawReason && typeof rawReason === 'string' && rawReason.trim().startsWith('[')) {
+      try {
+        const parsed = JSON.parse(rawReason);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [];
+  }, [(order as any)?.cancellation_reason]);
 
   const fetchPaymentResult = async () => {
     if (!sessionId || !isOpen) return;
@@ -125,8 +136,9 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
 
   const handleShareWhatsApp = (ticket: EventTicket, index: number) => {
     const title = eventTitle || order?.batch_name || 'Evento Better Now';
-    const client = ticket.client?.nome || (index === 0 ? order?.client_name : '') || 'Participante';
-    const doc = ticket.client?.documento ? formatCPF(ticket.client.documento) : (index === 0 && order?.client_document ? formatCPF(order.client_document) : '');
+    const client = attendeesParsed[index]?.nome || ((ticket.client as any)?.id !== order?.client_id || index === 0 ? ticket.client?.nome : null) || (index === 0 ? order?.client_name : '') || `Participante ${index + 1}`;
+    const rawDoc = attendeesParsed[index]?.documento || attendeesParsed[index]?.cpf || ((ticket.client as any)?.id !== order?.client_id || index === 0 ? ticket.client?.documento : null) || (index === 0 ? order?.client_document : '');
+    const doc = rawDoc ? formatCPF(rawDoc) : '';
     const hash = ticket.qr_code_hash;
     const ticketNum = ticket.ticket_number || `${index + 1}`;
 
@@ -341,11 +353,13 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
 
                               <div className="space-y-0.5">
                                 <p className="text-xs text-gray-900 font-bold truncate">
-                                  Titular: <span className="text-indigo-950 font-extrabold">{t.client?.nome || (idx === 0 ? order?.client_name : '') || `Participante ${idx + 1}`}</span>
+                                  Titular: <span className="text-indigo-950 font-extrabold">
+                                    {attendeesParsed[idx]?.nome || ((t.client as any)?.id !== order?.client_id || idx === 0 ? t.client?.nome : null) || (idx === 0 ? order?.client_name : '') || `Participante ${idx + 1}`}
+                                  </span>
                                 </p>
-                                {(t.client?.documento || (idx === 0 && order?.client_document)) && (
+                                {(attendeesParsed[idx]?.documento || attendeesParsed[idx]?.cpf || ((t.client as any)?.id !== order?.client_id || idx === 0 ? t.client?.documento : null) || (idx === 0 && order?.client_document)) && (
                                   <p className="text-[11px] text-gray-500 font-medium">
-                                    CPF: {formatCPF(t.client?.documento || order?.client_document || '')}
+                                    CPF: {formatCPF(attendeesParsed[idx]?.documento || attendeesParsed[idx]?.cpf || ((t.client as any)?.id !== order?.client_id || idx === 0 ? t.client?.documento : null) || order?.client_document || '')}
                                   </p>
                                 )}
                               </div>

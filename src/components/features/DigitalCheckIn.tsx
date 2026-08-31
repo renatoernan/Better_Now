@@ -233,16 +233,70 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
       // 2. Buscar ordens relacionadas para enriquecer com dados do comprador e participantes nominais
       const orderIds = Array.from(new Set((ticketsData || []).map(t => t.order_id).filter(Boolean)));
       let ordersMap: Record<string, any> = {};
+      const peopleMap: Record<string, any> = {};
+      const peopleByDocMap: Record<string, any> = {};
 
       if (orderIds.length > 0) {
         const { data: ordersData } = await supabase
           .from('app_event_orders')
-          .select('id, client_name, client_document, client_phone, client_email, batch_name, amount_total, quantity, status, cancellation_reason')
+          .select('id, client_id, client_name, client_document, client_phone, client_email, batch_name, amount_total, quantity, status, cancellation_reason')
           .in('id', orderIds);
+
+        const personIdsToFetch: string[] = [];
+        const docsToFetch: string[] = [];
 
         (ordersData || []).forEach(o => {
           ordersMap[o.id] = o;
+          if (o.client_id) personIdsToFetch.push(o.client_id);
+          if (o.client_document) docsToFetch.push(String(o.client_document).replace(/\D/g, ''));
+
+          if (o.cancellation_reason && typeof o.cancellation_reason === 'string' && o.cancellation_reason.trim().startsWith('[')) {
+            try {
+              const parsed = JSON.parse(o.cancellation_reason);
+              if (Array.isArray(parsed)) {
+                parsed.forEach((att: any) => {
+                  if (att.person_id || att.client_id) personIdsToFetch.push(att.person_id || att.client_id);
+                  const clean = String(att.documento || att.cpf || '').replace(/\D/g, '');
+                  if (clean) docsToFetch.push(clean);
+                });
+              }
+            } catch {}
+          }
         });
+
+        // Buscar cadastros em app_people
+        const uniqueIds = Array.from(new Set(personIdsToFetch));
+        const uniqueDocs = Array.from(new Set(docsToFetch));
+
+        if (uniqueIds.length > 0) {
+          const { data: peopleById } = await supabase
+            .from('app_people')
+            .select('id, nome, documento, whatsapp, email, telefone')
+            .in('id', uniqueIds);
+
+          (peopleById || []).forEach(p => {
+            peopleMap[p.id] = p;
+            if (p.documento) {
+              const clean = String(p.documento).replace(/\D/g, '');
+              if (clean) peopleByDocMap[clean] = p;
+            }
+          });
+        }
+
+        if (uniqueDocs.length > 0) {
+          const { data: peopleByDoc } = await supabase
+            .from('app_people')
+            .select('id, nome, documento, whatsapp, email, telefone')
+            .in('documento', uniqueDocs);
+
+          (peopleByDoc || []).forEach(p => {
+            if (p.id) peopleMap[p.id] = p;
+            if (p.documento) {
+              const clean = String(p.documento).replace(/\D/g, '');
+              if (clean) peopleByDocMap[clean] = p;
+            }
+          });
+        }
       }
 
       // 3. Desduplicar tickets por (order_id, ticket_number) caso existam duplicatas no banco
@@ -260,7 +314,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
         const ticketIdx = Math.max(0, (Number(t.ticket_number) || 1) - 1);
 
         let attendeeData: any = null;
-        if (order?.cancellation_reason && order.cancellation_reason.trim().startsWith('[')) {
+        if (order?.cancellation_reason && typeof order.cancellation_reason === 'string' && order.cancellation_reason.trim().startsWith('[')) {
           try {
             const parsed = JSON.parse(order.cancellation_reason);
             if (Array.isArray(parsed) && parsed[ticketIdx]) {
@@ -269,10 +323,19 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
           } catch {}
         }
 
-        const holderName = t.person?.nome || attendeeData?.nome || (ticketIdx === 0 ? order?.client_name : null) || `Participante ${ticketIdx + 1}`;
-        const holderDoc = t.person?.documento || attendeeData?.documento || attendeeData?.cpf || (ticketIdx === 0 ? order?.client_document : null);
-        const holderPhone = t.person?.whatsapp || attendeeData?.whatsapp || attendeeData?.telefone || (ticketIdx === 0 ? order?.client_phone : null);
-        const holderEmail = t.person?.email || attendeeData?.email || (ticketIdx === 0 ? order?.client_email : null);
+        // Localizar cadastro da pessoa do participante
+        const attPersonId = attendeeData?.person_id || attendeeData?.client_id;
+        const attDoc = String(attendeeData?.documento || attendeeData?.cpf || '').replace(/\D/g, '');
+        const matchedAttPerson = (attPersonId ? peopleMap[attPersonId] : null) || (attDoc ? peopleByDocMap[attDoc] : null);
+
+        // Se o ticket no banco estiver com o client_id do comprador mas ticketIdx > 0, ignora para não sobrescrever o titular real
+        const isBuyerPerson = t.person?.id && order?.client_id && t.person.id === order.client_id;
+        const validPerson = (!isBuyerPerson || ticketIdx === 0) ? t.person : null;
+
+        const holderName = matchedAttPerson?.nome || attendeeData?.nome || validPerson?.nome || (ticketIdx === 0 ? order?.client_name : null) || `Participante ${ticketIdx + 1}`;
+        const holderDoc = matchedAttPerson?.documento || attendeeData?.documento || attendeeData?.cpf || validPerson?.documento || (ticketIdx === 0 ? order?.client_document : null);
+        const holderPhone = matchedAttPerson?.whatsapp || matchedAttPerson?.telefone || attendeeData?.whatsapp || attendeeData?.telefone || validPerson?.whatsapp || (ticketIdx === 0 ? order?.client_phone : null);
+        const holderEmail = matchedAttPerson?.email || attendeeData?.email || validPerson?.email || (ticketIdx === 0 ? order?.client_email : null);
 
         return {
           ...t,
