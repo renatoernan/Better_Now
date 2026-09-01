@@ -266,6 +266,64 @@ serve(async (req: Request) => {
             console.warn("Aviso no disparo assíncrono de notificações:", notifErr);
           });
         }
+
+        // Registrar utilização do cupom se o pedido possuir cupom
+        if (orderData.coupon_id || orderData.coupon_code) {
+          try {
+            let targetCouponId = orderData.coupon_id;
+            if (!targetCouponId && orderData.coupon_code) {
+              const { data: cData } = await supabase
+                .from("app_event_coupons")
+                .select("id, current_uses")
+                .eq("event_id", orderData.event_id)
+                .ilike("code", String(orderData.coupon_code).trim())
+                .is("deleted_at", null)
+                .maybeSingle();
+              if (cData) targetCouponId = cData.id;
+            }
+
+            if (targetCouponId) {
+              const { data: existingUsage } = await supabase
+                .from("app_event_coupon_usages")
+                .select("id")
+                .eq("coupon_id", targetCouponId)
+                .eq("order_id", orderData.id)
+                .maybeSingle();
+
+              if (!existingUsage) {
+                const discAmt = Number(orderData.discount_amount || 0);
+                const origAmt = Number(orderData.amount_total || 0) + discAmt;
+
+                await supabase.from("app_event_coupon_usages").insert({
+                  coupon_id: targetCouponId,
+                  order_id: orderData.id,
+                  event_id: orderData.event_id,
+                  client_name: orderData.client_name || null,
+                  client_document: orderData.client_document || null,
+                  client_phone: orderData.client_phone || null,
+                  client_email: orderData.client_email || null,
+                  batch_index: orderData.batch_index ?? 0,
+                  discount_applied: discAmt,
+                  original_amount: origAmt,
+                  final_amount: Number(orderData.amount_total || 0),
+                  used_at: new Date().toISOString(),
+                });
+
+                const { count: realUsageCount } = await supabase
+                  .from("app_event_coupon_usages")
+                  .select("id", { count: "exact", head: true })
+                  .eq("coupon_id", targetCouponId);
+
+                await supabase
+                  .from("app_event_coupons")
+                  .update({ current_uses: realUsageCount || 1, updated_at: new Date().toISOString() })
+                  .eq("id", targetCouponId);
+              }
+            }
+          } catch (cpnErr) {
+            console.warn("Aviso ao registrar uso de cupom no webhook Mercado Pago:", cpnErr);
+          }
+        }
       }
     }
 

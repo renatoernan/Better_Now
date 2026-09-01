@@ -174,6 +174,64 @@ serve(async (req: Request) => {
             .upsert(ticketsToInsert, { onConflict: "order_id,ticket_number", ignoreDuplicates: true });
         }
 
+        // Registrar utilização do cupom em app_event_coupon_usages se o pedido possuir cupom
+        if (order.coupon_id || order.coupon_code) {
+          try {
+            let targetCouponId = order.coupon_id;
+            if (!targetCouponId && order.coupon_code) {
+              const { data: cData } = await supabase
+                .from("app_event_coupons")
+                .select("id, current_uses")
+                .eq("event_id", order.event_id)
+                .ilike("code", String(order.coupon_code).trim())
+                .is("deleted_at", null)
+                .maybeSingle();
+              if (cData) targetCouponId = cData.id;
+            }
+
+            if (targetCouponId) {
+              const { data: existingUsage } = await supabase
+                .from("app_event_coupon_usages")
+                .select("id")
+                .eq("coupon_id", targetCouponId)
+                .eq("order_id", orderId)
+                .maybeSingle();
+
+              if (!existingUsage) {
+                const discAmt = Number(order.discount_amount || 0);
+                const origAmt = Number(order.amount_total || 0) + discAmt;
+
+                await supabase.from("app_event_coupon_usages").insert({
+                  coupon_id: targetCouponId,
+                  order_id: orderId,
+                  event_id: order.event_id,
+                  client_name: order.client_name || null,
+                  client_document: order.client_document || null,
+                  client_phone: order.client_phone || null,
+                  client_email: order.client_email || null,
+                  batch_index: order.batch_index ?? 0,
+                  discount_applied: discAmt,
+                  original_amount: origAmt,
+                  final_amount: Number(order.amount_total || 0),
+                  used_at: new Date().toISOString(),
+                });
+
+                const { count: realUsageCount } = await supabase
+                  .from("app_event_coupon_usages")
+                  .select("id", { count: "exact", head: true })
+                  .eq("coupon_id", targetCouponId);
+
+                await supabase
+                  .from("app_event_coupons")
+                  .update({ current_uses: realUsageCount || 1, updated_at: new Date().toISOString() })
+                  .eq("id", targetCouponId);
+              }
+            }
+          } catch (cpnErr) {
+            console.warn("Aviso ao registrar uso do cupom em check_status:", cpnErr);
+          }
+        }
+
         // Disparar notificações de confirmação se o status era diferente
         if (order.status !== "paid" && order.status !== "approved") {
           sendOrderNotificationsFromBackend({
@@ -554,23 +612,50 @@ serve(async (req: Request) => {
 
     // 9. Processamento de Sucesso / Aprovação Imediata
     if (paymentStatus === "approved") {
-      // Incrementar uso do cupom se aplicável
+      // Incrementar uso do cupom se aplicável e registrar na tabela app_event_coupon_usages
       if (validCouponId) {
         try {
-          const { data: cpn } = await supabase
-            .from("app_event_coupons")
-            .select("current_uses")
-            .eq("id", validCouponId)
-            .single();
+          const finalOrderId = orderId || orderRecord?.id;
+          if (finalOrderId) {
+            const { data: existingUsage } = await supabase
+              .from("app_event_coupon_usages")
+              .select("id")
+              .eq("coupon_id", validCouponId)
+              .eq("order_id", finalOrderId)
+              .maybeSingle();
 
-          if (cpn) {
-            await supabase
-              .from("app_event_coupons")
-              .update({ current_uses: (Number(cpn.current_uses) || 0) + 1 })
-              .eq("id", validCouponId);
+            if (!existingUsage) {
+              const discAmt = validatedDiscount || 0;
+              const origAmt = (totalAmount || 0) + discAmt;
+
+              await supabase.from("app_event_coupon_usages").insert({
+                coupon_id: validCouponId,
+                order_id: finalOrderId,
+                event_id: event_id,
+                client_name: client_name || null,
+                client_document: cleanDoc || null,
+                client_phone: client_phone || null,
+                client_email: client_email || null,
+                batch_index: bIndex ?? 0,
+                discount_applied: discAmt,
+                original_amount: origAmt,
+                final_amount: totalAmount || 0,
+                used_at: new Date().toISOString(),
+              });
+            }
           }
-        } catch {
-          // Silencioso
+
+          const { count: realUsageCount } = await supabase
+            .from("app_event_coupon_usages")
+            .select("id", { count: "exact", head: true })
+            .eq("coupon_id", validCouponId);
+
+          await supabase
+            .from("app_event_coupons")
+            .update({ current_uses: realUsageCount || 1, updated_at: new Date().toISOString() })
+            .eq("id", validCouponId);
+        } catch (cpnErr) {
+          console.warn("Aviso ao registrar cupom em aprovação imediata:", cpnErr);
         }
       }
 

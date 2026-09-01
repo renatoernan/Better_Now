@@ -24,10 +24,11 @@ export const useEventCoupons = (initialEventId?: string) => {
     setLoading(true);
     try {
       const targetEventId = eventId !== undefined ? eventId : selectedEventId;
+      const syncResult = await couponService.syncAndBackfillCouponUsages(targetEventId);
       const data = await couponService.getCoupons(targetEventId);
       setCoupons(data);
 
-      const calculatedStats = couponService.calculateCouponStats(data);
+      const calculatedStats = couponService.calculateCouponStats(data, [], syncResult.totalDiscount);
       setStats(calculatedStats);
     } catch (err: any) {
       console.error('Erro ao carregar cupons:', err);

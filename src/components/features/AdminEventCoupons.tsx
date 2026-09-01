@@ -51,6 +51,18 @@ export const AdminEventCoupons: React.FC<AdminEventCouponsProps> = ({ onBack, in
   const [usagesList, setUsagesList] = useState<EventCouponUsage[]>([]);
   const [loadingUsages, setLoadingUsages] = useState(false);
 
+  // Totais consolidados das utilizações do cupom selecionado
+  const usagesSummary = useMemo(() => {
+    const totalOriginal = usagesList.reduce((acc, u) => acc + (Number(u.original_amount) || 0), 0);
+    const totalDiscount = usagesList.reduce((acc, u) => acc + (Number(u.discount_applied) || 0), 0);
+    const totalFinal = usagesList.reduce((acc, u) => acc + (Number(u.final_amount) || 0), 0);
+    return {
+      totalOriginal,
+      totalDiscount,
+      totalFinal,
+    };
+  }, [usagesList]);
+
   // Estados para modais de confirmação
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [couponToDelete, setCouponToDelete] = useState<EventCoupon | null>(null);
@@ -365,11 +377,15 @@ export const AdminEventCoupons: React.FC<AdminEventCouponsProps> = ({ onBack, in
 
           <div className="flex items-center gap-2 sm:gap-3">
             <button
-              onClick={() => refetch()}
-              className="p-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-lg transition-colors"
-              title="Recarregar cupons"
+              onClick={async () => {
+                await refetch();
+                toast.success('Cupons e utilizações sincronizados!');
+              }}
+              disabled={loading}
+              className="p-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-lg transition-colors disabled:opacity-60 cursor-pointer"
+              title="Recarregar e sincronizar cupons"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
             </button>
             <button
               onClick={handleOpenCreateModal}
@@ -1111,31 +1127,80 @@ export const AdminEventCoupons: React.FC<AdminEventCouponsProps> = ({ onBack, in
                   <p className="text-xs text-gray-500 mt-0.5">Assim que clientes usarem este cupom no checkout, os dados aparecerão aqui.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-gray-50 border-b border-gray-100 font-semibold text-gray-500 uppercase tracking-wider">
-                      <tr>
-                        <th className="px-4 py-3">Data</th>
-                        <th className="px-4 py-3">Cliente</th>
-                        <th className="px-4 py-3">Documento (CPF)</th>
-                        <th className="px-4 py-3">Valor Original</th>
-                        <th className="px-4 py-3">Desconto</th>
-                        <th className="px-4 py-3">Valor Final</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {usagesList.map((usage) => (
-                        <tr key={usage.id} className="hover:bg-gray-50/60">
-                          <td className="px-4 py-3 text-gray-600">{formatDateTime(usage.used_at)}</td>
-                          <td className="px-4 py-3 font-medium text-gray-900">{usage.client_name || 'Comprador'}</td>
-                          <td className="px-4 py-3 font-mono text-gray-600">{usage.client_document || '-'}</td>
-                          <td className="px-4 py-3 text-gray-500 line-through">{formatPrice(usage.original_amount)}</td>
-                          <td className="px-4 py-3 font-bold text-emerald-600">-{formatPrice(usage.discount_applied)}</td>
-                          <td className="px-4 py-3 font-bold text-gray-900">{formatPrice(usage.final_amount)}</td>
+                <div className="space-y-4">
+                  {/* Cards de Resumo dos Totais */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-200/80">
+                      <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
+                        Valor Original Total
+                      </span>
+                      <span className="text-lg font-bold text-gray-700 block mt-0.5">
+                        {formatPrice(usagesSummary.totalOriginal)}
+                      </span>
+                    </div>
+
+                    <div className="bg-emerald-50 rounded-xl p-3.5 border border-emerald-200/80">
+                      <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider block">
+                        Total em Descontos
+                      </span>
+                      <span className="text-lg font-bold text-emerald-600 block mt-0.5">
+                        -{formatPrice(usagesSummary.totalDiscount)}
+                      </span>
+                    </div>
+
+                    <div className="bg-indigo-50 rounded-xl p-3.5 border border-indigo-200/80">
+                      <span className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wider block">
+                        Valor Final Recebido
+                      </span>
+                      <span className="text-lg font-bold text-indigo-700 block mt-0.5">
+                        {formatPrice(usagesSummary.totalFinal)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tabela de Histórico de Usos com Linha de Totais */}
+                  <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-2xs">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50 border-b border-gray-100 font-semibold text-gray-500 uppercase tracking-wider">
+                        <tr>
+                          <th className="px-4 py-3">Data</th>
+                          <th className="px-4 py-3">Cliente</th>
+                          <th className="px-4 py-3">Documento (CPF)</th>
+                          <th className="px-4 py-3">Valor Original</th>
+                          <th className="px-4 py-3">Desconto</th>
+                          <th className="px-4 py-3">Valor Final</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {usagesList.map((usage) => (
+                          <tr key={usage.id} className="hover:bg-gray-50/60 transition-colors">
+                            <td className="px-4 py-3 text-gray-600">{formatDateTime(usage.used_at)}</td>
+                            <td className="px-4 py-3 font-medium text-gray-900">{usage.client_name || 'Comprador'}</td>
+                            <td className="px-4 py-3 font-mono text-gray-600">{usage.client_document || '-'}</td>
+                            <td className="px-4 py-3 text-gray-500 line-through">{formatPrice(usage.original_amount)}</td>
+                            <td className="px-4 py-3 font-bold text-emerald-600">-{formatPrice(usage.discount_applied)}</td>
+                            <td className="px-4 py-3 font-bold text-gray-900">{formatPrice(usage.final_amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50/95 border-t-2 border-gray-200 font-bold text-xs">
+                        <tr>
+                          <td colSpan={3} className="px-4 py-3.5 text-right text-gray-700 uppercase tracking-wider font-semibold">
+                            Totais ({usagesList.length} {usagesList.length === 1 ? 'uso' : 'usos'}):
+                          </td>
+                          <td className="px-4 py-3.5 font-bold text-gray-700">
+                            {formatPrice(usagesSummary.totalOriginal)}
+                          </td>
+                          <td className="px-4 py-3.5 font-bold text-emerald-600">
+                            -{formatPrice(usagesSummary.totalDiscount)}
+                          </td>
+                          <td className="px-4 py-3.5 font-bold text-indigo-700 text-sm">
+                            {formatPrice(usagesSummary.totalFinal)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

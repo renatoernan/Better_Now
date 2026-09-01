@@ -91,6 +91,7 @@ CREATE OR REPLACE FUNCTION app_validate_and_apply_coupon(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
+SECURITY DEFINER
 AS $$
 DECLARE
   v_coupon app_event_coupons%ROWTYPE;

@@ -246,7 +246,157 @@ export const applyCouponOnOrder = async (params: {
 };
 
 /**
- * Listar cupons para o painel admin (com filtro opcional por evento)
+ * Reconcilia e sincroniza retroativamente utilizações de cupons a partir dos pedidos pagos em app_event_orders
+ */
+export const syncAndBackfillCouponUsages = async (eventId?: string): Promise<{
+  syncedCount: number;
+  totalDiscount: number;
+}> => {
+  try {
+    // 1. Buscar todos os cupons existentes
+    let couponQuery = supabase
+      .from('app_event_coupons')
+      .select('id, code, event_id, current_uses, discount_type, discount_value')
+      .is('deleted_at', null);
+
+    if (eventId && eventId !== 'all') {
+      couponQuery = couponQuery.eq('event_id', eventId);
+    }
+
+    const { data: allCoupons, error: couponsErr } = await couponQuery;
+    if (couponsErr || !allCoupons || allCoupons.length === 0) {
+      return { syncedCount: 0, totalDiscount: 0 };
+    }
+
+    const couponMapById = new Map<string, typeof allCoupons[0]>();
+    const couponMapByCodeEvent = new Map<string, typeof allCoupons[0]>();
+
+    allCoupons.forEach((c) => {
+      couponMapById.set(c.id, c);
+      const codeKey = `${c.event_id}_${c.code.trim().toUpperCase()}`;
+      couponMapByCodeEvent.set(codeKey, c);
+    });
+
+    // 2. Buscar utilizações já registradas
+    const { data: existingUsages } = await supabase
+      .from('app_event_coupon_usages')
+      .select('id, coupon_id, order_id, discount_applied');
+
+    const recordedOrderIds = new Set<string>();
+    (existingUsages || []).forEach((u) => {
+      if (u.order_id) recordedOrderIds.add(u.order_id);
+    });
+
+    // 3. Buscar pedidos pagos em app_event_orders que utilizaram cupom ou tiveram desconto
+    let ordersQuery = supabase
+      .from('app_event_orders')
+      .select('id, event_id, client_name, client_document, client_phone, client_email, batch_index, coupon_id, coupon_code, discount_amount, amount_total, status, created_at')
+      .in('status', ['paid', 'approved']);
+
+    if (eventId && eventId !== 'all') {
+      ordersQuery = ordersQuery.eq('event_id', eventId);
+    }
+
+    const { data: paidOrders, error: ordersErr } = await ordersQuery;
+    if (ordersErr || !paidOrders) {
+      return { syncedCount: 0, totalDiscount: 0 };
+    }
+
+    const usagesToInsert: any[] = [];
+    const couponUsageTotals: Record<string, { count: number; discount: number }> = {};
+
+    allCoupons.forEach((c) => {
+      couponUsageTotals[c.id] = { count: 0, discount: 0 };
+    });
+
+    for (const order of paidOrders) {
+      let matchedCoupon: typeof allCoupons[0] | undefined;
+
+      if (order.coupon_id && couponMapById.has(order.coupon_id)) {
+        matchedCoupon = couponMapById.get(order.coupon_id);
+      } else if (order.coupon_code) {
+        const key = `${order.event_id}_${order.coupon_code.trim().toUpperCase()}`;
+        matchedCoupon = couponMapByCodeEvent.get(key);
+      }
+
+      if (matchedCoupon) {
+        const cId = matchedCoupon.id;
+        if (!couponUsageTotals[cId]) {
+          couponUsageTotals[cId] = { count: 0, discount: 0 };
+        }
+
+        const discAmount = Number(order.discount_amount || 0);
+        couponUsageTotals[cId].count += 1;
+        couponUsageTotals[cId].discount += discAmount;
+
+        // Se este pedido ainda não foi registrado na tabela app_event_coupon_usages, adicionar para insert
+        if (!recordedOrderIds.has(order.id)) {
+          const origAmt = Number(order.amount_total || 0) + discAmount;
+          usagesToInsert.push({
+            coupon_id: cId,
+            order_id: order.id,
+            event_id: order.event_id,
+            client_name: order.client_name || null,
+            client_document: order.client_document || null,
+            client_phone: order.client_phone || null,
+            client_email: order.client_email || null,
+            batch_index: order.batch_index ?? 0,
+            discount_applied: discAmount,
+            original_amount: origAmt,
+            final_amount: Number(order.amount_total || 0),
+            used_at: order.created_at || new Date().toISOString(),
+          });
+          recordedOrderIds.add(order.id);
+        }
+      }
+    }
+
+    // 4. Inserir utilizações pendentes no banco (backfill)
+    if (usagesToInsert.length > 0) {
+      try {
+        await supabase.from('app_event_coupon_usages').insert(usagesToInsert);
+      } catch (insertErr) {
+        console.warn('Aviso ao inserir histórico de cupons em lote:', insertErr);
+      }
+    }
+
+    // 5. Atualizar current_uses na tabela app_event_coupons caso haja divergência
+    let totalDiscountAcrossAll = 0;
+    let totalUsagesAcrossAll = 0;
+
+    for (const coupon of allCoupons) {
+      const statsForCoupon = couponUsageTotals[coupon.id] || { count: 0, discount: 0 };
+      totalDiscountAcrossAll += statsForCoupon.discount;
+      totalUsagesAcrossAll += statsForCoupon.count;
+
+      if (statsForCoupon.count !== coupon.current_uses) {
+        coupon.current_uses = statsForCoupon.count;
+        try {
+          await supabase
+            .from('app_event_coupons')
+            .update({ 
+              current_uses: statsForCoupon.count,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', coupon.id);
+        } catch (updErr) {
+          console.warn(`Aviso ao atualizar current_uses do cupom ${coupon.code}:`, updErr);
+        }
+      }
+    }
+
+    return {
+      syncedCount: totalUsagesAcrossAll,
+      totalDiscount: Number(totalDiscountAcrossAll.toFixed(2)),
+    };
+  } catch (err) {
+    console.error('Erro na sincronização de cupons:', err);
+    return { syncedCount: 0, totalDiscount: 0 };
+  }
+};
+
+/**
+ * Listar cupons para o painel admin (com filtro opcional por evento e reconciliação automática)
  */
 export const getCoupons = async (eventId?: string): Promise<EventCoupon[]> => {
   let query = supabase
@@ -270,32 +420,14 @@ export const getCoupons = async (eventId?: string): Promise<EventCoupon[]> => {
 
   const couponsList = (data || []) as EventCoupon[];
 
-  // Reconciliar contagem real de usos a partir da tabela app_event_coupon_usages
+  // Reconciliar e sincronizar automaticamente com os pedidos pagos
   try {
-    const { data: usagesData } = await supabase
-      .from('app_event_coupon_usages')
-      .select('coupon_id');
+    await syncAndBackfillCouponUsages(eventId);
 
-    if (usagesData && usagesData.length > 0) {
-      const usageCountMap: Record<string, number> = {};
-      usagesData.forEach(u => {
-        if (u.coupon_id) {
-          usageCountMap[u.coupon_id] = (usageCountMap[u.coupon_id] || 0) + 1;
-        }
-      });
-
-      couponsList.forEach(coupon => {
-        const realCount = usageCountMap[coupon.id] ?? 0;
-        if (realCount > (coupon.current_uses || 0)) {
-          coupon.current_uses = realCount;
-          // Sincronizar em background
-          supabase
-            .from('app_event_coupons')
-            .update({ current_uses: realCount })
-            .eq('id', coupon.id)
-            .then(() => {});
-        }
-      });
+    // Re-consultar contagens atualizadas caso tenham sido alteradas
+    const { data: refreshedCoupons } = await query;
+    if (refreshedCoupons && refreshedCoupons.length > 0) {
+      return refreshedCoupons as EventCoupon[];
     }
   } catch (reconcileErr) {
     console.warn('Aviso ao sincronizar contagem de usos dos cupons:', reconcileErr);
@@ -305,21 +437,97 @@ export const getCoupons = async (eventId?: string): Promise<EventCoupon[]> => {
 };
 
 /**
- * Obter utilizações de um cupom específico
+ * Obter utilizações de um cupom específico (unindo app_event_coupon_usages e pedidos de app_event_orders)
  */
 export const getCouponUsages = async (couponId: string): Promise<EventCouponUsage[]> => {
-  const { data, error } = await supabase
-    .from('app_event_coupon_usages')
-    .select('*')
-    .eq('coupon_id', couponId)
-    .order('used_at', { ascending: false });
+  try {
+    // 1. Buscar utilizações registradas diretamente na tabela
+    const { data: usagesData, error: usagesErr } = await supabase
+      .from('app_event_coupon_usages')
+      .select('*')
+      .eq('coupon_id', couponId)
+      .order('used_at', { ascending: false });
 
-  if (error) {
-    console.error('Erro ao buscar utilizações do cupom:', error);
-    throw error;
+    if (usagesErr) {
+      console.warn('Aviso ao buscar app_event_coupon_usages:', usagesErr);
+    }
+
+    const usagesList = (usagesData || []) as EventCouponUsage[];
+    const registeredOrderIds = new Set(usagesList.map((u) => u.order_id).filter(Boolean));
+
+    // 2. Buscar cupom para ter o código e event_id
+    const { data: couponData } = await supabase
+      .from('app_event_coupons')
+      .select('id, code, event_id, discount_type, discount_value')
+      .eq('id', couponId)
+      .maybeSingle();
+
+    if (!couponData) {
+      return usagesList;
+    }
+
+    // 3. Buscar pedidos pagos vinculados ao cupom em app_event_orders
+    const { data: paidOrders } = await supabase
+      .from('app_event_orders')
+      .select('id, event_id, client_name, client_document, client_phone, client_email, batch_index, coupon_id, coupon_code, discount_amount, amount_total, created_at')
+      .in('status', ['paid', 'approved'])
+      .or(`coupon_id.eq.${couponId},and(event_id.eq.${couponData.event_id},coupon_code.ilike.${couponData.code})`);
+
+    if (paidOrders && paidOrders.length > 0) {
+      const missingUsagesToInsert: any[] = [];
+
+      for (const order of paidOrders) {
+        if (!registeredOrderIds.has(order.id)) {
+          const disc = Number(order.discount_amount || 0);
+          const orig = Number(order.amount_total || 0) + disc;
+          const usageItem: EventCouponUsage = {
+            id: `virtual-${order.id}`,
+            coupon_id: couponId,
+            order_id: order.id,
+            event_id: order.event_id,
+            client_name: order.client_name || undefined,
+            client_document: order.client_document || undefined,
+            client_phone: order.client_phone || undefined,
+            client_email: order.client_email || undefined,
+            batch_index: order.batch_index || 0,
+            discount_applied: disc,
+            original_amount: orig,
+            final_amount: Number(order.amount_total || 0),
+            used_at: order.created_at,
+          };
+
+          usagesList.push(usageItem);
+          missingUsagesToInsert.push({
+            coupon_id: couponId,
+            order_id: order.id,
+            event_id: order.event_id,
+            client_name: order.client_name || null,
+            client_document: order.client_document || null,
+            client_phone: order.client_phone || null,
+            client_email: order.client_email || null,
+            batch_index: order.batch_index ?? 0,
+            discount_applied: disc,
+            original_amount: orig,
+            final_amount: Number(order.amount_total || 0),
+            used_at: order.created_at || new Date().toISOString(),
+          });
+        }
+      }
+
+      // Persistir em background se houver itens ausentes
+      if (missingUsagesToInsert.length > 0) {
+        supabase.from('app_event_coupon_usages').insert(missingUsagesToInsert).then(() => {});
+      }
+    }
+
+    // Ordenar decrescente por data de utilização
+    usagesList.sort((a, b) => new Date(b.used_at).getTime() - new Date(a.used_at).getTime());
+
+    return usagesList;
+  } catch (err: any) {
+    console.error('Erro ao buscar utilizações do cupom:', err);
+    throw err;
   }
-
-  return (data || []) as EventCouponUsage[];
 };
 
 /**
@@ -451,7 +659,11 @@ export const toggleCouponStatus = async (id: string, currentStatus: boolean): Pr
 /**
  * Calcular estatísticas gerais de cupons
  */
-export const calculateCouponStats = (coupons: EventCoupon[], usages: EventCouponUsage[] = []): CouponStats => {
+export const calculateCouponStats = (
+  coupons: EventCoupon[], 
+  usages: EventCouponUsage[] = [],
+  totalDiscountOverride?: number
+): CouponStats => {
   const now = new Date();
   const activeCoupons = coupons.filter(c => 
     c.is_active && 
@@ -462,12 +674,18 @@ export const calculateCouponStats = (coupons: EventCoupon[], usages: EventCoupon
   ).length;
 
   const totalUsages = coupons.reduce((acc, c) => acc + (c.current_uses || 0), 0);
-  const totalDiscountGiven = usages.reduce((acc, u) => acc + (Number(u.discount_applied) || 0), 0);
+  
+  let totalDiscountGiven = 0;
+  if (totalDiscountOverride !== undefined) {
+    totalDiscountGiven = totalDiscountOverride;
+  } else if (usages.length > 0) {
+    totalDiscountGiven = usages.reduce((acc, u) => acc + (Number(u.discount_applied) || 0), 0);
+  }
 
   return {
     totalCoupons: coupons.length,
     activeCoupons,
     totalUsages,
-    totalDiscountGiven,
+    totalDiscountGiven: Number(totalDiscountGiven.toFixed(2)),
   };
 };
