@@ -234,12 +234,14 @@ const TicketCard: React.FC<TicketCardProps> = ({
           return (
             <div 
               key={index}
-              className={`border-2 rounded-2xl p-4 sm:p-5 transition-all relative overflow-hidden ${
+              className={`border-2 rounded-2xl p-4 sm:p-5 transition-all relative overflow-hidden select-none ${
                 isBatchActive
                   ? isSelected
                     ? 'border-indigo-600 bg-white shadow-xs cursor-pointer'
                     : 'border-indigo-300 bg-white hover:border-indigo-500 cursor-pointer'
-                  : 'border-amber-300 bg-amber-50/20 cursor-not-allowed'
+                  : isSoldOut
+                    ? 'border-red-300 bg-red-50/25 cursor-not-allowed'
+                    : 'border-amber-300 bg-amber-50/20 cursor-not-allowed'
               }`}
               onClick={() => {
                 if (isBatchActive) {
@@ -247,8 +249,19 @@ const TicketCard: React.FC<TicketCardProps> = ({
                 }
               }}
             >
+              {/* Faixa Diagonal ESGOTADO ocupando o card com transparência e cantos arredondados */}
+              {isSoldOut && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-10 p-2">
+                  <div className="w-[92%] sm:w-[90%] py-1.5 sm:py-2 bg-gradient-to-r from-red-600/70 via-rose-600/70 to-red-600/70 backdrop-blur-xs text-white font-black text-xs sm:text-sm tracking-[0.25em] text-center uppercase shadow-md shadow-red-950/20 -rotate-12 transform rounded-xl border border-white/40 flex items-center justify-center gap-2 select-none">
+                    <span className="text-[9px] opacity-80">●</span>
+                    <span>ESGOTADO</span>
+                    <span className="text-[9px] opacity-80">●</span>
+                  </div>
+                </div>
+              )}
+
               {isBatchActive ? (
-                /* Lote Ativo (Estilo Azul / Índigo conforme anexo) */
+                /* Lote Ativo (Estilo Azul / Índigo) */
                 <div>
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-indigo-950 text-base">{batch.name}</h3>
@@ -289,13 +302,44 @@ const TicketCard: React.FC<TicketCardProps> = ({
                     </div>
                   )}
                 </div>
+              ) : isSoldOut ? (
+                /* Lote Esgotado / Encerrado (Estilo Vermelho / Rose) */
+                <div className="opacity-90">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-red-950 text-base">{batch.name}</h3>
+                  </div>
+
+                  <div className="flex items-baseline mt-1.5">
+                    <span className="text-2xl sm:text-3xl font-black text-red-600">
+                      {formatPrice(batch.price)}
+                    </span>
+                    <span className="text-xs text-red-700/70 font-normal ml-1.5">/ ingresso</span>
+                  </div>
+
+                  {period && (
+                    <p className="text-[11px] text-red-700/80 font-normal mt-1.5 whitespace-nowrap overflow-hidden text-ellipsis">{period}</p>
+                  )}
+
+                  {isSingleMethodZeroFee && (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-red-100/80 text-red-900 border border-red-200/80">
+                        <Sparkles className="w-3 h-3 text-red-600" />
+                        Sem taxa de conveniência
+                      </span>
+                    </div>
+                  )}
+
+                  {batch.description && (
+                    <p className="text-xs text-red-700/70 mt-1">{batch.description}</p>
+                  )}
+                </div>
               ) : (
-                /* Lote Inativo (Estilo Amarelo / Âmbar conforme anexo) */
+                /* Lote Em Breve (Estilo Amarelo / Âmbar) */
                 <div>
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-amber-800 text-base">{batch.name}</h3>
                     <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-lg shrink-0">
-                      {isSoldOut ? 'Esgotado' : isExpired ? 'Encerrado' : 'Em Breve'}
+                      Em Breve
                     </span>
                   </div>
 
