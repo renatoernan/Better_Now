@@ -294,36 +294,77 @@ export const useEventOrders = (eventId?: string) => {
         // Enriquecer cada ticket com seu titular nominal correto
         const orderRawTickets = ticketsByOrder[order.id] || [];
         const enrichedTickets: EventTicketRecord[] = orderRawTickets.map((ticket: EventTicketRecord, idx: number) => {
-          const attendee = attendeesList[idx] || null;
+          const directPerson = ticket.person || (ticket.client_id ? peopleMap[ticket.client_id] : null);
 
+          // Caso 1: Ingresso possui pessoa titular nominal vinculada diretamente que é diferente do comprador
+          // (ex: ingresso transferido de titularidade ou associado nominalmente)
+          const isExplicitTicketHolder = directPerson && directPerson.nome && (
+            (ticket.client_id && order.client_id && ticket.client_id !== order.client_id) ||
+            (!order.client_id && ticket.client_id)
+          );
+
+          if (isExplicitTicketHolder) {
+            return {
+              ...ticket,
+              person: {
+                id: directPerson.id || ticket.client_id,
+                nome: directPerson.nome,
+                documento: directPerson.documento || undefined,
+                whatsapp: directPerson.whatsapp || directPerson.telefone || undefined,
+                email: directPerson.email || undefined,
+              }
+            };
+          }
+
+          // Caso 2: Verificar dados de participantes gravados no ato da compra (attendeesList)
+          const attendee = attendeesList[idx] || null;
           if (attendee) {
             const attPersonId = attendee.person_id || attendee.client_id;
             const attDoc = String(attendee.documento || attendee.cpf || '').replace(/\D/g, '');
             const matchedAttPerson = (attPersonId ? peopleMap[attPersonId] : null)
               || (attDoc ? peopleByDocMap[attDoc] : null);
 
+            // Se o ticket já tem uma pessoa vinculada que não é o comprador, respeita ela; senão usa o attendee
+            const resolvedPerson = (directPerson && directPerson.nome && (!order.client_id || directPerson.id !== order.client_id))
+              ? directPerson
+              : (matchedAttPerson || null);
+
             return {
               ...ticket,
               person: {
-                id: matchedAttPerson?.id || attPersonId || ticket.person?.id,
-                nome: matchedAttPerson?.nome || attendee.nome || ticket.person?.nome || (idx === 0 ? currentName : `Participante ${idx + 1}`),
-                documento: matchedAttPerson?.documento || attendee.documento || attendee.cpf || ticket.person?.documento || (idx === 0 ? currentDoc : undefined),
-                whatsapp: matchedAttPerson?.whatsapp || matchedAttPerson?.telefone || attendee.whatsapp || attendee.telefone || ticket.person?.whatsapp || (idx === 0 ? currentPhone : undefined),
-                email: matchedAttPerson?.email || attendee.email || ticket.person?.email || (idx === 0 ? currentEmail : undefined),
+                id: resolvedPerson?.id || attPersonId || ticket.person?.id,
+                nome: resolvedPerson?.nome || attendee.nome || (idx === 0 ? currentName : `Participante ${idx + 1}`),
+                documento: resolvedPerson?.documento || attendee.documento || attendee.cpf || ticket.person?.documento || (idx === 0 ? currentDoc : undefined),
+                whatsapp: resolvedPerson?.whatsapp || resolvedPerson?.telefone || attendee.whatsapp || attendee.telefone || ticket.person?.whatsapp || (idx === 0 ? currentPhone : undefined),
+                email: resolvedPerson?.email || attendee.email || ticket.person?.email || (idx === 0 ? currentEmail : undefined),
               }
             };
           }
 
-          // Se não houver attendee no JSON mas for o primeiro ingresso, vincula ao comprador
+          // Caso 3: Se não houver attendee no JSON mas for o primeiro ingresso, vincula ao comprador
           if (idx === 0) {
             return {
               ...ticket,
               person: {
-                id: matchedPerson?.id || ticket.person?.id,
-                nome: currentName,
-                documento: currentDoc,
-                whatsapp: currentPhone,
-                email: currentEmail,
+                id: directPerson?.id || matchedPerson?.id || ticket.person?.id,
+                nome: directPerson?.nome || currentName,
+                documento: directPerson?.documento || currentDoc,
+                whatsapp: directPerson?.whatsapp || directPerson?.telefone || currentPhone,
+                email: directPerson?.email || currentEmail,
+              }
+            };
+          }
+
+          // Caso 4: Se o ticket possui pessoa vinculada direta
+          if (directPerson && directPerson.nome) {
+            return {
+              ...ticket,
+              person: {
+                id: directPerson.id || ticket.client_id,
+                nome: directPerson.nome,
+                documento: directPerson.documento,
+                whatsapp: directPerson.whatsapp || directPerson.telefone,
+                email: directPerson.email,
               }
             };
           }
@@ -794,6 +835,55 @@ export const useEventOrders = (eventId?: string) => {
         .eq('id', ticketId);
 
       if (ticketUpdateError) throw ticketUpdateError;
+
+      // 3.1. Sincronizar o JSON de participantes em app_event_orders.cancellation_reason (se existir)
+      if (orderId) {
+        try {
+          const { data: ordData } = await supabase
+            .from('app_event_orders')
+            .select('cancellation_reason')
+            .eq('id', orderId)
+            .maybeSingle();
+
+          if (ordData?.cancellation_reason && typeof ordData.cancellation_reason === 'string' && ordData.cancellation_reason.trim().startsWith('[')) {
+            const attendees = JSON.parse(ordData.cancellation_reason);
+            if (Array.isArray(attendees)) {
+              // Buscar ticket_number para saber o índice exato do ingresso no pedido
+              const { data: currentTicket } = await supabase
+                .from('app_event_tickets')
+                .select('ticket_number')
+                .eq('id', ticketId)
+                .maybeSingle();
+
+              const tNumber = currentTicket?.ticket_number || 1;
+              const attendeeIndex = Math.max(0, tNumber - 1);
+
+              if (attendees[attendeeIndex]) {
+                attendees[attendeeIndex] = {
+                  ...attendees[attendeeIndex],
+                  nome: toPerson.nome.trim(),
+                  documento: cleanDoc || attendees[attendeeIndex].documento,
+                  cpf: cleanDoc || attendees[attendeeIndex].cpf,
+                  whatsapp: toPerson.whatsapp || attendees[attendeeIndex].whatsapp,
+                  telefone: toPerson.whatsapp || attendees[attendeeIndex].telefone,
+                  email: toPerson.email || attendees[attendeeIndex].email,
+                  person_id: targetPersonId,
+                  client_id: targetPersonId,
+                };
+
+                await supabase
+                  .from('app_event_orders')
+                  .update({
+                    cancellation_reason: JSON.stringify(attendees)
+                  })
+                  .eq('id', orderId);
+              }
+            }
+          }
+        } catch (jsonSyncErr) {
+          console.warn('Aviso ao sincronizar participantes em app_event_orders:', jsonSyncErr);
+        }
+      }
 
       // 4. Registrar log na tabela app_ticket_transfers (ignora se a tabela não existir ainda no banco)
       try {

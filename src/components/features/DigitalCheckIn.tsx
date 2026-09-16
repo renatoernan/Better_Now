@@ -332,10 +332,21 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
         const isBuyerPerson = t.person?.id && order?.client_id && t.person.id === order.client_id;
         const validPerson = (!isBuyerPerson || ticketIdx === 0) ? t.person : null;
 
-        const holderName = matchedAttPerson?.nome || attendeeData?.nome || validPerson?.nome || (ticketIdx === 0 ? order?.client_name : null) || `Participante ${ticketIdx + 1}`;
-        const holderDoc = matchedAttPerson?.documento || attendeeData?.documento || attendeeData?.cpf || validPerson?.documento || (ticketIdx === 0 ? order?.client_document : null);
-        const holderPhone = matchedAttPerson?.whatsapp || matchedAttPerson?.telefone || attendeeData?.whatsapp || attendeeData?.telefone || validPerson?.whatsapp || (ticketIdx === 0 ? order?.client_phone : null);
-        const holderEmail = matchedAttPerson?.email || attendeeData?.email || validPerson?.email || (ticketIdx === 0 ? order?.client_email : null);
+        // Se o ticket possui pessoa vinculada diretamente que não é o comprador (transferido/nominal), ela tem prioridade total
+        const isExplicitHolder = t.person?.nome && (!isBuyerPerson || ticketIdx === 0);
+
+        const holderName = isExplicitHolder
+          ? t.person.nome
+          : (matchedAttPerson?.nome || attendeeData?.nome || validPerson?.nome || (ticketIdx === 0 ? order?.client_name : null) || `Participante ${ticketIdx + 1}`);
+        const holderDoc = isExplicitHolder
+          ? (t.person?.documento || null)
+          : (matchedAttPerson?.documento || attendeeData?.documento || attendeeData?.cpf || validPerson?.documento || (ticketIdx === 0 ? order?.client_document : null));
+        const holderPhone = isExplicitHolder
+          ? (t.person?.whatsapp || null)
+          : (matchedAttPerson?.whatsapp || matchedAttPerson?.telefone || attendeeData?.whatsapp || attendeeData?.telefone || validPerson?.whatsapp || (ticketIdx === 0 ? order?.client_phone : null));
+        const holderEmail = isExplicitHolder
+          ? (t.person?.email || null)
+          : (matchedAttPerson?.email || attendeeData?.email || validPerson?.email || (ticketIdx === 0 ? order?.client_email : null));
 
         return {
           ...t,

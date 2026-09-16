@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ArrowLeft, Search, Filter, Download, Ticket, DollarSign, Clock, 
   CheckCircle2, XCircle, Eye, FileText, Globe, RefreshCw, User, Phone, 
@@ -81,6 +81,16 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
   const [orderToNotify, setOrderToNotify] = useState<EventOrderRecord | null>(null);
   const [ticketToTransfer, setTicketToTransfer] = useState<{ ticket: EventTicketRecord; order: EventOrderRecord } | null>(null);
   const [showComplimentaryModal, setShowComplimentaryModal] = useState<boolean>(false);
+
+  // Manter selectedOrderForDetail sincronizado em tempo real caso orders mude
+  useEffect(() => {
+    if (selectedOrderForDetail) {
+      const freshOrder = orders.find(o => o.id === selectedOrderForDetail.id);
+      if (freshOrder) {
+        setSelectedOrderForDetail(freshOrder);
+      }
+    }
+  }, [orders]);
 
   // Alternar status selecionado (múltipla escolha)
   const toggleStatus = (statusKey: string) => {
@@ -1184,7 +1194,29 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         orderClientDocument={ticketToTransfer?.order.client_document}
         orderClientPhone={ticketToTransfer?.order.client_phone}
         onConfirmTransfer={async (params) => {
-          await transferTicket(params);
+          const success = await transferTicket(params);
+          if (success) {
+            // Atualizar imediatamente o modal de detalhes caso esteja aberto na tela
+            setSelectedOrderForDetail(prev => {
+              if (!prev || prev.id !== params.orderId) return prev;
+              const updatedTickets = (prev.tickets || []).map(t => {
+                if (t.id === params.ticketId) {
+                  return {
+                    ...t,
+                    person: {
+                      id: t.person?.id || '',
+                      nome: params.toPerson.nome,
+                      documento: params.toPerson.documento,
+                      whatsapp: params.toPerson.whatsapp,
+                      email: params.toPerson.email,
+                    }
+                  };
+                }
+                return t;
+              });
+              return { ...prev, tickets: updatedTickets };
+            });
+          }
           setTicketToTransfer(null);
         }}
       />
