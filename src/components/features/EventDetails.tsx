@@ -10,7 +10,7 @@ import { usePublicEvents } from '../../shared/hooks/hooks/usePublicEvents';
 import { ArrowLeft } from 'lucide-react';
 import { Event as EventType, PriceBatch, ScheduleItem, PaymentMethodFee } from '../../shared/types/types/event';
 import { CouponValidationResult } from '../../shared/types/types/coupon';
-import { processPriceBatches, getBatchStatus, formatPrice } from '../../shared/utils/utils/eventUtils';
+import { processPriceBatches, getBatchStatus, formatPrice, isBatchVisiblePublicly } from '../../shared/utils/utils/eventUtils';
 import PhoneLoginModal from '../shared/PhoneLoginModal';
 import TokenVerificationModal from '../shared/TokenVerificationModal';
 import ClientRegistrationModal from '../shared/ClientRegistrationModal';
@@ -145,6 +145,17 @@ const EventDetails: React.FC = () => {
         if (eventData?.price_batches) {
           const processedBatches = processPriceBatches(eventData.price_batches);
           setPriceBatches(processedBatches);
+
+          // Selecionar como lote inicial o primeiro lote ativo visível, ou primeiro visível
+          const firstActiveIdx = processedBatches.findIndex(b => isBatchVisiblePublicly(b) && getBatchStatus(b) === 'active');
+          if (firstActiveIdx !== -1) {
+            setSelectedBatch(firstActiveIdx);
+          } else {
+            const firstVisibleIdx = processedBatches.findIndex(isBatchVisiblePublicly);
+            if (firstVisibleIdx !== -1) {
+              setSelectedBatch(firstVisibleIdx);
+            }
+          }
         } else {
           // Se não há price_batches, definir array vazio
           setPriceBatches([]);

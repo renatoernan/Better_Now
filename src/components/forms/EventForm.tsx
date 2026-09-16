@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle, CreditCard, FileText, QrCode, Percent, Upload, Image as ImageIcon, UserCheck, ClipboardList, CheckSquare, GripVertical, ArrowUp, ArrowDown, MessageSquare, Copy, Check, Sparkles, RefreshCw, Ticket, Send, RotateCcw, Pencil, Globe, Link2 } from 'lucide-react';
+import { X, Save, Calendar, Clock, MapPin, Users, DollarSign, Tag, Mail, Phone, Info, Plus, Trash2, Video, AlertCircle, CreditCard, FileText, QrCode, Percent, Upload, Image as ImageIcon, UserCheck, ClipboardList, CheckSquare, GripVertical, ArrowUp, ArrowDown, MessageSquare, Copy, Check, Sparkles, RefreshCw, Ticket, Send, RotateCcw, Pencil, Globe, Link2, Eye, EyeOff } from 'lucide-react';
 import { Event, PriceBatch, PaymentMethodFee, CheckoutFieldConfig } from '../../shared/types/types/event';
 import { useSupabaseEventTypes } from '../../shared/hooks/hooks/useSupabaseEventTypes';
 import ImageUpload from '../shared/ImageUpload';
@@ -31,6 +31,7 @@ interface LocalPriceBatch {
   sold_quantity?: number;
   start_date: string;
   end_date?: string;
+  show_when_closed?: boolean;
   use_custom_payment_methods?: boolean;
   payment_methods?: PaymentMethodFee[];
 }
@@ -194,6 +195,7 @@ const EventForm: React.FC<EventFormProps> = ({
             sold_quantity: b.sold_quantity,
             start_date: b.start_date || '',
             end_date: b.end_date || '',
+            show_when_closed: b.show_when_closed !== false,
             use_custom_payment_methods: isCustom,
             payment_methods: isCustom && b.payment_methods && Array.isArray(b.payment_methods)
               ? DEFAULT_PAYMENT_METHODS.map(defaultPm => {
@@ -261,7 +263,8 @@ const EventForm: React.FC<EventFormProps> = ({
         name: 'Lote Único',
         price: 0,
         start_date: '',
-        end_date: ''
+        end_date: '',
+        show_when_closed: true
       };
       setPriceBatches([newBatch]);
     } else {
@@ -276,7 +279,8 @@ const EventForm: React.FC<EventFormProps> = ({
         name: `Lote ${currentBatches.length + 1}`,
         price: 0,
         start_date: '',
-        end_date: ''
+        end_date: '',
+        show_when_closed: true
       };
       setPriceBatches([...currentBatches, newBatch]);
     }
@@ -475,6 +479,7 @@ const EventForm: React.FC<EventFormProps> = ({
             sold_quantity: batch.sold_quantity,
             start_date: batch.start_date,
             end_date: batch.end_date,
+            show_when_closed: batch.show_when_closed !== false,
             use_custom_payment_methods: false,
             payment_methods: undefined
           };
@@ -487,6 +492,7 @@ const EventForm: React.FC<EventFormProps> = ({
           sold_quantity: batch.sold_quantity,
           start_date: batch.start_date,
           end_date: batch.end_date,
+          show_when_closed: batch.show_when_closed !== false,
           use_custom_payment_methods: true,
           payment_methods: batch.payment_methods || paymentMethods || DEFAULT_PAYMENT_METHODS
         };
@@ -1306,8 +1312,39 @@ const EventForm: React.FC<EventFormProps> = ({
                           </div>
                         </div>
 
-                        {/* Formas de Pagamento Específicas deste Lote */}
+                        {/* Visualizar Lote Encerrado na Área Pública */}
                         <div className="pt-3 border-t border-gray-100">
+                          <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-gray-200/80">
+                            <div className="flex items-center gap-2">
+                              {batch.show_when_closed !== false ? (
+                                <Eye className="w-4 h-4 text-indigo-600" />
+                              ) : (
+                                <EyeOff className="w-4 h-4 text-gray-400" />
+                              )}
+                              <div>
+                                <span className="text-xs font-bold text-gray-900 block">
+                                  Visualizar lote encerrado
+                                </span>
+                                <span className="text-[11px] text-gray-500">
+                                  Exibir este lote na área pública mesmo após encerrado ou esgotado
+                                </span>
+                              </div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer ml-3">
+                              <input
+                                type="checkbox"
+                                checked={batch.show_when_closed !== false}
+                                onChange={(e) => updatePriceBatch(batch.id, 'show_when_closed', e.target.checked)}
+                                className="sr-only peer"
+                                disabled={isSubmitting}
+                              />
+                              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Formas de Pagamento Específicas deste Lote */}
+                        <div className="pt-1">
                           <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-gray-200/80">
                             <div className="flex items-center gap-2">
                               <CreditCard className="w-4 h-4 text-indigo-600" />

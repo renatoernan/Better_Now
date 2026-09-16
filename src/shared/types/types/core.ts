@@ -42,6 +42,7 @@ export interface PriceBatch {
   end_date?: string;
   is_active?: boolean;
   description?: string;
+  show_when_closed?: boolean;
   payment_methods?: PaymentMethodFee[];
   use_custom_payment_methods?: boolean;
   created_at?: string;

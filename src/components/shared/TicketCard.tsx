@@ -4,7 +4,7 @@ import {
   QrCode, ShieldCheck, ChevronDown, Ticket, Tag, X, Check, Loader2, Gift, Sparkles 
 } from 'lucide-react';
 import { TicketCardProps, PaymentMethodFee } from '../../shared/types';
-import { formatPrice, getBatchStatus, formatBatchPeriod, formatBrazilDate } from '../../shared/utils/utils/eventUtils';
+import { formatPrice, getBatchStatus, formatBatchPeriod, formatBrazilDate, isBatchVisiblePublicly } from '../../shared/utils/utils/eventUtils';
 import { validateCouponPreview } from '../../shared/services/couponService';
 
 const TicketCard: React.FC<TicketCardProps> = ({
@@ -96,6 +96,24 @@ const TicketCard: React.FC<TicketCardProps> = ({
       }
     }
   }, [selectedBatch, selectedBatchData]);
+
+  // Se o lote atualmente selecionado não estiver visível na área pública, redirecionar para o primeiro visível
+  useEffect(() => {
+    if (priceBatches.length > 0) {
+      const current = priceBatches[selectedBatch];
+      if (!current || !isBatchVisiblePublicly(current)) {
+        const firstActiveVisible = priceBatches.findIndex(b => isBatchVisiblePublicly(b) && getBatchStatus(b) === 'active');
+        if (firstActiveVisible !== -1) {
+          onBatchSelect(firstActiveVisible);
+        } else {
+          const firstVisible = priceBatches.findIndex(isBatchVisiblePublicly);
+          if (firstVisible !== -1) {
+            onBatchSelect(firstVisible);
+          }
+        }
+      }
+    }
+  }, [priceBatches, selectedBatch]);
 
   // Identificar método selecionado ativo apenas entre os métodos habilitados no lote
   const hasPaymentMethodsConfigured = activeMethods.length > 0;
@@ -197,6 +215,8 @@ const TicketCard: React.FC<TicketCardProps> = ({
     }
   }, [selectedBatch, quantity, rawSubtotal]);
 
+  const visibleBatches = priceBatches.filter(isBatchVisiblePublicly);
+
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 space-y-6">
       <div className="flex items-center justify-between border-b border-gray-100 pb-4">
@@ -205,14 +225,25 @@ const TicketCard: React.FC<TicketCardProps> = ({
           Ingressos
         </h2>
         <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
-          {priceBatches.length} {priceBatches.length === 1 ? 'lote' : 'lotes'}
+          {visibleBatches.length} {visibleBatches.length === 1 ? 'lote' : 'lotes'}
         </span>
       </div>
     
       {/* Lista de Lotes de Preço */}
-      <div className="space-y-3.5">
-        {priceBatches.map((batch, index) => {
-          const status = getBatchStatus(batch);
+      {visibleBatches.length === 0 ? (
+        <div className="py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200 p-4">
+          <Ticket className="w-8 h-8 text-gray-400 mx-auto mb-2 opacity-60" />
+          <p className="text-sm font-semibold text-gray-700">Lotes indisponíveis</p>
+          <p className="text-xs text-gray-500 mt-1">No momento não há lotes abertos para compra neste evento.</p>
+        </div>
+      ) : (
+        <div className="space-y-3.5">
+          {priceBatches.map((batch, index) => {
+            if (!isBatchVisiblePublicly(batch)) {
+              return null;
+            }
+
+            const status = getBatchStatus(batch);
           const period = formatBatchPeriod(batch);
           const isActive = status === 'active';
           const isExpired = status === 'expired';
@@ -371,7 +402,8 @@ const TicketCard: React.FC<TicketCardProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Seção de Compra (Quantidade + Formas de Pagamento + Cupom) */}
       {selectedBatchData && selectedBatchStatus === 'active' && (

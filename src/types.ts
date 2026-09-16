@@ -26,6 +26,7 @@ export interface PriceBatch {
   sold_quantity?: number;
   start_date: string;
   end_date?: string;
+  show_when_closed?: boolean;
 }
 
 export interface Event {

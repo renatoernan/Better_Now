@@ -162,6 +162,31 @@ export const getBatchStatus = (batch: PriceBatch): 'active' | 'expired' | 'upcom
 };
 
 /**
+ * Verificar se o lote está encerrado (seja por término da vigência ou esgotamento de vagas)
+ */
+export const isBatchClosed = (batch: PriceBatch): boolean => {
+  if (!batch) return false;
+  const status = getBatchStatus(batch);
+  if (status === 'expired') return true;
+  if (isBatchSoldOut(batch)) return true;
+  return false;
+};
+
+/**
+ * Determinar se o lote deve ser exibido na área pública de ingressos.
+ * Regra: Se o lote estiver encerrado e 'show_when_closed' for false, não exibir.
+ * Caso contrário (ativo, em breve, ou encerrado com show_when_closed !== false), exibir normalmente.
+ */
+export const isBatchVisiblePublicly = (batch: PriceBatch): boolean => {
+  if (!batch) return false;
+  const closed = isBatchClosed(batch);
+  if (closed && batch.show_when_closed === false) {
+    return false;
+  }
+  return true;
+};
+
+/**
  * Formatar período de validade do lote considerando BRT (UTC-3)
  */
 export const formatBatchPeriod = (batch: PriceBatch): string | null => {

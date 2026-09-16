@@ -39,6 +39,7 @@ export const priceBatchSchema = z.object({
   start_date: z.string().datetime(),
   end_date: z.string().datetime(),
   is_active: z.boolean(),
+  show_when_closed: z.boolean().optional(),
 }).refine(data => new Date(data.end_date) > new Date(data.start_date), {
   message: 'Data de fim deve ser posterior à data de início',
   path: ['end_date'],
