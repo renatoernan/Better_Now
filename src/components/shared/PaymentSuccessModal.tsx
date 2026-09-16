@@ -136,8 +136,17 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
 
   const handleShareWhatsApp = (ticket: EventTicket, index: number) => {
     const title = eventTitle || order?.batch_name || 'Evento Better Now';
-    const client = attendeesParsed[index]?.nome || ((ticket.client as any)?.id !== order?.client_id || index === 0 ? ticket.client?.nome : null) || (index === 0 ? order?.client_name : '') || `Participante ${index + 1}`;
-    const rawDoc = attendeesParsed[index]?.documento || attendeesParsed[index]?.cpf || ((ticket.client as any)?.id !== order?.client_id || index === 0 ? ticket.client?.documento : null) || (index === 0 ? order?.client_document : '');
+    const isExplicitHolder = (ticket.client as any)?.id && (
+      ((ticket.client as any).id !== order?.client_id) || (!order?.client_id)
+    );
+    const client = (isExplicitHolder && ticket.client?.nome)
+      ? ticket.client.nome
+      : (attendeesParsed[index]?.nome || ticket.client?.nome || (index === 0 ? order?.client_name : '') || `Participante ${index + 1}`);
+
+    const rawDoc = (isExplicitHolder && ticket.client?.documento)
+      ? ticket.client.documento
+      : (attendeesParsed[index]?.documento || attendeesParsed[index]?.cpf || ticket.client?.documento || (index === 0 ? order?.client_document : ''));
+
     const doc = rawDoc ? formatCPF(rawDoc) : '';
     const hash = ticket.qr_code_hash;
     const ticketNum = ticket.ticket_number || `${index + 1}`;
@@ -332,93 +341,106 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
 
                   {tickets.length > 0 ? (
                     <div className="space-y-3">
-                      {tickets.map((t, idx) => (
-                        <div
-                          key={t.id || idx}
-                          className="bg-white border-2 border-indigo-100 hover:border-indigo-300 rounded-2xl p-4 sm:p-5 shadow-xs transition-all space-y-3"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="space-y-1.5 flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg border border-indigo-200">
-                                  Ingresso #{t.ticket_number || idx + 1}
-                                </span>
-                                <span className={`text-[11px] font-bold uppercase flex items-center gap-1 ${
-                                  t.status === 'used' ? 'text-gray-500' : 'text-emerald-600'
-                                }`}>
-                                  <Check className="w-3.5 h-3.5" />
-                                  {t.status === 'used' ? 'Já Utilizado' : 'Válido para Entrada'}
-                                </span>
-                              </div>
+                      {tickets.map((t, idx) => {
+                        const isExplicitHolder = (t.client as any)?.id && (
+                          ((t.client as any).id !== order?.client_id) || (!order?.client_id)
+                        );
+                        const holderName = (isExplicitHolder && t.client?.nome)
+                          ? t.client.nome
+                          : (attendeesParsed[idx]?.nome || t.client?.nome || (idx === 0 ? order?.client_name : '') || `Participante ${idx + 1}`);
 
-                              <div className="space-y-0.5">
-                                <p className="text-xs text-gray-900 font-bold truncate">
-                                  Titular: <span className="text-indigo-950 font-extrabold">
-                                    {attendeesParsed[idx]?.nome || ((t.client as any)?.id !== order?.client_id || idx === 0 ? t.client?.nome : null) || (idx === 0 ? order?.client_name : '') || `Participante ${idx + 1}`}
+                        const holderDoc = (isExplicitHolder && t.client?.documento)
+                          ? t.client.documento
+                          : (attendeesParsed[idx]?.documento || attendeesParsed[idx]?.cpf || t.client?.documento || (idx === 0 ? order?.client_document : ''));
+
+                        return (
+                          <div
+                            key={t.id || idx}
+                            className="bg-white border-2 border-indigo-100 hover:border-indigo-300 rounded-2xl p-4 sm:p-5 shadow-xs transition-all space-y-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="space-y-1.5 flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg border border-indigo-200">
+                                    Ingresso #{t.ticket_number || idx + 1}
                                   </span>
-                                </p>
-                                {(attendeesParsed[idx]?.documento || attendeesParsed[idx]?.cpf || ((t.client as any)?.id !== order?.client_id || idx === 0 ? t.client?.documento : null) || (idx === 0 && order?.client_document)) && (
-                                  <p className="text-[11px] text-gray-500 font-medium">
-                                    CPF: {formatCPF(attendeesParsed[idx]?.documento || attendeesParsed[idx]?.cpf || ((t.client as any)?.id !== order?.client_id || idx === 0 ? t.client?.documento : null) || order?.client_document || '')}
+                                  <span className={`text-[11px] font-bold uppercase flex items-center gap-1 ${
+                                    t.status === 'used' ? 'text-gray-500' : 'text-emerald-600'
+                                  }`}>
+                                    <Check className="w-3.5 h-3.5" />
+                                    {t.status === 'used' ? 'Já Utilizado' : 'Válido para Entrada'}
+                                  </span>
+                                </div>
+
+                                <div className="space-y-0.5">
+                                  <p className="text-xs text-gray-900 font-bold truncate">
+                                    Titular: <span className="text-indigo-950 font-extrabold">
+                                      {holderName}
+                                    </span>
                                   </p>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-2 pt-0.5">
-                                <code className="text-[11px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 truncate max-w-[180px] sm:max-w-xs">
-                                  {t.qr_code_hash}
-                                </code>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyCode(t.qr_code_hash)}
-                                  className="text-gray-500 hover:text-indigo-600 p-1 rounded hover:bg-gray-100 transition-colors cursor-pointer shrink-0"
-                                  title="Copiar código de validação"
-                                >
-                                  {copiedHash === t.qr_code_hash ? (
-                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-3.5 h-3.5" />
+                                  {holderDoc && (
+                                    <p className="text-[11px] text-gray-500 font-medium">
+                                      CPF: {formatCPF(holderDoc)}
+                                    </p>
                                   )}
-                                </button>
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-0.5">
+                                  <code className="text-[11px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 truncate max-w-[180px] sm:max-w-xs">
+                                    {t.qr_code_hash}
+                                  </code>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyCode(t.qr_code_hash)}
+                                    className="text-gray-500 hover:text-indigo-600 p-1 rounded hover:bg-gray-100 transition-colors cursor-pointer shrink-0"
+                                    title="Copiar código de validação"
+                                  >
+                                    {copiedHash === t.qr_code_hash ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* QR Code SVG Individual */}
+                              <div
+                                onClick={() => setEnlargedTicket(t)}
+                                className="bg-white p-2 rounded-xl border border-gray-200 shadow-2xs cursor-pointer hover:scale-105 transition-transform flex flex-col items-center shrink-0 group"
+                                title="Clique para ampliar o QR Code"
+                              >
+                                <QRCodeSVG
+                                  value={t.qr_code_hash}
+                                  size={85}
+                                  level="M"
+                                  includeMargin={false}
+                                />
+                                <span className="text-[9px] font-semibold text-gray-400 group-hover:text-indigo-600 mt-1 flex items-center gap-0.5">
+                                  <Maximize2 className="w-2.5 h-2.5" /> Ampliar
+                                </span>
                               </div>
                             </div>
 
-                            {/* QR Code SVG Individual */}
-                            <div
-                              onClick={() => setEnlargedTicket(t)}
-                              className="bg-white p-2 rounded-xl border border-gray-200 shadow-2xs cursor-pointer hover:scale-105 transition-transform flex flex-col items-center shrink-0 group"
-                              title="Clique para ampliar o QR Code"
-                            >
-                              <QRCodeSVG
-                                value={t.qr_code_hash}
-                                size={85}
-                                level="M"
-                                includeMargin={false}
-                              />
-                              <span className="text-[9px] font-semibold text-gray-400 group-hover:text-indigo-600 mt-1 flex items-center gap-0.5">
-                                <Maximize2 className="w-2.5 h-2.5" /> Ampliar
-                              </span>
+                            {/* Botões de Ação do Ingresso (WhatsApp e Compartilhar) */}
+                            <div className="pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
+                              <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                                <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
+                                Apresente este QR Code na portaria
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => handleShareWhatsApp(t, idx)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-2xs hover:shadow-xs transition-all cursor-pointer select-none"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                                Enviar no WhatsApp
+                              </button>
                             </div>
                           </div>
-
-                          {/* Botões de Ação do Ingresso (WhatsApp e Compartilhar) */}
-                          <div className="pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
-                            <p className="text-[11px] text-gray-500 flex items-center gap-1">
-                              <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
-                              Apresente este QR Code na portaria
-                            </p>
-
-                            <button
-                              type="button"
-                              onClick={() => handleShareWhatsApp(t, idx)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-2xs hover:shadow-xs transition-all cursor-pointer select-none"
-                            >
-                              <Share2 className="w-3.5 h-3.5" />
-                              Enviar no WhatsApp
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 flex items-start gap-3">
@@ -491,55 +513,72 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
       </div>
 
       {/* Modal de QR Code em Tela Cheia / Ampliado */}
-      {enlargedTicket && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-60 flex items-center justify-center p-4 animate-in fade-in"
-          onClick={() => setEnlargedTicket(null)}
-        >
+      {enlargedTicket && (() => {
+        const enlargedIndex = (enlargedTicket.ticket_number || 1) - 1;
+        const isExplicitHolder = (enlargedTicket.client as any)?.id && (
+          ((enlargedTicket.client as any).id !== order?.client_id) || (!order?.client_id)
+        );
+        const enlargedHolderName = (isExplicitHolder && enlargedTicket.client?.nome)
+          ? enlargedTicket.client.nome
+          : (attendeesParsed[enlargedIndex]?.nome || enlargedTicket.client?.nome || (enlargedIndex === 0 ? order?.client_name : '') || `Participante ${enlargedIndex + 1}`);
+
+        const enlargedHolderDoc = (isExplicitHolder && enlargedTicket.client?.documento)
+          ? enlargedTicket.client.documento
+          : (attendeesParsed[enlargedIndex]?.documento || attendeesParsed[enlargedIndex]?.cpf || enlargedTicket.client?.documento || (enlargedIndex === 0 ? order?.client_document : ''));
+
+        return (
           <div
-            className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center space-y-4 shadow-2xl border border-gray-200"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-60 flex items-center justify-center p-4 animate-in fade-in"
+            onClick={() => setEnlargedTicket(null)}
           >
-            <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                Ingresso #{enlargedTicket.ticket_number}
-              </span>
+            <div
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center space-y-4 shadow-2xl border border-gray-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  Ingresso #{enlargedTicket.ticket_number}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEnlargedTicket(null)}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-2xl border border-gray-200 flex items-center justify-center">
+                <QRCodeSVG
+                  value={enlargedTicket.qr_code_hash}
+                  size={220}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <p className="font-bold text-gray-900 text-sm">{eventTitle || order?.batch_name || 'Evento'}</p>
+                <p className="text-xs text-indigo-950 font-bold">Titular: {enlargedHolderName}</p>
+                {enlargedHolderDoc && (
+                  <p className="text-[11px] text-gray-500 font-medium">CPF: {formatCPF(enlargedHolderDoc)}</p>
+                )}
+                <code className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg block mt-2">
+                  {enlargedTicket.qr_code_hash}
+                </code>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setEnlargedTicket(null)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100"
+                className="w-full py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                Fechar Visualização
               </button>
             </div>
-
-            <div className="bg-slate-50 p-4 rounded-2xl border border-gray-200 flex items-center justify-center">
-              <QRCodeSVG
-                value={enlargedTicket.qr_code_hash}
-                size={220}
-                level="H"
-                includeMargin={true}
-              />
-            </div>
-
-            <div>
-              <p className="font-bold text-gray-900 text-sm">{eventTitle || order?.batch_name || 'Evento'}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Titular: {order?.client_name || 'Participante'}</p>
-              <code className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg block mt-2">
-                {enlargedTicket.qr_code_hash}
-              </code>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setEnlargedTicket(null)}
-              className="w-full py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl"
-            >
-              Fechar Visualização
-            </button>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

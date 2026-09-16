@@ -185,6 +185,26 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
     }
 
     if (!error && tickets && tickets.length > 0) {
+      // Garantir que todos os tickets com client_id tenham seus dados de pessoa carregados
+      const missingClientIds = tickets
+        .map((t: any) => t.client_id)
+        .filter((id: string, idx: number, arr: string[]) =>
+          Boolean(id) &&
+          !((tickets[idx] as any)?.client?.nome || (tickets[idx] as any)?.person?.nome) &&
+          arr.indexOf(id) === idx
+        );
+
+      let fetchedPeopleMap: Record<string, any> = {};
+      if (missingClientIds.length > 0) {
+        const { data: peopleData } = await supabase
+          .from('app_people')
+          .select('id, nome, documento, whatsapp, email')
+          .in('id', missingClientIds);
+        (peopleData || []).forEach((p: any) => {
+          fetchedPeopleMap[p.id] = p;
+        });
+      }
+
       let attendees: any[] = [];
       if ((order as any)?.cancellation_reason && typeof (order as any).cancellation_reason === 'string' && (order as any).cancellation_reason.trim().startsWith('[')) {
         try {
@@ -193,21 +213,59 @@ export const getTicketsByOrderId = async (orderId: string, orderFallbackData?: E
         } catch {}
       }
 
-      const enrichedTickets = tickets.map((t, idx) => {
+      const enrichedTickets = tickets.map((t: any, idx: number) => {
+        const directPerson = t.client || t.person || (t.client_id ? fetchedPeopleMap[t.client_id] : null);
+
+        // Se o ticket possui titular vinculado diretamente que é diferente do comprador (ex: transferido nominalmente)
+        const isExplicitHolder = directPerson && directPerson.nome && (
+          (t.client_id && order?.client_id && t.client_id !== order.client_id) ||
+          (!order?.client_id && t.client_id)
+        );
+
+        if (isExplicitHolder) {
+          return {
+            ...t,
+            client: {
+              id: directPerson.id || t.client_id,
+              nome: directPerson.nome,
+              documento: directPerson.documento || undefined,
+              whatsapp: directPerson.whatsapp || undefined,
+              email: directPerson.email || undefined,
+            }
+          };
+        }
+
         const att = attendees[idx] || null;
         if (att) {
           return {
             ...t,
             client: {
-              id: att.person_id || att.client_id || t.client?.id,
-              nome: att.nome || t.client?.nome || (idx === 0 ? order?.client_name : `Participante ${idx + 1}`),
-              documento: att.documento || att.cpf || t.client?.documento || (idx === 0 ? (order as any)?.client_document : undefined),
-              whatsapp: att.whatsapp || att.telefone || t.client?.whatsapp || (idx === 0 ? (order as any)?.client_phone : undefined),
-              email: att.email || t.client?.email || (idx === 0 ? (order as any)?.client_email : undefined),
+              id: directPerson?.id || t.client_id || att.person_id || att.client_id,
+              nome: (directPerson?.nome && t.client_id !== order?.client_id ? directPerson.nome : null) || att.nome || directPerson?.nome || (idx === 0 ? order?.client_name : `Participante ${idx + 1}`),
+              documento: (directPerson?.documento && t.client_id !== order?.client_id ? directPerson.documento : null) || att.documento || att.cpf || directPerson?.documento || (idx === 0 ? (order as any)?.client_document : undefined),
+              whatsapp: (directPerson?.whatsapp && t.client_id !== order?.client_id ? directPerson.whatsapp : null) || att.whatsapp || att.telefone || directPerson?.whatsapp || (idx === 0 ? (order as any)?.client_phone : undefined),
+              email: (directPerson?.email && t.client_id !== order?.client_id ? directPerson.email : null) || att.email || directPerson?.email || (idx === 0 ? (order as any)?.client_email : undefined),
             }
           };
         }
-        return t;
+
+        if (idx === 0) {
+          return {
+            ...t,
+            client: {
+              id: directPerson?.id || t.client_id || order?.client_id,
+              nome: directPerson?.nome || order?.client_name,
+              documento: directPerson?.documento || (order as any)?.client_document,
+              whatsapp: directPerson?.whatsapp || (order as any)?.client_phone,
+              email: directPerson?.email || (order as any)?.client_email,
+            }
+          };
+        }
+
+        return {
+          ...t,
+          client: directPerson || undefined
+        };
       });
 
       return enrichedTickets as EventTicket[];
