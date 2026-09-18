@@ -20,9 +20,13 @@ interface EventPhoto {
   id: string;
   event_id: string;
   photo_url: string;
+  storage_path?: string | null;
+  media_type?: 'photo' | 'video';
   caption?: string;
   uploaded_at: string;
   uploaded_by?: string;
+  source?: 'admin' | 'participant';
+  moderation_status?: 'pending' | 'approved' | 'rejected';
 }
 
 /**
@@ -648,10 +652,13 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
       setLoading(true);
       setError(null);
 
+      // A galeria mostra apenas o conteúdo publicado; pendentes e rejeitados
+      // são tratados na tela de moderação do mural.
       const { data, error: fetchErr } = await supabase
         .from('app_event_photos')
         .select('*')
         .eq('event_id', eventId)
+        .eq('moderation_status', 'approved')
         .order('uploaded_at', { ascending: false });
 
       if (fetchErr) throw fetchErr;
@@ -691,7 +698,11 @@ export const useSupabaseEvents = (): UseSupabaseEventsReturn => {
         .insert([{
           event_id: eventId,
           photo_url: publicUrl,
+          storage_path: filePath,
+          media_type: file.type.startsWith('video/') ? 'video' : 'photo',
           caption: caption || null,
+          source: 'admin',
+          moderation_status: 'approved',
           uploaded_at: new Date().toISOString()
         }])
         .select()

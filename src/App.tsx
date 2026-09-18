@@ -20,6 +20,8 @@ const ContactForm = React.lazy(() => import('./components/forms/ContactForm'));
 const WhatsAppButton = React.lazy(() => import('./components/ui/WhatsAppButton'));
 const PublicEvents = React.lazy(() => import('./components/features/PublicEvents'));
 const EventDetails = React.lazy(() => import('./components/features/EventDetails'));
+const EventMural = React.lazy(() => import('./components/features/EventMural'));
+const EventTelao = React.lazy(() => import('./components/features/EventTelao'));
 
 // Admin Components (Lazy Loading)
 const AdminLogin = React.lazy(() => import('./components/forms/AdminLogin'));
@@ -29,6 +31,9 @@ const AdminEvents = React.lazy(() => import('./components/features/AdminEvents')
 const AdminTestimonials = React.lazy(() => import('./components/features/AdminTestimonials'));
 const AdminSettings = React.lazy(() => import('./components/features/AdminSettings'));
 const AdminSolicitations = React.lazy(() => import('./components/features/AdminSolicitations'));
+const AdminEventMural = React.lazy(() => import('./components/features/AdminEventMural'));
+const AdminEventContests = React.lazy(() => import('./components/features/AdminEventContests'));
+const ContestKiosk = React.lazy(() => import('./components/features/ContestKiosk'));
 
 // Supplier Components (Lazy Loading)
 const AdminSuppliers = React.lazy(() => import('./components/features/AdminSuppliers'));
@@ -95,13 +100,29 @@ const AppContent: React.FC = () => {
             </Suspense>
           } 
         />
-        <Route 
-          path="/eventos/:id" 
+        <Route
+          path="/eventos/:id"
           element={
             <Suspense fallback={<LoadingFallback message="Carregando detalhes do evento..." />}>
               <EventDetails />
             </Suspense>
-          } 
+          }
+        />
+        <Route
+          path="/eventos/:id/mural"
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando mural..." />}>
+              <EventMural />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/eventos/:id/telao"
+          element={
+            <Suspense fallback={<LoadingFallback message="Preparando telão..." />}>
+              <EventTelao />
+            </Suspense>
+          }
         />
         
         {/* Rotas administrativas */}
@@ -147,8 +168,32 @@ const AppContent: React.FC = () => {
               </Suspense>
             } 
           />
-          <Route 
-            path="solicitations" 
+          <Route
+            path="events/:id/mural"
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando mural..." />}>
+                <AdminEventMural />
+              </Suspense>
+            }
+          />
+          <Route
+            path="events/:id/concursos"
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando concursos..." />}>
+                <AdminEventContests />
+              </Suspense>
+            }
+          />
+          <Route
+            path="events/:id/concursos/:contestId/tablet"
+            element={
+              <Suspense fallback={<LoadingFallback message="Abrindo modo tablet..." />}>
+                <ContestKiosk />
+              </Suspense>
+            }
+          />
+          <Route
+            path="solicitations"
             element={
               <Suspense fallback={<LoadingFallback message="Carregando solicitações..." />}>
                 <AdminSolicitations />

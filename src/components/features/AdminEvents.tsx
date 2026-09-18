@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin, ArrowLeft, Globe, Link2, Copy } from 'lucide-react';
+import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin, ArrowLeft, Globe, Link2, Copy, Images, Trophy } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { Event } from '../../shared/types/types/event';
 import { toast } from 'sonner';
@@ -32,6 +33,8 @@ const AdminEvents: React.FC = () => {
     fetchEvents,
     fetchDeletedEvents
   } = useSupabaseEvents();
+
+  const navigate = useNavigate();
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -669,6 +672,24 @@ const AdminEvents: React.FC = () => {
 
                       <button
                         type="button"
+                        onClick={() => navigate(`/admin/events/${event.id}/mural`)}
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors"
+                      >
+                        <Images className="w-4 h-4 mb-1" />
+                        <span>Mural</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/admin/events/${event.id}/concursos`)}
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                      >
+                        <Trophy className="w-4 h-4 mb-1" />
+                        <span>Concursos</span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => {
                           setSelectedEvent(event);
                           setViewMode('form');
@@ -829,6 +850,20 @@ const AdminEvents: React.FC = () => {
                               title="Galeria"
                             >
                               <Camera className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => navigate(`/admin/events/${event.id}/mural`)}
+                              className="text-purple-600 hover:text-purple-800 p-1.5 rounded-lg hover:bg-purple-50 transition-colors cursor-pointer"
+                              title="Mural (moderação)"
+                            >
+                              <Images className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => navigate(`/admin/events/${event.id}/concursos`)}
+                              className="text-amber-600 hover:text-amber-800 p-1.5 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer"
+                              title="Concursos"
+                            >
+                              <Trophy className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => {

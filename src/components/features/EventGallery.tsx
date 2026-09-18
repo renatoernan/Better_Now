@@ -366,7 +366,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
       const mediaData = eventPhotos.filter(photo => photo.event_id === eventId).map(photo => ({
         id: photo.id,
         url: photo.photo_url,
-        type: getMediaType(photo.photo_url),
+        type: photo.media_type || getMediaType(photo.photo_url),
         caption: photo.caption,
         uploaded_at: photo.uploaded_at,
         uploaded_by: photo.uploaded_by
@@ -391,7 +391,7 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, isAdmin = false, s
       const mediaData = (data || []).map(photo => ({
         id: photo.id,
         url: photo.photo_url,
-        type: getMediaType(photo.photo_url),
+        type: photo.media_type || getMediaType(photo.photo_url),
         caption: photo.caption,
         uploaded_at: photo.uploaded_at,
         uploaded_by: photo.uploaded_by
