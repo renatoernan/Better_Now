@@ -101,7 +101,7 @@ const PromoteToContestModal: React.FC<Props> = ({
 
         <div className="p-4 space-y-4 overflow-y-auto">
           <div className="flex gap-3">
-            <img src={photo.photo_url} alt="" className="w-20 h-20 object-cover rounded-lg flex-shrink-0" />
+            <img src={photo.photo_url} alt="" className="w-20 h-20 object-contain bg-gray-100 dark:bg-gray-900 rounded-lg flex-shrink-0" />
             <div className="text-sm text-gray-500 self-center">
               Esta foto vira uma candidatura no concurso escolhido.
             </div>
@@ -213,7 +213,7 @@ const PromoteToContestModal: React.FC<Props> = ({
                 <img
                   src={conflicts[0].photo.photo_url}
                   alt=""
-                  className="w-14 h-14 object-cover rounded mt-2 ml-6"
+                  className="w-14 h-14 object-contain bg-gray-100 dark:bg-gray-900 rounded mt-2 ml-6"
                 />
               )}
             </div>

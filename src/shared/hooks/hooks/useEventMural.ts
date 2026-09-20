@@ -28,6 +28,9 @@ export interface SubmitOptions {
   authorName?: string;
   ticketId?: string | null;
   personId?: string | null;
+  /** Fotos tiradas pela equipe (modo tablet) entram como 'admin' e já aprovadas. */
+  source?: 'admin' | 'participant';
+  moderationStatus?: ModerationStatus;
 }
 
 const BUCKET = 'events';
@@ -44,6 +47,63 @@ const buildStoragePath = (eventId: string, file: File): string => {
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   return `${MURAL_FOLDER}/${eventId}/${unique}.${ext}`;
+};
+
+const persistMedia = async (
+  eventId: string,
+  upload: File,
+  isVideo: boolean,
+  options: SubmitOptions
+): Promise<MuralItem> => {
+  const storagePath = buildStoragePath(eventId, upload);
+
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, upload, { contentType: upload.type });
+  if (uploadError) throw uploadError;
+
+  const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
+
+  const { data, error: insertError } = await supabase
+    .from('app_event_photos')
+    .insert([{
+      event_id: eventId,
+      photo_url: publicUrl,
+      storage_path: storagePath,
+      media_type: isVideo ? 'video' : 'photo',
+      caption: options.caption?.trim() || null,
+      source: options.source || 'participant',
+      moderation_status: options.moderationStatus || 'pending',
+      consent_image_use: true,
+      uploaded_by: options.authorName?.trim() || null,
+      submitted_by_ticket_id: options.ticketId || null,
+      submitted_by_person_id: options.personId || null,
+    }])
+    .select()
+    .single();
+
+  if (insertError) {
+    // Não deixa arquivo órfão no bucket se a linha não entrou
+    await supabase.storage.from(BUCKET).remove([storagePath]);
+    throw insertError;
+  }
+
+  return data;
+};
+
+/**
+ * Envia uma foto sem montar o hook do mural — usado pelo modo tablet, que só
+ * precisa gravar a imagem recém-capturada.
+ */
+export const uploadEventPhoto = async (
+  eventId: string,
+  file: File,
+  options: SubmitOptions = {}
+): Promise<MuralItem> => {
+  const { compressedFile } = await compressImage(file, {
+    maxWidth: 1920, maxHeight: 1920, quality: 0.82, maxSizeKB: 900,
+  });
+  return persistMedia(eventId, compressedFile, false, options);
 };
 
 export const useEventMural = (eventId: string, status?: ModerationStatus | 'all') => {
@@ -119,40 +179,7 @@ export const useEventMural = (eventId: string, status?: ModerationStatus | 'all'
         ? file
         : (await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.82, maxSizeKB: 900 })).compressedFile;
 
-      const storagePath = buildStoragePath(eventId, upload);
-
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, upload, { contentType: upload.type });
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
-
-      const { data, error: insertError } = await supabase
-        .from('app_event_photos')
-        .insert([{
-          event_id: eventId,
-          photo_url: publicUrl,
-          storage_path: storagePath,
-          media_type: isVideo ? 'video' : 'photo',
-          caption: options.caption?.trim() || null,
-          source: 'participant',
-          moderation_status: 'pending',
-          consent_image_use: true,
-          uploaded_by: options.authorName?.trim() || null,
-          submitted_by_ticket_id: options.ticketId || null,
-          submitted_by_person_id: options.personId || null,
-        }])
-        .select()
-        .single();
-
-      if (insertError) {
-        // Não deixa arquivo órfão no bucket se a linha não entrou
-        await supabase.storage.from(BUCKET).remove([storagePath]);
-        throw insertError;
-      }
-
-      return data;
+      return persistMedia(eventId, upload, isVideo, options);
     },
     [eventId]
   );

@@ -135,6 +135,17 @@ const AppContent: React.FC = () => {
         />
         
         {/* Rotas administrativas */}
+        {/* Modo tablet: tela cheia, fora do AdminLayout (sem menu lateral) */}
+        <Route
+          path="/admin/events/:id/concursos/:contestId/tablet"
+          element={
+            <Suspense fallback={<LoadingFallback message="Abrindo modo tablet..." />}>
+              <ProtectedRoute>
+                <ContestKiosk />
+              </ProtectedRoute>
+            </Suspense>
+          }
+        />
         <Route 
           path="/admin/login" 
           element={
@@ -190,14 +201,6 @@ const AppContent: React.FC = () => {
             element={
               <Suspense fallback={<LoadingFallback message="Carregando concursos..." />}>
                 <AdminEventContests />
-              </Suspense>
-            }
-          />
-          <Route
-            path="events/:id/concursos/:contestId/tablet"
-            element={
-              <Suspense fallback={<LoadingFallback message="Abrindo modo tablet..." />}>
-                <ContestKiosk />
               </Suspense>
             }
           />

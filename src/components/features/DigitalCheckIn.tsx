@@ -31,6 +31,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { isPaidOrderStatus } from '../../shared/utils/utils/eventAttendees';
 import { supabase } from '../../shared/services/lib/supabase';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { toast } from 'sonner';
@@ -212,6 +213,9 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
   const codeInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const isProcessingScanRef = useRef(false);
+  // Ingressos de pedidos não pagos ficam fora da lista, mas o leitor precisa
+  // deles para dizer por que o QR não vale, em vez de "código não localizado".
+  const unpaidTicketsRef = useRef<any[]>([]);
 
   // Carregar ingressos reais do evento
   const loadEventTickets = async () => {
@@ -299,9 +303,10 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
         }
       }
 
-      // 3. Desduplicar tickets por (order_id, ticket_number) caso existam duplicatas no banco
+      // 3. Só pedidos pagos entram na portaria; desduplicar por (order_id, ticket_number)
       const seenTicketKeys = new Set<string>();
       const deduplicatedTickets = (ticketsData || []).filter(t => {
+        if (!isPaidOrderStatus(ordersMap[t.order_id]?.status)) return false;
         const key = `${t.order_id}-${t.ticket_number}`;
         if (seenTicketKeys.has(key)) return false;
         seenTicketKeys.add(key);
@@ -358,6 +363,9 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
         };
       });
 
+      unpaidTicketsRef.current = (ticketsData || []).filter(
+        t => !isPaidOrderStatus(ordersMap[t.order_id]?.status)
+      );
       setTickets(enriched);
     } catch (err) {
       console.error('Erro ao carregar ingressos para check-in:', err);
@@ -602,7 +610,15 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
       }
     } else {
       playWarningBeep();
-      toast.error(`Nenhum ingresso localizado com o código: ${clean}`);
+      const unpaid = unpaidTicketsRef.current.find(t =>
+        String(t.qr_code_hash || '').toLowerCase() === clean.toLowerCase() ||
+        String(t.id || '').toLowerCase() === clean.toLowerCase()
+      );
+      toast.error(
+        unpaid
+          ? 'Ingresso de pedido não pago. Confirme o pagamento antes do check-in.'
+          : `Nenhum ingresso localizado com o código: ${clean}`
+      );
       // Libera após 2s caso não localize
       setTimeout(() => {
         isProcessingScanRef.current = false;

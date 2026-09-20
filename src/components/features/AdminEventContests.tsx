@@ -334,7 +334,7 @@ const AdminEventContests: React.FC = () => {
                                 src={e.photo.photo_url}
                                 alt={e.participant_name}
                                 loading="lazy"
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-contain"
                               />
                             )}
                           </div>

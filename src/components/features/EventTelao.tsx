@@ -163,7 +163,7 @@ const EventTelao: React.FC = () => {
               transition={{ delay: 0.4, duration: 0.8 }}
               src={winner.photo_url}
               alt={winner.participant_name}
-              className="w-72 h-72 object-cover rounded-3xl mx-auto mb-6 ring-4 ring-amber-400 shadow-2xl"
+              className="w-72 h-72 object-contain bg-black/40 rounded-3xl mx-auto mb-6 ring-4 ring-amber-400 shadow-2xl"
             />
           )}
 
@@ -221,7 +221,7 @@ const EventTelao: React.FC = () => {
             transition={{ duration: 1.2 }}
             className="absolute inset-0"
           >
-            <img src={current.photo_url} alt="" className="w-full h-full object-cover" />
+            <img src={current.photo_url} alt="" className="w-full h-full object-contain" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/60" />
           </motion.div>
         ) : (
@@ -272,7 +272,7 @@ const EventTelao: React.FC = () => {
                   {i + 1}
                 </span>
                 {r.photo_url && (
-                  <img src={r.photo_url} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                  <img src={r.photo_url} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/10" />
                 )}
                 <span className="flex-1 truncate">{r.participant_name}</span>
                 <span className="font-bold text-lg">{r.vote_count}</span>
@@ -298,7 +298,7 @@ const EventTelao: React.FC = () => {
                   key={e.entry_id}
                   src={e.photo_url}
                   alt=""
-                  className="w-11 h-11 rounded-full object-cover ring-2 ring-black"
+                  className="w-11 h-11 rounded-full object-contain bg-white/10 ring-2 ring-black"
                 />
               )
             ))}

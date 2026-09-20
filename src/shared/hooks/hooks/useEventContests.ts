@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/lib/supabase';
+import { fetchEventAttendees, formatPersonName } from '../../utils/utils/eventAttendees';
 
 export type ContestStatus = 'draft' | 'voting' | 'closed' | 'published';
 
@@ -57,7 +58,8 @@ export interface ParticipantRef {
 }
 
 export interface EventParticipantOption {
-  personId: string;
+  /** Convidado nominal do pedido pode não ter cadastro próprio. */
+  personId: string | null;
   ticketId: string;
   name: string;
   phone?: string | null;
@@ -284,43 +286,36 @@ export const useEventContests = (eventId: string) => {
   };
 };
 
-/** Participantes do evento, a partir dos ingressos emitidos. */
+/**
+ * Participantes do evento — a mesma lista da portaria, um item por ingresso,
+ * para que o tablet do concurso nunca mostre menos gente que o check-in.
+ */
 export const searchEventParticipants = async (
   eventId: string,
   term: string
 ): Promise<EventParticipantOption[]> => {
-  const { data: tickets, error: tErr } = await supabase
-    .from('app_event_tickets')
-    .select('id, client_id, used_at, status')
-    .eq('event_id', eventId)
-    .not('client_id', 'is', null);
+  const attendees = await fetchEventAttendees(eventId);
+  const t = term.trim().toLowerCase();
+  const digits = t.replace(/\D/g, '');
 
-  if (tErr) throw tErr;
-  if (!tickets?.length) return [];
-
-  const personIds = [...new Set(tickets.map(t => t.client_id))];
-
-  let query = supabase
-    .from('app_people')
-    .select('id, nome, apelido, telefone, whatsapp')
-    .in('id', personIds)
-    .limit(30);
-
-  if (term.trim()) query = query.ilike('nome', `%${term.trim()}%`);
-
-  const { data: people, error: pErr } = await query;
-  if (pErr) throw pErr;
-
-  return (people || []).map(p => {
-    const ticket = tickets.find(t => t.client_id === p.id);
-    return {
-      personId: p.id,
-      ticketId: ticket?.id || '',
-      name: p.apelido || p.nome,
-      phone: p.whatsapp || p.telefone,
-      checkedIn: Boolean(ticket?.used_at),
-    };
-  });
+  return attendees
+    // Ingresso cancelado não concorre nem vota
+    .filter(a => a.status !== 'canceled')
+    .filter(a => {
+      if (!t) return true;
+      if (a.name.toLowerCase().includes(t)) return true;
+      if (digits && String(a.document || '').replace(/\D/g, '').includes(digits)) return true;
+      if (digits && String(a.phone || '').replace(/\D/g, '').includes(digits)) return true;
+      return false;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+    .map(a => ({
+      personId: a.personId,
+      ticketId: a.ticketId,
+      name: formatPersonName(a.name),
+      phone: a.phone,
+      checkedIn: a.checkedIn,
+    }));
 };
 
 export default useEventContests;
