@@ -1,6 +1,6 @@
 
 import React, { Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 
 // Layout Components (mantidos como imports diretos por serem críticos)
@@ -79,6 +79,11 @@ const HomePage: React.FC = () => {
 };
 
 const AppContent: React.FC = () => {
+  // O botão do WhatsApp fala com o público do site; na área administrativa ele
+  // só cobre os controles de tela (modo tablet, check-in) sem servir a ninguém.
+  const { pathname } = useLocation();
+  const isAdminArea = pathname.startsWith('/admin');
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Routes>
@@ -293,9 +298,11 @@ const AppContent: React.FC = () => {
         closeButton
         duration={4000}
       />
-      <Suspense fallback={null}>
-        <WhatsAppButton />
-      </Suspense>
+      {!isAdminArea && (
+        <Suspense fallback={null}>
+          <WhatsAppButton />
+        </Suspense>
+      )}
     </div>
   );
 };

@@ -31,6 +31,20 @@ const RESET_MS = 3500;
 
 const norm = (v: string) => v.trim().toLowerCase();
 
+/**
+ * Mesma regra que a função register-contest-vote aplica no servidor: além do
+ * estado do concurso, a janela de horário também fecha a votação.
+ */
+const votingOpenAt = (
+  c: { status?: string | null; voting_opens_at?: string | null; voting_closes_at?: string | null; deleted_at?: string | null } | null | undefined,
+  at: number
+): boolean => {
+  if (!c || c.deleted_at || c.status !== 'voting') return false;
+  if (c.voting_opens_at && at < Date.parse(c.voting_opens_at)) return false;
+  if (c.voting_closes_at && at > Date.parse(c.voting_closes_at)) return false;
+  return true;
+};
+
 const ContestKiosk: React.FC = () => {
   const { id: eventId, contestId } = useParams<{ id: string; contestId: string }>();
   const navigate = useNavigate();
@@ -63,6 +77,9 @@ const ContestKiosk: React.FC = () => {
   // Check-in e fotos mudam em outros aparelhos durante o evento; o tablet fica
   // horas aberto na mesma tela, então precisa de um recarregar manual.
   const [reloadKey, setReloadKey] = useState(0);
+  // A votação também fecha sozinha pelo horário, então a tela precisa de um
+  // relógio, e não só do estado carregado quando o tablet abriu.
+  const [nowTs, setNowTs] = useState(() => Date.now());
   const [refreshing, setRefreshing] = useState(false);
 
   // Captura de foto no tablet
@@ -85,6 +102,37 @@ const ContestKiosk: React.FC = () => {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setAdminId(data.user?.id ?? null));
   }, []);
+
+  // Estado do concurso em tempo real: fechar a votação no painel precisa tirar
+  // a aba do ar em todos os tablets na hora, sem ninguém recarregar nada.
+  useEffect(() => {
+    if (!contestId) return;
+    const channel = supabase
+      .channel(`contest-kiosk:${contestId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_event_contests', filter: `id=eq.${contestId}` },
+        () => { refetchContests(); setNowTs(Date.now()); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [contestId, refetchContests]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTs(Date.now()), 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  const liveVotingOpen = votingOpenAt(contest, nowTs);
+
+  // Acorda exatamente no instante do fechamento programado, em vez de esperar
+  // o próximo tique do relógio.
+  useEffect(() => {
+    const closesAt = contest?.voting_closes_at ? Date.parse(contest.voting_closes_at) : null;
+    if (!closesAt || closesAt <= nowTs) return;
+    const t = setTimeout(() => setNowTs(Date.now()), Math.min(closesAt - nowTs + 500, 2147483647));
+    return () => clearTimeout(t);
+  }, [contest?.voting_closes_at, nowTs]);
 
   const clearShot = useCallback(() => {
     setShot(prev => {
@@ -110,14 +158,8 @@ const ContestKiosk: React.FC = () => {
     resetTimer.current = setTimeout(backToIdle, RESET_MS);
   }, [backToIdle]);
 
-  const onScan = useCallback((decoded: string) => {
-    if (stageRef.current !== 'idle') return;
-    const hash = decoded.trim();
-    if (!hash) return;
-    setTicketHash(hash);
-    setVoterLabel('');
-    setStage('picking');
-  }, []);
+  const onScanRef = useRef<(decoded: string) => void>(() => {});
+  const onScan = useCallback((decoded: string) => { onScanRef.current(decoded); }, []);
 
   // Câmera com a mesma estratégia em cascata do check-in digital, que já lida
   // com as recusas de Android e iOS.
@@ -266,6 +308,20 @@ const ContestKiosk: React.FC = () => {
     return manualOptions.filter(o => o.name.toLowerCase().includes(t));
   }, [manualOptions, manualTerm]);
 
+  // Votação fechada enquanto alguém usava a aba: sai dela na hora, e quem
+  // estava escolhendo candidato recebe o aviso em vez de um erro do servidor.
+  useEffect(() => {
+    if (liveVotingOpen) return;
+    if (stage === 'picking') {
+      setFeedback({ title: 'Votação encerrada', detail: 'Este concurso não está mais recebendo votos.' });
+      setStage('error');
+      setMode('photo');
+      scheduleReset();
+      return;
+    }
+    if (mode === 'vote') setMode('photo');
+  }, [liveVotingOpen, stage, mode, scheduleReset]);
+
   // Com o ranking na tela, a apuração precisa acompanhar os votos que chegam
   // dos outros tablets sem alguém tocar em nada.
   useEffect(() => {
@@ -328,6 +384,34 @@ const ContestKiosk: React.FC = () => {
     setStage('capture');
   };
 
+  /**
+   * Confirma no banco que a votação segue aberta antes de liberar a escolha do
+   * candidato. O realtime já derruba a aba, mas uma rede instável pode perder o
+   * evento — e aí o convidado só descobriria ao levar a recusa do servidor.
+   */
+  const ensureVotingOpen = useCallback(async (): Promise<boolean> => {
+    if (!contestId) return false;
+    const { data, error } = await supabase
+      .from('app_event_contests')
+      .select('status, voting_opens_at, voting_closes_at, deleted_at')
+      .eq('id', contestId)
+      .maybeSingle();
+
+    // Sem resposta do banco, confia no estado já carregado: o servidor ainda
+    // valida o voto, então não vale travar a fila por uma consulta que falhou.
+    if (error) return votingOpenAt(contest, Date.now());
+
+    if (votingOpenAt(data, Date.now())) return true;
+
+    await refetchContests();
+    setNowTs(Date.now());
+    setMode('photo');
+    setFeedback({ title: 'Votação encerrada', detail: 'Este concurso não está mais recebendo votos.' });
+    setStage('error');
+    scheduleReset();
+    return false;
+  }, [contestId, contest, refetchContests, scheduleReset]);
+
   const startVote = async (o: EventParticipantOption) => {
     // O servidor recusaria depois da escolha do candidato; avisar aqui evita
     // que o convidado percorra a tela inteira para levar um "não".
@@ -340,6 +424,8 @@ const ContestKiosk: React.FC = () => {
       scheduleReset();
       return;
     }
+    if (!(await ensureVotingOpen())) return;
+
     const hash = await resolveTicketHash(o.ticketId);
     if (!hash) {
       setFeedback({ title: 'Ingresso não encontrado', detail: o.name });
@@ -447,6 +533,18 @@ const ContestKiosk: React.FC = () => {
     }
   };
 
+  onScanRef.current = (decoded: string) => {
+    if (stageRef.current !== 'idle') return;
+    const hash = decoded.trim();
+    if (!hash) return;
+    (async () => {
+      if (!(await ensureVotingOpen())) return;
+      setTicketHash(hash);
+      setVoterLabel('');
+      setStage('picking');
+    })();
+  };
+
   const vote = async (entryId: string, participantLabel: string) => {
     if (submitting) return;
     setSubmitting(true);
@@ -479,7 +577,7 @@ const ContestKiosk: React.FC = () => {
     );
   }
 
-  const votingOpen = contest.status === 'voting';
+  const votingOpen = votingOpenAt(contest, nowTs);
   const visible = listTab === 'todo' ? todoList : capturedList;
   const requiresCheckin = contest.require_checkin;
   const ranking = resultsFor(contest.id).map(r => ({
