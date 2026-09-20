@@ -4,7 +4,7 @@ import {
   CheckCircle2, XCircle, Eye, FileText, Globe, RefreshCw, User, Phone, 
   Calendar, Layers, CreditCard, ChevronRight, AlertCircle, Ban, Trash2, 
   RotateCcw, Zap, MessageSquare, Gift, Users, ArrowRightLeft, QrCode, ShoppingBag,
-  Receipt, Wallet, Percent
+  Receipt, Wallet, Percent, Link2
 } from 'lucide-react';
 import { Event } from '../../shared/types/types/event';
 import { useEventOrders, EventOrderRecord, EventTicketRecord } from '../../shared/hooks/hooks/useEventOrders';
@@ -19,6 +19,7 @@ import AdminIssueComplimentaryModal from '../shared/AdminIssueComplimentaryModal
 import AdminRefundOrderModal from '../shared/AdminRefundOrderModal';
 import AdminTransferTicketModal from '../shared/AdminTransferTicketModal';
 import AdminSendOrderNotificationModal from '../shared/AdminSendOrderNotificationModal';
+import AdminOrderShareModal from '../shared/AdminOrderShareModal';
 import { toast } from 'sonner';
 
 interface AdminEventOrdersProps {
@@ -81,6 +82,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
   const [orderToNotify, setOrderToNotify] = useState<EventOrderRecord | null>(null);
   const [ticketToTransfer, setTicketToTransfer] = useState<{ ticket: EventTicketRecord; order: EventOrderRecord } | null>(null);
   const [showComplimentaryModal, setShowComplimentaryModal] = useState<boolean>(false);
+  const [showShareModal, setShowShareModal] = useState<boolean>(false);
 
   // Manter selectedOrderForDetail sincronizado em tempo real caso orders mude
   useEffect(() => {
@@ -507,6 +509,15 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
             title="Atualizar dados"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl border border-gray-200 shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+            title="Gerar link somente-leitura, protegido por senha, para consulta dos pedidos"
+          >
+            <Link2 className="w-4 h-4" />
+            <span>Link de Consulta</span>
           </button>
 
           <button
@@ -1167,6 +1178,13 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
       />
 
       {/* Modal de Emissão de Cortesia VIP */}
+      <AdminOrderShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        eventId={event.id}
+        eventTitle={event.title}
+      />
+
       <AdminIssueComplimentaryModal
         isOpen={showComplimentaryModal}
         onClose={() => setShowComplimentaryModal(false)}

@@ -22,6 +22,7 @@ const PublicEvents = React.lazy(() => import('./components/features/PublicEvents
 const EventDetails = React.lazy(() => import('./components/features/EventDetails'));
 const EventMural = React.lazy(() => import('./components/features/EventMural'));
 const EventTelao = React.lazy(() => import('./components/features/EventTelao'));
+const PublicEventOrders = React.lazy(() => import('./components/features/PublicEventOrders'));
 
 // Admin Components (Lazy Loading)
 const AdminLogin = React.lazy(() => import('./components/forms/AdminLogin'));
@@ -121,6 +122,14 @@ const AppContent: React.FC = () => {
           element={
             <Suspense fallback={<LoadingFallback message="Preparando telão..." />}>
               <EventTelao />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/pedidos/:token"
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando consulta..." />}>
+              <PublicEventOrders />
             </Suspense>
           }
         />
