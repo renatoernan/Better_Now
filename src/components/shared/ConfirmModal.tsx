@@ -64,6 +64,17 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     }
   };
 
+  const getIconBg = () => {
+    switch (type) {
+      case 'warning':
+        return 'bg-yellow-50';
+      case 'info':
+        return 'bg-blue-50';
+      default:
+        return 'bg-red-50';
+    }
+  };
+
   const getConfirmButtonColor = () => {
     switch (type) {
       case 'danger':
@@ -86,7 +97,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
       aria-labelledby="modal-title"
       aria-describedby="modal-description"
     >
-      <div className="relative w-full max-w-md bg-white rounded-lg shadow-xl animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
         {/* Botão fechar */}
         <button
           onClick={onClose}
@@ -99,22 +110,18 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
         {/* Conteúdo do modal */}
         <div className="p-6">
           {/* Ícone e título */}
-          <div className="flex items-center mb-4">
-            <div className={`flex-shrink-0 w-10 h-10 mx-auto flex items-center justify-center rounded-full bg-red-100 ${getIconColor()}`}>
-              <AlertTriangle size={24} />
+          <div className="flex items-start gap-4 mb-5">
+            <div className={`flex-shrink-0 w-11 h-11 flex items-center justify-center rounded-full ${getIconBg()} ${getIconColor()}`}>
+              <AlertTriangle size={22} />
             </div>
-            <div className="ml-4">
-              <h3 id="modal-title" className="text-lg font-medium text-gray-900">
+            <div className="min-w-0 pr-6">
+              <h3 id="modal-title" className="text-lg font-semibold text-gray-900">
                 {title}
               </h3>
+              <p id="modal-description" className="mt-1.5 text-sm text-gray-500 leading-relaxed">
+                {message}
+              </p>
             </div>
-          </div>
-
-          {/* Mensagem */}
-          <div className="mb-6">
-            <p id="modal-description" className="text-sm text-gray-500">
-              {message}
-            </p>
           </div>
 
           {/* Botões */}
@@ -122,7 +129,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+              className="w-full sm:w-auto px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
               autoFocus
             >
               {cancelText}
@@ -130,7 +137,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             <button
               type="button"
               onClick={onConfirm}
-              className={`w-full sm:w-auto px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${getConfirmButtonColor()}`}
+              className={`w-full sm:w-auto px-4 py-2.5 text-sm font-medium text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${getConfirmButtonColor()}`}
             >
               {confirmText}
             </button>

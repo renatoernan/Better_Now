@@ -45,6 +45,21 @@ const votingOpenAt = (
   return true;
 };
 
+/**
+ * Encerrada é diferente de fechada para votos: rascunho também não recebe voto,
+ * mas não tem apuração para mostrar. Vale o concurso encerrado pelo painel
+ * (closed/published) ou pelo fim da janela de horário.
+ */
+const votingEndedAt = (
+  c: { status?: string | null; voting_closes_at?: string | null; deleted_at?: string | null } | null | undefined,
+  at: number
+): boolean => {
+  if (!c || c.deleted_at) return false;
+  if (c.status === 'closed' || c.status === 'published') return true;
+  if (c.status === 'voting' && c.voting_closes_at && at > Date.parse(c.voting_closes_at)) return true;
+  return false;
+};
+
 const ContestKiosk: React.FC = () => {
   const { id: eventId, contestId } = useParams<{ id: string; contestId: string }>();
   const navigate = useNavigate();
@@ -62,6 +77,7 @@ const ContestKiosk: React.FC = () => {
   const [stage, setStage] = useState<Stage>('idle');
   const [ticketHash, setTicketHash] = useState('');
   const [voterLabel, setVoterLabel] = useState('');
+  const [voterTicketId, setVoterTicketId] = useState('');
   const [feedback, setFeedback] = useState<{ title: string; detail?: string } | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -80,6 +96,8 @@ const ContestKiosk: React.FC = () => {
   // A votação também fecha sozinha pelo horário, então a tela precisa de um
   // relógio, e não só do estado carregado quando o tablet abriu.
   const [nowTs, setNowTs] = useState(() => Date.now());
+  // Ingressos que já votaram neste concurso (voto válido, não anulado)
+  const [votedTickets, setVotedTickets] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
 
   // Captura de foto no tablet
@@ -123,7 +141,36 @@ const ContestKiosk: React.FC = () => {
     return () => clearInterval(t);
   }, []);
 
+  // Quem já votou: some da fila e volta a aparecer se a organização anular o
+  // voto. Os votos vêm de vários tablets, então a lista precisa ser ao vivo.
+  const loadVotedTickets = useCallback(async () => {
+    if (!contestId) return;
+    const { data, error } = await supabase
+      .from('app_contest_votes')
+      .select('ticket_id')
+      .eq('contest_id', contestId)
+      .is('voided_at', null);
+    if (error) return;
+    setVotedTickets(new Set((data || []).map(v => v.ticket_id)));
+  }, [contestId]);
+
+  useEffect(() => { loadVotedTickets(); }, [loadVotedTickets, reloadKey]);
+
+  useEffect(() => {
+    if (!contestId) return;
+    const channel = supabase
+      .channel(`contest-kiosk-votes:${contestId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_contest_votes', filter: `contest_id=eq.${contestId}` },
+        () => { loadVotedTickets(); refetchResults(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [contestId, loadVotedTickets, refetchResults]);
+
   const liveVotingOpen = votingOpenAt(contest, nowTs);
+  const liveVotingEnded = votingEndedAt(contest, nowTs);
 
   // Acorda exatamente no instante do fechamento programado, em vez de esperar
   // o próximo tique do relógio.
@@ -146,6 +193,7 @@ const ContestKiosk: React.FC = () => {
     setVoterEntry('name');
     setTicketHash('');
     setVoterLabel('');
+    setVoterTicketId('');
     setFeedback(null);
     setTarget(null);
     setSheetFor(null);
@@ -322,6 +370,12 @@ const ContestKiosk: React.FC = () => {
     if (mode === 'vote') setMode('photo');
   }, [liveVotingOpen, stage, mode, scheduleReset]);
 
+  // Ranking só existe depois do encerramento; se a votação for reaberta, o
+  // tablet sai da apuração sozinho, pelo mesmo evento de realtime.
+  useEffect(() => {
+    if (mode === 'rank' && !liveVotingEnded) setMode('photo');
+  }, [mode, liveVotingEnded]);
+
   // Com o ranking na tela, a apuração precisa acompanhar os votos que chegam
   // dos outros tablets sem alguém tocar em nada.
   useEffect(() => {
@@ -412,7 +466,48 @@ const ContestKiosk: React.FC = () => {
     return false;
   }, [contestId, contest, refetchContests, scheduleReset]);
 
+  /** Mesma confirmação da votação, do outro lado: a apuração só abre encerrada. */
+  const openRanking = useCallback(async () => {
+    if (!contestId) return;
+    const { data, error } = await supabase
+      .from('app_event_contests')
+      .select('status, voting_closes_at, deleted_at')
+      .eq('id', contestId)
+      .maybeSingle();
+
+    if (error) {
+      if (votingEndedAt(contest, Date.now())) setMode('rank');
+      return;
+    }
+
+    await refetchContests();
+    setNowTs(Date.now());
+
+    if (votingEndedAt(data, Date.now())) {
+      setMode('rank');
+      refetchResults();
+      return;
+    }
+
+    setFeedback({
+      title: 'Apuração indisponível',
+      detail: 'O ranking abre quando a votação deste concurso for encerrada.',
+    });
+    setStage('error');
+    scheduleReset();
+  }, [contestId, contest, refetchContests, refetchResults, scheduleReset]);
+
   const startVote = async (o: EventParticipantOption) => {
+    if (votedTickets.has(o.ticketId)) {
+      setFeedback({
+        title: 'Voto já registrado',
+        detail: `${o.name} já votou neste concurso.`,
+      });
+      setStage('error');
+      scheduleReset();
+      return;
+    }
+
     // O servidor recusaria depois da escolha do candidato; avisar aqui evita
     // que o convidado percorra a tela inteira para levar um "não".
     if (contest?.require_checkin && !o.checkedIn) {
@@ -436,6 +531,7 @@ const ContestKiosk: React.FC = () => {
     setSheetFor(null);
     setTicketHash(hash);
     setVoterLabel(o.name);
+    setVoterTicketId(o.ticketId);
     setManualTerm('');
     setStage('picking');
   };
@@ -541,6 +637,7 @@ const ContestKiosk: React.FC = () => {
       if (!(await ensureVotingOpen())) return;
       setTicketHash(hash);
       setVoterLabel('');
+      setVoterTicketId('');
       setStage('picking');
     })();
   };
@@ -549,8 +646,10 @@ const ContestKiosk: React.FC = () => {
     if (submitting) return;
     setSubmitting(true);
     try {
+      const votedTicketId = voterTicketId;
       const outcome = await castVote(entryId, ticketHash, participantLabel);
       if (outcome.ok) {
+        if (votedTicketId) setVotedTickets(prev => new Set(prev).add(votedTicketId));
         setFeedback({
           title: `Voto em ${participantLabel} registrado`,
           detail: outcome.queued ? 'Sem rede agora — será enviado automaticamente.' : undefined,
@@ -578,6 +677,7 @@ const ContestKiosk: React.FC = () => {
   }
 
   const votingOpen = votingOpenAt(contest, nowTs);
+  const votingEnded = votingEndedAt(contest, nowTs);
   const visible = listTab === 'todo' ? todoList : capturedList;
   const requiresCheckin = contest.require_checkin;
   const ranking = resultsFor(contest.id).map(r => ({
@@ -598,14 +698,16 @@ const ContestKiosk: React.FC = () => {
     showEligibility = false
   ) => {
     const photo = t.entry?.photo?.photo_url;
-    const blocked = showEligibility && requiresCheckin && !t.option.checkedIn;
+    const alreadyVoted = showEligibility && votedTickets.has(t.option.ticketId);
+    const blocked = showEligibility && (alreadyVoted || (requiresCheckin && !t.option.checkedIn));
     return (
       <button
         key={t.option.ticketId}
         onClick={() => onPick(t)}
+        disabled={alreadyVoted}
         className={`flex flex-col items-center gap-1.5 bg-gray-800 hover:bg-gray-700 rounded-xl transition-colors active:scale-[0.97] text-center ${
           photo ? 'p-2' : 'px-2 py-3 justify-center min-h-[80px]'
-        } ${blocked ? 'opacity-60' : ''}`}
+        } ${blocked ? 'opacity-60' : ''} ${alreadyVoted ? 'cursor-not-allowed' : ''}`}
       >
         {photo && (
           <div className="w-full aspect-square rounded-lg overflow-hidden bg-gray-900">
@@ -619,7 +721,11 @@ const ContestKiosk: React.FC = () => {
         )}
         <span className="text-xs font-medium leading-tight line-clamp-3 w-full">{t.option.name}</span>
         {showEligibility && (
-          t.option.checkedIn ? (
+          alreadyVoted ? (
+            <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded-full">
+              já votou
+            </span>
+          ) : t.option.checkedIn ? (
             <span className="text-[10px] px-1.5 py-0.5 bg-green-500/20 text-green-300 rounded-full">
               apto
             </span>
@@ -669,8 +775,10 @@ const ContestKiosk: React.FC = () => {
               <Vote className="w-3.5 h-3.5" /> Votação
             </button>
             <button
-              onClick={() => setMode('rank')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              onClick={openRanking}
+              disabled={!votingEnded}
+              title={votingEnded ? undefined : 'A apuração abre quando a votação for encerrada'}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                 mode === 'rank' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-white/10'
               }`}
             >

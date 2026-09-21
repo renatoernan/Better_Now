@@ -108,20 +108,32 @@ serve(async (req) => {
       }
     }
 
-    // 5. Já votou? Consulta antecipada dá mensagem melhor que erro de constraint,
-    // mas quem garante a unicidade é a constraint no passo 6.
+    // 5. Reenvio da fila local: a mesma tentativa não vira dois votos. Vale
+    // mesmo se o voto tiver sido anulado, senão o tablet insistiria para sempre.
+    if (client_vote_id) {
+      const { data: sameAttempt } = await supabase
+        .from("app_contest_votes")
+        .select("id")
+        .eq("contest_id", contest_id)
+        .eq("client_vote_id", client_vote_id)
+        .maybeSingle();
+
+      if (sameAttempt) {
+        return json({ ok: true, duplicate: false, already_synced: true, vote_id: sameAttempt.id });
+      }
+    }
+
+    // Já votou? Só voto válido conta: anular um voto devolve o direito de voto
+    // ao ingresso, e é a trava parcial no banco que garante isso de verdade.
     const { data: existing } = await supabase
       .from("app_contest_votes")
-      .select("id, entry_id, client_vote_id")
+      .select("id")
       .eq("contest_id", contest_id)
       .eq("ticket_id", ticket.id)
+      .is("voided_at", null)
       .maybeSingle();
 
     if (existing) {
-      // Reenvio da fila local: mesma tentativa, não é voto novo.
-      if (client_vote_id && existing.client_vote_id === client_vote_id) {
-        return json({ ok: true, duplicate: false, already_synced: true, vote_id: existing.id });
-      }
       return reject("ALREADY_VOTED", "Este ingresso já votou neste concurso.", 409);
     }
 

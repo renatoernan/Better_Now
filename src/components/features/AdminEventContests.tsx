@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trophy, Trash2, Edit, X, Loader2, Images, AlertTriangle, Users, Tablet,
-  Sparkles, MonitorPlay,
+  Sparkles, MonitorPlay, RefreshCw, BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../shared/services/lib/supabase';
 import {
   useEventContests, EventContest, ContestInput, ContestStatus,
 } from '../../shared/hooks/hooks/useEventContests';
+import { formatPersonName, fetchEventAttendees } from '../../shared/utils/utils/eventAttendees';
+import ContestVotersPanel from '../shared/ContestVotersPanel';
+import ConfirmModal from '../shared/ConfirmModal';
 
 const STATUS_LABEL: Record<ContestStatus, string> = {
   draft: 'Rascunho',
@@ -40,8 +43,31 @@ const AdminEventContests: React.FC = () => {
 
   const {
     contests, loading, createContest, updateContest, deleteContest,
-    entriesFor, removeEntry, resultsFor, refetchResults,
+    entriesFor, removeEntry, resultsFor, refetchResults, refetchEntries,
   } = useEventContests(eventId || '');
+
+  const [tab, setTab] = useState<'contests' | 'ranking'>('contests');
+  // Nome do votante vem do ingresso, na mesma resolução da portaria
+  const [voterNames, setVoterNames] = useState<Map<string, string>>(new Map());
+  // Confirmações da tela em modal, no lugar do diálogo do navegador
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    type: 'danger' | 'warning' | 'info';
+    run: () => Promise<void>;
+  } | null>(null);
+  const [refreshingResults, setRefreshingResults] = useState(false);
+
+  const refreshRanking = async () => {
+    if (refreshingResults) return;
+    setRefreshingResults(true);
+    try {
+      await Promise.all([refetchResults(), refetchEntries()]);
+    } finally {
+      setRefreshingResults(false);
+    }
+  };
 
   const [eventTitle, setEventTitle] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -58,6 +84,17 @@ const AdminEventContests: React.FC = () => {
       .single()
       .then(({ data }) => { if (data?.title) setEventTitle(data.title); });
   }, [eventId]);
+
+  useEffect(() => {
+    if (!eventId || tab !== 'ranking') return;
+    let active = true;
+    fetchEventAttendees(eventId)
+      .then(list => {
+        if (active) setVoterNames(new Map(list.map(a => [a.ticketId, a.name])));
+      })
+      .catch(() => { /* a lista de votos ainda funciona sem os nomes */ });
+    return () => { active = false; };
+  }, [eventId, tab]);
 
   const openCreate = () => {
     setEditing(null);
@@ -120,38 +157,59 @@ const AdminEventContests: React.FC = () => {
     const winner = ranking[0];
     const tied = ranking.filter(r => r.vote_count === winner.vote_count).length > 1;
 
+    const winnerName = formatPersonName(winner.participant_name);
     const message = tied
-      ? `Há empate em ${winner.vote_count} voto(s). Pelo critério de desempate, ${winner.participant_name} vence por ter recebido o primeiro voto. Revelar no telão?`
-      : `Revelar ${winner.participant_name} como vencedor de "${c.title}" no telão, com ${winner.vote_count} voto(s)?`;
+      ? `Há empate em ${winner.vote_count} voto(s). Pelo critério de desempate, ${winnerName} vence por ter recebido o primeiro voto. A revelação não pode ser desfeita no telão.`
+      : `${winnerName} venceu com ${winner.vote_count} voto(s). A revelação não pode ser desfeita no telão.`;
 
-    if (!window.confirm(message)) return;
-
-    try {
-      await updateContest(c.id, { status: 'published' });
-      toast.success(`${winner.participant_name} revelado no telão.`);
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao revelar o vencedor.');
-    }
+    setConfirmAction({
+      title: `Revelar o vencedor de "${c.title}"?`,
+      message,
+      confirmText: 'Revelar no telão',
+      type: 'warning',
+      run: async () => {
+        try {
+          await updateContest(c.id, { status: 'published' });
+          toast.success(`${formatPersonName(winner.participant_name)} revelado no telão.`);
+        } catch (err: any) {
+          toast.error(err.message || 'Erro ao revelar o vencedor.');
+        }
+      },
+    });
   };
 
-  const handleDelete = async (c: EventContest) => {
-    if (!window.confirm(`Excluir o concurso "${c.title}"? As candidaturas também saem.`)) return;
-    try {
-      await deleteContest(c.id);
-      toast.success('Concurso excluído.');
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao excluir.');
-    }
+  const handleDelete = (c: EventContest) => {
+    setConfirmAction({
+      title: `Excluir o concurso "${c.title}"?`,
+      message: 'As candidaturas e os votos deste concurso saem junto. A ação não pode ser desfeita.',
+      confirmText: 'Excluir concurso',
+      type: 'danger',
+      run: async () => {
+        try {
+          await deleteContest(c.id);
+          toast.success('Concurso excluído.');
+        } catch (err: any) {
+          toast.error(err.message || 'Erro ao excluir.');
+        }
+      },
+    });
   };
 
-  const handleRemoveEntry = async (entryId: string, name: string) => {
-    if (!window.confirm(`Tirar ${name} do concurso?`)) return;
-    try {
-      await removeEntry(entryId);
-      toast.success('Candidatura removida.');
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao remover.');
-    }
+  const handleRemoveEntry = (entryId: string, name: string) => {
+    setConfirmAction({
+      title: `Tirar ${formatPersonName(name)} do concurso?`,
+      message: 'A foto sai da disputa e os votos que ela recebeu são excluídos junto.',
+      confirmText: 'Remover candidatura',
+      type: 'danger',
+      run: async () => {
+        try {
+          await removeEntry(entryId);
+          toast.success('Candidatura removida.');
+        } catch (err: any) {
+          toast.error(err.message || 'Erro ao remover.');
+        }
+      },
+    });
   };
 
   return (
@@ -195,7 +253,130 @@ const AdminEventContests: React.FC = () => {
         </div>
       </div>
 
-      {loading && contests.length === 0 ? (
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setTab('contests')}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === 'contests'
+              ? 'border-purple-600 text-purple-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Trophy className="w-4 h-4" /> Concursos
+        </button>
+        <button
+          onClick={() => setTab('ranking')}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === 'ranking'
+              ? 'border-purple-600 text-purple-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" /> Ranking / Apuração
+        </button>
+      </div>
+
+      {tab === 'ranking' ? (
+        <div className="space-y-4">
+          {contests.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
+              <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-700 font-medium">Nenhum concurso neste evento</p>
+            </div>
+          ) : (
+            contests.map(c => {
+              const list = entriesFor(c.id);
+              // Apuração mostra quem recebeu voto; candidaturas zeradas viram um
+              // rodapé, para a leitura do ranking não competir com a lista toda.
+              const voted = resultsFor(c.id).filter(r => Number(r.vote_count) > 0);
+              const total = voted.reduce((sum, r) => sum + Number(r.vote_count), 0);
+              const photoOf = (entryId: string) =>
+                list.find(e => e.id === entryId)?.photo?.photo_url;
+
+              return (
+                <div key={c.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="p-4 flex flex-wrap items-center justify-between gap-3 border-b">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="font-bold text-gray-900">{c.title}</h2>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[c.status]}`}>
+                          {STATUS_LABEL[c.status]}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {total} voto{total !== 1 ? 's' : ''} · {voted.length} de {list.length} candidatura{list.length !== 1 ? 's' : ''} com voto
+                      </p>
+                    </div>
+                    <button
+                      onClick={refreshRanking}
+                      disabled={refreshingResults}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshingResults ? 'animate-spin' : ''}`} /> Atualizar
+                    </button>
+                  </div>
+
+                  {voted.length === 0 ? (
+                    <p className="p-4 text-sm text-gray-500">Nenhum voto computado ainda.</p>
+                  ) : (
+                    <ol className="divide-y divide-gray-100">
+                      {voted.map((r, i) => {
+                        const share = total ? Math.round((Number(r.vote_count) / total) * 100) : 0;
+                        const medal = [
+                          'bg-amber-400 text-white',
+                          'bg-gray-300 text-gray-800',
+                          'bg-amber-700 text-white',
+                        ][i];
+                        return (
+                          <li key={r.entry_id} className="flex items-center gap-3 px-4 py-3">
+                            <span
+                              className={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold flex-shrink-0 ${
+                                medal || 'bg-gray-100 text-gray-500'
+                              }`}
+                            >
+                              {i + 1}
+                            </span>
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                              {photoOf(r.entry_id) && (
+                                <img
+                                  src={photoOf(r.entry_id)}
+                                  alt={r.participant_name}
+                                  loading="lazy"
+                                  className="w-full h-full object-contain"
+                                />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 truncate">
+                                {formatPersonName(r.participant_name)}
+                              </p>
+                              <div className="h-1.5 mt-1.5 bg-gray-100 rounded-full overflow-hidden max-w-md">
+                                <div className="h-full bg-purple-500" style={{ width: `${share}%` }} />
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-lg font-bold text-gray-900 leading-none">{r.vote_count}</p>
+                              <p className="text-[11px] text-gray-500">{share}%</p>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+
+                  {!c.show_live_results && voted.length > 0 && (
+                    <p className="px-4 py-3 text-xs text-gray-500 border-t bg-gray-50">
+                      Resultado lacrado: só a organização enxerga esta contagem.
+                    </p>
+                  )}
+
+                  <ContestVotersPanel contestId={c.id} entries={list} voterNames={voterNames} />
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : loading && contests.length === 0 ? (
         <div className="flex justify-center py-16">
           <Loader2 className="w-7 h-7 animate-spin text-purple-600" />
         </div>
@@ -282,43 +463,6 @@ const AdminEventContests: React.FC = () => {
                   </div>
                 </div>
 
-                {c.status !== 'draft' && (() => {
-                  const ranking = resultsFor(c.id);
-                  const total = ranking.reduce((sum, r) => sum + Number(r.vote_count), 0);
-                  if (ranking.length === 0) return null;
-                  return (
-                    <div className="px-4 py-3 bg-gray-50 border-b">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-semibold text-gray-700">
-                          Apuração · {total} voto{total !== 1 ? 's' : ''}
-                        </h3>
-                        <button
-                          onClick={() => refetchResults()}
-                          className="text-xs text-purple-700 hover:text-purple-900 font-medium"
-                        >
-                          Atualizar
-                        </button>
-                      </div>
-                      <ol className="space-y-1">
-                        {ranking.slice(0, 5).map((r, i) => (
-                          <li key={r.entry_id} className="flex items-center gap-2 text-sm">
-                            <span className={`w-5 text-center font-bold ${i === 0 ? 'text-amber-500' : 'text-gray-400'}`}>
-                              {i + 1}
-                            </span>
-                            <span className="flex-1 truncate text-gray-800">{r.participant_name}</span>
-                            <span className="font-semibold text-gray-900">{r.vote_count}</span>
-                          </li>
-                        ))}
-                      </ol>
-                      {!c.show_live_results && (
-                        <p className="text-xs text-gray-500 mt-2">
-                          Resultado lacrado: só a organização enxerga esta contagem.
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
-
                 <div className="p-4">
                   {list.length === 0 ? (
                     <p className="text-sm text-gray-500">
@@ -339,7 +483,7 @@ const AdminEventContests: React.FC = () => {
                             )}
                           </div>
                           <p className="mt-1 text-xs text-gray-800 truncate font-medium">
-                            {e.participant_name}
+                            {formatPersonName(e.participant_name)}
                           </p>
                           {!e.participant_person_id && (
                             <p className="text-[10px] text-amber-600 flex items-center gap-0.5">
@@ -363,6 +507,20 @@ const AdminEventContests: React.FC = () => {
           })}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={Boolean(confirmAction)}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => {
+          const action = confirmAction;
+          setConfirmAction(null);
+          action?.run();
+        }}
+        title={confirmAction?.title ?? ''}
+        message={confirmAction?.message ?? ''}
+        confirmText={confirmAction?.confirmText ?? 'Confirmar'}
+        type={confirmAction?.type ?? 'danger'}
+      />
 
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
