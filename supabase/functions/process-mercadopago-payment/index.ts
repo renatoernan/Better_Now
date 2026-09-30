@@ -8,6 +8,25 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+/**
+ * Tabela Oficial de Taxas de Parcelamento do Mercado Pago (Brasil).
+ * Repassadas ao comprador quando o parcelamento é por conta do cliente.
+ */
+const MP_BUYER_INSTALLMENT_RATES: Record<number, number> = {
+  1: 0,       // 1x: À vista (sem juros)
+  2: 9.64,    // 2x: 9,64%
+  3: 11.23,   // 3x: 11,23%
+  4: 11.36,   // 4x: 11,36%
+  5: 14.31,   // 5x: 14,31%
+  6: 14.32,   // 6x: 14,32%
+  7: 16.72,   // 7x: 16,72%
+  8: 16.73,   // 8x: 16,73%
+  9: 19.69,   // 9x: 19,69%
+  10: 20.65,  // 10x: 20,65%
+  11: 20.66,  // 11x: 20,66%
+  12: 22.11,  // 12x: 22,11%
+};
+
 serve(async (req: Request) => {
   // Tratar preflight CORS
   if (req.method === "OPTIONS") {
@@ -124,7 +143,7 @@ serve(async (req: Request) => {
           updated_at: new Date().toISOString(),
         };
 
-        if (realMpFee > 0) {
+        if (realMpFee > 0 && (!order.convenience_fee || Number(order.convenience_fee) === 0)) {
           updatePayload.convenience_fee = realMpFee;
           updatePayload.convenience_fee_percentage = realMpFeePct;
         }
@@ -428,13 +447,32 @@ serve(async (req: Request) => {
       }
     }
     const feeAmount = Number((subtotal * (feeRate / 100)).toFixed(2));
-    const totalAmount = Number((subtotal + feeAmount).toFixed(2));
+    const baseTotalAmount = Number((subtotal + feeAmount).toFixed(2));
 
-    if (totalAmount <= 0) {
+    if (baseTotalAmount <= 0) {
       return new Response(
         JSON.stringify({ error: "O valor final do pedido deve ser maior que zero." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Cálculo e Recálculo de Juros de Parcelamento (repasse ao comprador)
+    const instCount = Math.min(12, Math.max(1, Number(body.installments) || 1));
+    let finalChargedAmount = baseTotalAmount;
+    let installmentRate = 0;
+    let installmentInterest = 0;
+
+    if (payment_method === "credit_card" && instCount > 1) {
+      installmentRate = Number(body.installment_rate) || MP_BUYER_INSTALLMENT_RATES[instCount] || 0;
+      const expectedCalculatedTotal = Number((baseTotalAmount * (1 + installmentRate / 100)).toFixed(2));
+
+      // Se o frontend passou o total validado da API oficial de installments do MP (payer_costs)
+      if (body.total_with_interest && Number(body.total_with_interest) >= baseTotalAmount) {
+        finalChargedAmount = Number(Number(body.total_with_interest).toFixed(2));
+      } else {
+        finalChargedAmount = expectedCalculatedTotal;
+      }
+      installmentInterest = Math.max(0, Number((finalChargedAmount - baseTotalAmount).toFixed(2)));
     }
 
     // 5. Criação ou Atualização do Pedido em app_event_orders com valores auditados
@@ -451,7 +489,7 @@ serve(async (req: Request) => {
           client_email: client_email || "",
           client_phone: client_phone || "",
           client_document: cleanDoc,
-          amount_total: totalAmount,
+          amount_total: finalChargedAmount,
           batch_index: bIndex,
           batch_name: batchName,
           payment_method: payment_method,
@@ -482,7 +520,7 @@ serve(async (req: Request) => {
           client_phone: client_phone || "",
           client_document: cleanDoc,
           ip_address: ip_address || null,
-          amount_total: totalAmount,
+          amount_total: finalChargedAmount,
           currency: "brl",
           quantity: Number(quantity),
           batch_index: bIndex,
@@ -517,7 +555,7 @@ serve(async (req: Request) => {
     const idempotencyKey = `pay-${orderId}-${Date.now()}`;
 
     let mpPayload: any = {
-      transaction_amount: totalAmount,
+      transaction_amount: finalChargedAmount,
       description: `Ingresso - ${event.title || "Evento"} (${batchName}) [${quantity}x]`,
       payer: {
         email: payerEmail,
@@ -536,6 +574,10 @@ serve(async (req: Request) => {
         client_id: client_id,
         quantity: quantity,
         batch_index: bIndex,
+        base_amount: baseTotalAmount,
+        installments: instCount,
+        installment_interest: installmentInterest,
+        installment_rate: installmentRate,
       },
     };
 
@@ -543,7 +585,7 @@ serve(async (req: Request) => {
       mpPayload = {
         ...mpPayload,
         token: card_token,
-        installments: Number(installments) || 1,
+        installments: instCount,
         payment_method_id: payment_method_id || undefined,
         issuer_id: issuer_id ? Number(issuer_id) : undefined,
       };
@@ -719,6 +761,18 @@ serve(async (req: Request) => {
     }
 
     // 11. Resposta para Cartão em Análise ou Pendente
+    if (paymentStatus === "in_process" || paymentStatus === "pending") {
+      // Disparar notificação de pedido criado (Aguardando análise da operadora) para cliente e cópia no backstage
+      sendOrderNotificationsFromBackend({
+        supabase,
+        orderId: orderId || orderRecord?.id,
+        orderData: { ...orderRecord, status: "pending" },
+        type: "created",
+      }).catch((notifErr) => {
+        console.warn("Aviso no envio de notificações de cartão em análise:", notifErr);
+      });
+    }
+
     return new Response(
       JSON.stringify({
         success: paymentStatus !== "rejected",

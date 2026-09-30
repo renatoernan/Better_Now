@@ -24,6 +24,10 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
 import {
+  calculateInstallmentOptions,
+  fetchMercadoPagoInstallments,
+} from '../../shared/utils/utils/installmentUtils';
+import {
   createMercadoPagoPixPayment,
   processMercadoPagoCardPayment,
   loadMercadoPagoSDK,
@@ -123,12 +127,30 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
   const [cardLoading, setCardLoading] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
   const [detectedBrand, setDetectedBrand] = useState('');
+  const [apiPayerCosts, setApiPayerCosts] = useState<any[] | null>(null);
 
   // Identificação da bandeira em tempo real
   useEffect(() => {
     const brand = getCardBrand(cardNumber);
     setDetectedBrand(brand);
   }, [cardNumber]);
+
+  // Consulta dinâmica de parcelamento do Mercado Pago quando o BIN estiver digitado
+  useEffect(() => {
+    const cleanBin = cardNumber.replace(/\D/g, '').slice(0, 8);
+    if (cleanBin.length >= 6 && isCard) {
+      const publicKey = (import.meta as any).env.VITE_MERCADOPAGO_PUBLIC_KEY;
+      if (publicKey) {
+        fetchMercadoPagoInstallments(totalPrice, cleanBin, publicKey).then(costs => {
+          if (costs && costs.length > 0) {
+            setApiPayerCosts(costs);
+          }
+        });
+      }
+    } else {
+      setApiPayerCosts(null);
+    }
+  }, [cardNumber, totalPrice, isCard]);
 
   // Sincronizar dados do comprador
   useEffect(() => {
@@ -363,6 +385,9 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
         cardToken,
         paymentMethodId,
         installments: Number(installments) || 1,
+        installment_rate: selectedInstallmentPlan.rate,
+        installment_amount: selectedInstallmentPlan.installmentAmount,
+        total_with_interest: finalTotalToPay,
         attendees: attendees,
       });
 
@@ -381,20 +406,28 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
     }
   };
 
-  // Opções de parcelas
+  // Opções de parcelas recalculadas com juros por conta do comprador (Mercado Pago)
   const installmentOptions = useMemo(() => {
-    const opts = [];
-    const max = Math.min(12, Math.max(1, maxInstallments));
-    for (let i = 1; i <= max; i++) {
-      const val = totalPrice / i;
-      opts.push({
-        count: i,
-        label: `${i}x de ${formatPrice(val)} sem juros`,
+    return calculateInstallmentOptions(totalPrice, maxInstallments, apiPayerCosts || undefined);
+  }, [totalPrice, maxInstallments, apiPayerCosts]);
+
+  // Plano da parcela atualmente selecionada
+  const selectedInstallmentPlan = useMemo(() => {
+    return (
+      installmentOptions.find((opt) => opt.count === installments) ||
+      installmentOptions[0] || {
+        count: 1,
+        rate: 0,
+        installmentAmount: totalPrice,
         total: totalPrice,
-      });
-    }
-    return opts;
-  }, [totalPrice, maxInstallments]);
+        interestAmount: 0,
+        label: `1x de ${formatPrice(totalPrice)} à vista (sem juros)`,
+      }
+    );
+  }, [installmentOptions, installments, totalPrice]);
+
+  const finalTotalToPay = isCard && installments > 1 ? selectedInstallmentPlan.total : totalPrice;
+  const installmentInterestAmount = isCard && installments > 1 ? selectedInstallmentPlan.interestAmount : 0;
 
   const formatTimer = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -471,11 +504,26 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
                   <span className="font-semibold">+{formatPrice(feeAmount)}</span>
                 </div>
               )}
+              {isCard && installments > 1 && installmentInterestAmount > 0 && (
+                <div className="flex justify-between items-center text-indigo-700 font-semibold bg-indigo-50/80 px-2.5 py-1.5 rounded-lg border border-indigo-100/70">
+                  <span className="flex items-center gap-1 text-xs">
+                    💳 Acréscimo parcelamento ({installments}x)
+                  </span>
+                  <span className="text-xs font-bold">+{formatPrice(installmentInterestAmount)}</span>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-gray-200/80 pt-2.5 flex justify-between items-center text-sm sm:text-base font-bold text-gray-900">
-              <span>Total a pagar</span>
-              <span className="text-lg sm:text-xl text-indigo-600 font-extrabold">{formatPrice(totalPrice)}</span>
+              <div className="flex flex-col">
+                <span>Total a pagar</span>
+                {isCard && installments > 1 && (
+                  <span className="text-xs font-semibold text-gray-500">
+                    {installments}x de {formatPrice(selectedInstallmentPlan.installmentAmount)}
+                  </span>
+                )}
+              </div>
+              <span className="text-lg sm:text-xl text-indigo-600 font-extrabold">{formatPrice(finalTotalToPay)}</span>
             </div>
           </div>
 
@@ -727,7 +775,11 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
                 ) : (
                   <>
                     <Lock className="w-4 h-4" />
-                    <span>Pagar {formatPrice(totalPrice)}</span>
+                    <span>
+                      {installments > 1
+                        ? `Pagar ${formatPrice(finalTotalToPay)} em ${installments}x`
+                        : `Pagar ${formatPrice(finalTotalToPay)} à vista`}
+                    </span>
                   </>
                 )}
               </button>

@@ -256,15 +256,8 @@ serve(async (req: Request) => {
             });
           }
         } else {
-          // Se já existiam ingressos gerados mas a notificação precisa ser garantida
-          sendOrderNotificationsFromBackend({
-            supabase,
-            orderId: orderData.id,
-            orderData,
-            type: "confirmed",
-          }).catch((notifErr) => {
-            console.warn("Aviso no disparo assíncrono de notificações:", notifErr);
-          });
+          // Se já existiam ingressos gerados, o pedido já foi processado e notificado pela Edge Function
+          console.log(`[Webhook MP] Ingressos já existentes para o pedido ${orderData.id}. Reenvio de notificação dispensado.`);
         }
 
         // Registrar utilização do cupom se o pedido possuir cupom

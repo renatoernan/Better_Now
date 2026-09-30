@@ -233,6 +233,37 @@ export async function sendOrderNotificationsFromBackend(params: OrderNotifierPar
       order = fetchedOrder;
     }
 
+    const currentOrderId = orderId || order?.id;
+    if (!currentOrderId) {
+      return {
+        email: { success: false, message: "ID do pedido não informado." },
+        whatsapp: { success: false, message: "ID do pedido não informado." },
+      };
+    }
+
+    // Trava atômica de idempotência no banco de dados (app_settings)
+    // Garante que para um mesmo pedido e tipo ('confirmed' | 'created'), apenas 1 chamada consiga disparar.
+    const lockKey = `notif_lock_${type}_${currentOrderId}`;
+    const { error: lockError } = await supabase
+      .from("app_settings")
+      .insert({
+        key: lockKey,
+        value: JSON.stringify({
+          sent_at: new Date().toISOString(),
+          type,
+          order_id: currentOrderId,
+        }),
+        description: `Trava de idempotencia da notificacao ${type} para o pedido ${currentOrderId}`,
+      });
+
+    if (lockError) {
+      console.log(`[Notifier Backend] Notificação "${type}" para o pedido ${currentOrderId} já enviada anteriormente (chave ${lockKey}). Disparo duplicado ignorado.`);
+      return {
+        email: { success: true, message: "Notificação já enviada anteriormente (idempotência)." },
+        whatsapp: { success: true, message: "Notificação já enviada anteriormente (idempotência)." },
+      };
+    }
+
     // 2. Carregar configurações do app_settings
     const { data: settingsRows } = await supabase
       .from("app_settings")

@@ -792,12 +792,37 @@ export const sendOrderNotifications = async (
   params: SendOrderNotificationParams
 ): Promise<{ whatsapp: { success: boolean; message: string }; email: { success: boolean; message: string } }> => {
   const currentOrderId = params.orderId || params.orderData?.id;
-  if (currentOrderId && isDuplicateNotification(params.type, currentOrderId)) {
-    console.warn(`[Notificações] Disparo duplicado prevenido para o pedido ${currentOrderId} (tipo: ${params.type})`);
-    return {
-      whatsapp: { success: true, message: 'Notificação já enviada recentemente (duplicação evitada).' },
-      email: { success: true, message: 'Notificação já enviada recentemente (duplicação evitada).' },
-    };
+  if (currentOrderId) {
+    if (isDuplicateNotification(params.type, currentOrderId)) {
+      console.warn(`[Notificações] Disparo duplicado prevenido na memória para o pedido ${currentOrderId} (tipo: ${params.type})`);
+      return {
+        whatsapp: { success: true, message: 'Notificação já enviada recentemente (duplicação evitada).' },
+        email: { success: true, message: 'Notificação já enviada recentemente (duplicação evitada).' },
+      };
+    }
+
+    // Trava de idempotência atômica no banco de dados (compartilhada com Backend)
+    const lockKey = `notif_lock_${params.type}_${currentOrderId}`;
+    const { error: lockErr } = await supabase
+      .from('app_settings')
+      .insert({
+        key: lockKey,
+        value: JSON.stringify({
+          sent_at: new Date().toISOString(),
+          type: params.type,
+          order_id: currentOrderId,
+          source: 'frontend',
+        }),
+        description: `Trava de idempotencia da notificacao ${params.type} para o pedido ${currentOrderId}`,
+      });
+
+    if (lockErr) {
+      console.warn(`[Notificações] Notificação "${params.type}" para o pedido ${currentOrderId} já enviada anteriormente (chave ${lockKey}). Disparo ignorado.`);
+      return {
+        whatsapp: { success: true, message: 'Notificação já enviada anteriormente (idempotência no banco).' },
+        email: { success: true, message: 'Notificação já enviada anteriormente (idempotência no banco).' },
+      };
+    }
   }
 
   const [whatsappResult, emailResult] = await Promise.allSettled([

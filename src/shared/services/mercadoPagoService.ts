@@ -87,6 +87,9 @@ export interface ProcessCardPaymentParams {
   paymentMethodId: string;
   issuerId?: string;
   installments: number;
+  installment_rate?: number;
+  installment_amount?: number;
+  total_with_interest?: number;
   attendees?: any[];
 }
 
@@ -218,11 +221,8 @@ export const completeMercadoPagoOrder = async (
       }
     }
 
-    sendOrderNotifications({
-      type: 'confirmed',
-      orderId: cleanOrderId,
-      orderData: { ...currentOrder, status: 'paid' },
-    }).catch(() => {});
+    // A notificação de confirmação é disparada exclusivamente pelo Backend (Edge Function / Webhook)
+    // para garantir idempotência e evitar mensagens duplicadas via WhatsApp.
 
     return true;
   } catch (err) {
@@ -318,6 +318,9 @@ export const processMercadoPagoCardPayment = async (
           card_token: params.cardToken,
           payment_method_id: params.paymentMethodId,
           installments: params.installments,
+          installment_rate: params.installment_rate,
+          installment_amount: params.installment_amount,
+          total_with_interest: params.total_with_interest,
           issuer_id: params.issuerId,
           client_name: params.client_name,
           client_email: params.client_email,
