@@ -21,83 +21,15 @@ const MESSAGES: Record<string, string> = {
 };
 
 /**
- * Taxas fixas definidas pela organização para eventos específicos, diferentes
- * das tarifas que o gateway devolve e do que está gravado em convenience_fee.
+ * Taxa e líquido de cada pedido vêm da mesma fonte do controle de repasses
+ * (view app_event_order_financials, migration 044), para que o relatório que o
+ * organizador recebe nunca divirja do que é efetivamente repassado.
  *
- * Valem apenas neste relatório de consulta: a tela administrativa mantém o
- * cálculo dela, por decisão do cliente, então os dois lugares podem divergir
- * nos pedidos Pix antigos gravados a 0,99%.
- *
- * Exceção deliberada e pontual. Se um segundo evento precisar disso, o certo é
- * virar campo no cadastro do evento em vez de crescer este mapa.
+ * Taxa = conveniência total (cobrada do cliente ou assumida pelo organizador,
+ * como os 3% da Pré-Venda do Halloween 2026) + juros de parcelamento.
+ * Líquido = bruto − taxa = valor repassado ao organizador.
  */
-const FEE_OVERRIDES: Record<string, { pix: number; card: number }> = {
-  // Halloween 2026
-  "5bb8a2d1-ff90-4b8f-9045-b483bba72588": { pix: 3, card: 7.5 },
-};
-
-const isFreeOrder = (method: string) => method === "cortesia" || method === "free";
-
-const applyOverride = (
-  order: Record<string, any>,
-  rates: { pix: number; card: number }
-): { fee: number; percentage: number } | null => {
-  const total = Number(order.amount_total || 0);
-  const method = String(order.payment_method || "").toLowerCase().trim();
-
-  if (isFreeOrder(method) || total <= 0) return { fee: 0, percentage: 0 };
-
-  const rate = method === "credit_card" ? rates.card
-    : (method === "pix" || method === "pix_stripe") ? rates.pix
-    : null;
-
-  // Forma de pagamento fora da regra combinada cai no cálculo padrão
-  if (rate === null) return null;
-
-  return { fee: Number((total * (rate / 100)).toFixed(2)), percentage: rate };
-};
-
-/**
- * Repete a derivação de taxa da tela administrativa. Lá ela também regrava o
- * valor no banco; aqui não, porque esta é uma visão estritamente de leitura.
- */
-const resolveFee = (
-  order: Record<string, any>,
-  overrides?: { pix: number; card: number }
-): { fee: number; percentage: number } => {
-  if (overrides) {
-    const forced = applyOverride(order, overrides);
-    if (forced) return forced;
-  }
-
-  const total = Number(order.amount_total || 0);
-  let fee = Number(order.convenience_fee || 0);
-  let percentage = Number(order.convenience_fee_percentage || 0);
-
-  if (fee > 0) {
-    if (!percentage && total > 0) percentage = Number(((fee / total) * 100).toFixed(2));
-    return { fee, percentage };
-  }
-
-  if (percentage > 0 && total > 0) {
-    return { fee: Number((total * (percentage / 100)).toFixed(2)), percentage };
-  }
-
-  if (total > 0) {
-    const method = String(order.payment_method || "").toLowerCase().trim();
-    if (isFreeOrder(method)) return { fee: 0, percentage: 0 };
-
-    const viaGateway = !!order.stripe_session_id
-      || method === "pix" || method === "pix_stripe" || method === "credit_card";
-
-    if (viaGateway) {
-      const rate = (method === "pix" || method === "pix_stripe") ? 0.99 : 4.99;
-      return { fee: Number((total * (rate / 100)).toFixed(2)), percentage: rate };
-    }
-  }
-
-  return { fee: 0, percentage: 0 };
-};
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -128,23 +60,44 @@ serve(async (req) => {
 
     const eventId = check.event_id;
 
-    const [{ data: event }, { data: orders }] = await Promise.all([
+    const [{ data: event }, { data: orders }, { data: financials }, { data: payouts }] = await Promise.all([
       supabase.from("app_events").select("title, event_date").eq("id", eventId).maybeSingle(),
       supabase
         .from("app_event_orders")
-        .select("id, client_name, quantity, batch_name, batch_index, payment_method, amount_total, convenience_fee, convenience_fee_percentage, stripe_session_id, status, refunded_at, created_at")
+        .select("id, client_name, quantity, batch_name, payment_method, amount_total, convenience_fee, convenience_fee_percentage, status, refunded_at, created_at")
         .eq("event_id", eventId)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("app_event_order_financials")
+        .select("order_id, convenience_fee, installment_interest, fee_percentage_total, payout_id, payout_status")
+        .eq("event_id", eventId),
+      // Só o que interessa ao organizador: observações internas e quem
+      // registrou o repasse ficam de fora
+      supabase
+        .from("app_event_payouts")
+        .select("id, paid_at, created_at, method, reference, proof_url")
+        .eq("event_id", eventId)
+        .eq("kind", "payout")
+        .is("voided_at", null),
     ]);
+
+    const finById = new Map((financials ?? []).map((f) => [f.order_id, f]));
+    const payoutById = new Map((payouts ?? []).map((p) => [p.id, p]));
 
     // Projeção deliberada: e-mail, telefone, CPF e IP existem na linha lida
     // acima, mas nunca saem daqui. A resposta carrega só as colunas da tela.
-    const overrides = FEE_OVERRIDES[eventId];
-
     const rows = (orders ?? []).map((o) => {
       const gross = Number(o.amount_total || 0);
-      const { fee, percentage } = resolveFee(o, overrides);
+      const fin = finById.get(o.id);
+      // Pedidos fora da apuração (pendentes, falhos) mostram a conveniência gravada
+      const fee = round2(fin
+        ? Number(fin.convenience_fee || 0) + Number(fin.installment_interest || 0)
+        : Number(o.convenience_fee || 0));
+      const percentage = fin
+        ? Number(fin.fee_percentage_total || 0)
+        : Number(o.convenience_fee_percentage || 0);
       const isRefunded = o.status === "refunded" || !!o.refunded_at;
+      const payout = fin?.payout_id ? payoutById.get(fin.payout_id) : null;
 
       return {
         code: `#${String(o.id).substring(0, 8).toUpperCase()}`,
@@ -158,6 +111,17 @@ serve(async (req) => {
         net: Number((gross - fee).toFixed(2)),
         status: isRefunded ? "refunded" : o.status,
         created_at: o.created_at,
+        // Repasse só existe para pedido pago; os demais vêm sem
+        payout: fin
+          ? {
+              status: fin.payout_status,
+              paid_at: payout?.paid_at ?? null,
+              registered_at: payout?.created_at ?? null,
+              method: payout?.method ?? null,
+              reference: payout?.reference ?? null,
+              proof_url: payout?.proof_url ?? null,
+            }
+          : null,
       };
     });
 

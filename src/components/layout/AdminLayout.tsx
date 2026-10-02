@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Users, Calendar, Settings, LogOut, Menu, X, MessageSquare, Mail, Truck,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Wallet,
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -60,6 +60,11 @@ const AdminLayout: React.FC = () => {
       name: 'Eventos',
       path: '/admin/events',
       icon: Calendar,
+    },
+    {
+      name: 'Repasses',
+      path: '/admin/repasses',
+      icon: Wallet,
     },
     {
       name: 'Fornecedores',

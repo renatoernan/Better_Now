@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendOrderNotificationsFromBackend } from "../_shared/orderNotifier.ts";
+import { extractGatewayFinancials } from "../_shared/mpFinancials.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -168,20 +169,6 @@ serve(async (req: Request) => {
     }
 
     if (orderData) {
-      // Extrair taxa real cobrada pelo Mercado Pago
-      let realMpFee = 0;
-      if (Array.isArray(payment.fee_details) && payment.fee_details.length > 0) {
-        realMpFee = payment.fee_details.reduce((acc: number, item: any) => acc + (Number(item.amount) || 0), 0);
-      } else if (payment.transaction_details?.total_paid_amount && payment.transaction_details?.net_received_amount) {
-        realMpFee = Number(payment.transaction_details.total_paid_amount) - Number(payment.transaction_details.net_received_amount);
-      } else if (Array.isArray(payment.charges_details)) {
-        realMpFee = payment.charges_details.reduce((acc: number, item: any) => acc + (Number(item.amounts?.original) || 0), 0);
-      }
-      realMpFee = Number(realMpFee.toFixed(2));
-
-      const totalOrderAmount = Number(orderData.amount_total || payment.transaction_amount || 0);
-      const realMpFeePct = totalOrderAmount > 0 && realMpFee > 0 ? Number(((realMpFee / totalOrderAmount) * 100).toFixed(2)) : 0;
-
       const updatePayload: any = {
         status: mappedStatus,
         stripe_payment_intent_id: String(paymentId),
@@ -189,10 +176,11 @@ serve(async (req: Request) => {
         updated_at: new Date().toISOString(),
       };
 
-      if (realMpFee > 0) {
-        updatePayload.convenience_fee = realMpFee;
-        updatePayload.convenience_fee_percentage = realMpFeePct;
-      }
+      // Taxa do MP, líquido e data de liberação vão para as colunas de gateway.
+      // convenience_fee é a receita da plataforma definida no checkout e não
+      // pode ser sobrescrita aqui (ver migration 044).
+      const gateway = extractGatewayFinancials(payment);
+      if (gateway) Object.assign(updatePayload, gateway);
 
       // Atualizar status e taxas do pedido
       await supabase

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendOrderNotificationsFromBackend } from "../_shared/orderNotifier.ts";
+import { extractGatewayFinancials } from "../_shared/mpFinancials.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,8 +10,8 @@ const corsHeaders = {
 };
 
 /**
- * Tabela Oficial de Taxas de Parcelamento do Mercado Pago (Brasil).
- * Repassadas ao comprador quando o parcelamento é por conta do cliente.
+ * Tabela de juros de parcelamento do Mercado Pago (Brasil), ao comprador.
+ * Apenas referência para o metadata: quem calcula e cobra os juros é o MP.
  */
 const MP_BUYER_INSTALLMENT_RATES: Record<number, number> = {
   1: 0,       // 1x: À vista (sem juros)
@@ -121,32 +122,16 @@ serve(async (req: Request) => {
 
       // 3. Se o pagamento foi aprovado no Mercado Pago ou já estava marcado como pago
       if (mpStatus === "approved" || order.status === "paid" || order.status === "approved") {
-        // Extrair a taxa real cobrada pelo Mercado Pago a partir de mpData
-        let realMpFee = 0;
-        if (mpData) {
-          if (Array.isArray(mpData.fee_details) && mpData.fee_details.length > 0) {
-            realMpFee = mpData.fee_details.reduce((acc: number, item: any) => acc + (Number(item.amount) || 0), 0);
-          } else if (mpData.transaction_details?.total_paid_amount && mpData.transaction_details?.net_received_amount) {
-            realMpFee = Number(mpData.transaction_details.total_paid_amount) - Number(mpData.transaction_details.net_received_amount);
-          } else if (Array.isArray(mpData.charges_details)) {
-            realMpFee = mpData.charges_details.reduce((acc: number, item: any) => acc + (Number(item.amounts?.original) || 0), 0);
-          }
-        }
-        realMpFee = Number(realMpFee.toFixed(2));
-
-        const orderAmount = Number(order.amount_total || mpData?.transaction_amount || 0);
-        const realMpFeePct = orderAmount > 0 && realMpFee > 0 ? Number(((realMpFee / orderAmount) * 100).toFixed(2)) : 0;
-
         const updatePayload: any = {
           status: "paid",
           stripe_session_id: mpPaymentId || order.stripe_session_id,
           updated_at: new Date().toISOString(),
         };
 
-        if (realMpFee > 0 && (!order.convenience_fee || Number(order.convenience_fee) === 0)) {
-          updatePayload.convenience_fee = realMpFee;
-          updatePayload.convenience_fee_percentage = realMpFeePct;
-        }
+        // Taxa do MP vai para as colunas de gateway; a conveniência gravada no
+        // checkout continua intacta (ver migration 044).
+        const gateway = extractGatewayFinancials(mpData);
+        if (gateway) Object.assign(updatePayload, gateway);
 
         await supabase
           .from("app_event_orders")
@@ -268,8 +253,7 @@ serve(async (req: Request) => {
             paid: true, 
             status: "approved", 
             paymentId: mpPaymentId || order.stripe_session_id,
-            fee: realMpFee,
-            feePercentage: realMpFeePct 
+            gatewayFee: gateway?.gateway_fee ?? null,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -456,24 +440,19 @@ serve(async (req: Request) => {
       );
     }
 
-    // Cálculo e Recálculo de Juros de Parcelamento (repasse ao comprador)
+    // Juros de parcelamento: a conta do MP está configurada com os juros por
+    // conta do comprador (desde 10/2026). Nesse modo o MP espera o valor SEM
+    // juros em transaction_amount e acrescenta o financiamento ele mesmo ao
+    // cobrar o cartão. Somar juros aqui fazia o comprador pagar em dobro.
+    // Os juros não passam pela conta da plataforma: não entram no pedido,
+    // na conveniência, no repasse nem no lucro.
     const instCount = Math.min(12, Math.max(1, Number(body.installments) || 1));
-    let finalChargedAmount = baseTotalAmount;
-    let installmentRate = 0;
-    let installmentInterest = 0;
-
-    if (payment_method === "credit_card" && instCount > 1) {
-      installmentRate = Number(body.installment_rate) || MP_BUYER_INSTALLMENT_RATES[instCount] || 0;
-      const expectedCalculatedTotal = Number((baseTotalAmount * (1 + installmentRate / 100)).toFixed(2));
-
-      // Se o frontend passou o total validado da API oficial de installments do MP (payer_costs)
-      if (body.total_with_interest && Number(body.total_with_interest) >= baseTotalAmount) {
-        finalChargedAmount = Number(Number(body.total_with_interest).toFixed(2));
-      } else {
-        finalChargedAmount = expectedCalculatedTotal;
-      }
-      installmentInterest = Math.max(0, Number((finalChargedAmount - baseTotalAmount).toFixed(2)));
-    }
+    const finalChargedAmount = baseTotalAmount;
+    // Só informativo (metadata): a taxa que o comprador viu na tela
+    const installmentRate = payment_method === "credit_card" && instCount > 1
+      ? Number(body.installment_rate) || MP_BUYER_INSTALLMENT_RATES[instCount] || 0
+      : 0;
+    const installmentInterest = 0;
 
     // 5. Criação ou Atualização do Pedido em app_event_orders com valores auditados
     const cleanDoc = client_document ? String(client_document).replace(/\D/g, "") : null;
@@ -495,6 +474,10 @@ serve(async (req: Request) => {
           payment_method: payment_method,
           convenience_fee: feeAmount,
           convenience_fee_percentage: feeRate,
+          tickets_amount: subtotal,
+          installment_interest: installmentInterest,
+          installments: instCount,
+          fee_source: "checkout",
           coupon_id: validCouponId,
           coupon_code: appliedCouponCode,
           discount_amount: validatedDiscount,
@@ -529,6 +512,10 @@ serve(async (req: Request) => {
           payment_method: payment_method,
           convenience_fee: feeAmount,
           convenience_fee_percentage: feeRate,
+          tickets_amount: subtotal,
+          installment_interest: installmentInterest,
+          installments: instCount,
+          fee_source: "checkout",
           coupon_id: validCouponId,
           coupon_code: appliedCouponCode,
           discount_amount: validatedDiscount,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/lib/supabase';
 import { checkMercadoPagoPaymentStatus } from '../../services/mercadoPagoService';
+import { isMercadoPagoOrder, runOrderRefund } from '../../services/mercadoPagoRefundService';
 import { 
   sendOrderNotifications, 
   sendOrderWhatsAppNotification, 
@@ -83,6 +84,8 @@ export interface RefundOrderParams {
   amount: number;
   reason: string;
   isPartial?: boolean;
+  /** Estorno já feito no painel do MP: só registra no sistema. */
+  registerOnly?: boolean;
 }
 
 export interface TransferTicketParams {
@@ -265,11 +268,8 @@ export const useEventOrders = (eventId?: string) => {
       const combinedOrders: EventOrderRecord[] = (ordersData || []).map((order) => {
         let fee = Number(order.convenience_fee || 0);
         let feePercentage = Number(order.convenience_fee_percentage || 0);
-        let needsDbFix = false;
 
         const orderTotal = Number(order.amount_total || 0);
-        const orderQty = Math.max(1, Number(order.quantity) || 1);
-        const discountAmount = Number(order.discount_amount || 0);
 
         // Localizar cadastro mais recente do comprador
         const cleanDoc = (order.client_document || order.documento || order.cpf || '').replace(/\D/g, '');
@@ -372,48 +372,16 @@ export const useEventOrders = (eventId?: string) => {
           return ticket;
         });
 
-        // Caso 1: Taxa já gravada no pedido (vinda da API do Mercado Pago)
+        // Taxa de conveniência é a gravada no checkout. Esta tela só exibe: não
+        // estima nem regrava taxa no banco. A estimativa de taxa do Mercado Pago
+        // que existia aqui sobrescrevia a conveniência e quebrava o cálculo de
+        // repasse — a taxa do MP agora vive em gateway_fee (migration 044).
         if (fee > 0) {
           if (!feePercentage && orderTotal > 0) {
             feePercentage = Number(((fee / orderTotal) * 100).toFixed(2));
           }
-        } 
-        // Caso 2: Percentual informado mas valor da taxa ausente
-        else if (feePercentage > 0 && orderTotal > 0) {
-          fee = Number((orderTotal * (feePercentage / 100)).toFixed(2));
-          needsDbFix = true;
-        } 
-        // Caso 3: Ambos ausentes/zerados - apurar taxa real do gateway Mercado Pago
-        else if (orderTotal > 0) {
-          const normPayment = String(order.payment_method || '').toLowerCase().trim();
-
-          // Identificar se foi processado pelo gateway Mercado Pago
-          const isMercadoPagoGateway = !!order.stripe_session_id || normPayment === 'pix' || normPayment === 'pix_stripe' || normPayment === 'credit_card';
-
-          if (normPayment === 'cortesia') {
-            fee = 0;
-            feePercentage = 0;
-          } else if (isMercadoPagoGateway) {
-            // Taxas oficiais do Mercado Pago no Brasil: Pix = 0.99%, Cartão = 4.99%
-            const mpGatewayRate = (normPayment === 'pix' || normPayment === 'pix_stripe') ? 0.99 : 4.99;
-            feePercentage = mpGatewayRate;
-            fee = Number((orderTotal * (mpGatewayRate / 100)).toFixed(2));
-            needsDbFix = true;
-          }
-        }
-
-        // Auto-cura: atualiza silenciosamente no Supabase para fixar a taxa real
-        if (needsDbFix && fee > 0 && order.id) {
-          supabase
-            .from('app_event_orders')
-            .update({
-              convenience_fee: fee,
-              convenience_fee_percentage: feePercentage,
-            })
-            .eq('id', order.id)
-            .then(({ error }: any) => {
-              if (error) console.warn(`Aviso ao atualizar taxa do pedido ${order.id}:`, error);
-            });
+        } else if (feePercentage > 0 && orderTotal > 0) {
+          fee = Number((orderTotal - orderTotal / (1 + feePercentage / 100)).toFixed(2));
         }
 
         return {
@@ -730,13 +698,36 @@ export const useEventOrders = (eventId?: string) => {
   };
 
   // Registrar Reembolso de Pedido (Parcial ou Total)
-  const refundOrder = async ({ orderId, amount, reason, isPartial = false }: RefundOrderParams) => {
+  const refundOrder = async ({ orderId, amount, reason, isPartial = false, registerOnly = false }: RefundOrderParams) => {
+    const targetOrder = orders.find(o => o.id === orderId);
+    if (!targetOrder) {
+      toast.error('Pedido não encontrado.');
+      return false;
+    }
+
+    // Pedido pago pelo Mercado Pago: o estorno acontece no MP e o pedido é
+    // marcado com o que o MP confirmar. Antes daqui o reembolso só existia no
+    // banco e o comprador nunca recebia o dinheiro. O erro sobe para o modal
+    // mostrar a resposta do MP sem fechar.
+    if (isMercadoPagoOrder(targetOrder)) {
+      const result = await runOrderRefund({
+        orderId,
+        action: registerOnly ? 'register' : 'refund',
+        amount: isPartial ? amount : null,
+        reason,
+      });
+      toast.success(
+        registerOnly
+          ? 'Reembolso registrado no sistema com os valores do Mercado Pago.'
+          : result.total
+            ? `Estorno de R$ ${Number(result.refunded_amount || amount).toFixed(2)} feito no Mercado Pago e ingressos cancelados.`
+            : `Estorno parcial feito no Mercado Pago. Total estornado: R$ ${Number(result.refunded_amount || amount).toFixed(2)}.`
+      );
+      await fetchOrders();
+      return true;
+    }
+
     try {
-      const targetOrder = orders.find(o => o.id === orderId);
-      if (!targetOrder) {
-        toast.error('Pedido não encontrado.');
-        return false;
-      }
 
       const newStatus = isPartial ? targetOrder.status : 'refunded';
 

@@ -1197,8 +1197,9 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         isOpen={!!orderToRefund}
         onClose={() => setOrderToRefund(null)}
         order={orderToRefund}
-        onConfirmRefund={async ({ orderId, amount, reason, isPartial }) => {
-          await refundOrder({ orderId, amount, reason, isPartial });
+        onConfirmRefund={async ({ orderId, amount, reason, isPartial, registerOnly }) => {
+          // Erro do Mercado Pago sobe para o modal, que mostra a mensagem e fica aberto
+          await refundOrder({ orderId, amount, reason, isPartial, registerOnly });
           setOrderToRefund(null);
         }}
       />

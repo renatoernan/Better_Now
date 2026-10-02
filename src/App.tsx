@@ -35,6 +35,7 @@ const AdminSolicitations = React.lazy(() => import('./components/features/AdminS
 const AdminEventMural = React.lazy(() => import('./components/features/AdminEventMural'));
 const AdminEventContests = React.lazy(() => import('./components/features/AdminEventContests'));
 const ContestKiosk = React.lazy(() => import('./components/features/ContestKiosk'));
+const AdminPayouts = React.lazy(() => import('./components/features/AdminPayouts'));
 
 // Supplier Components (Lazy Loading)
 const AdminSuppliers = React.lazy(() => import('./components/features/AdminSuppliers'));
@@ -206,6 +207,14 @@ const AppContent: React.FC = () => {
             element={
               <Suspense fallback={<LoadingFallback message="Carregando concursos..." />}>
                 <AdminEventContests />
+              </Suspense>
+            }
+          />
+          <Route
+            path="repasses"
+            element={
+              <Suspense fallback={<LoadingFallback message="Carregando repasses..." />}>
+                <AdminPayouts />
               </Suspense>
             }
           />

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, RotateCcw, AlertTriangle, Loader2, DollarSign, Info } from 'lucide-react';
 import { EventOrderRecord } from '../../shared/hooks/hooks/useEventOrders';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
+import { isMercadoPagoOrder } from '../../shared/services/mercadoPagoRefundService';
 
 interface AdminRefundOrderModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface AdminRefundOrderModalProps {
     amount: number;
     reason: string;
     isPartial: boolean;
+    registerOnly?: boolean;
   }) => Promise<boolean | void>;
 }
 
@@ -25,12 +27,14 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
   const [reason, setReason] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [registerOnly, setRegisterOnly] = useState<boolean>(false);
 
   useEffect(() => {
     if (order) {
       setRefundAmount(Number(order.amount_total) || 0);
       setReason('');
       setErrorMsg('');
+      setRegisterOnly(false);
     }
   }, [order, isOpen]);
 
@@ -38,6 +42,8 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
 
   const totalOrderAmount = Number(order.amount_total) || 0;
   const isPartial = refundAmount > 0 && refundAmount < totalOrderAmount;
+  const viaMp = isMercadoPagoOrder(order);
+  const refundsOnMp = viaMp && !registerOnly;
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +71,7 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
         amount: refundAmount,
         reason: reason.trim(),
         isPartial,
+        registerOnly,
       });
       onClose();
     } catch (err: any) {
@@ -92,7 +99,7 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
               <RotateCcw className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Registrar Reembolso</h2>
+              <h2 className="text-xl font-bold text-white">{refundsOnMp ? 'Estornar no Mercado Pago' : 'Registrar Reembolso'}</h2>
               <p className="text-xs text-purple-200">Controle de Devoluções e Reembolsos</p>
             </div>
           </div>
@@ -184,12 +191,28 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
                 {isPartial ? 'Atenção ao Reembolso Parcial:' : 'Atenção ao Reembolso Total:'}
               </p>
               <p className="text-[11px] leading-relaxed opacity-90">
+                {refundsOnMp && 'O valor será estornado no Mercado Pago e devolvido ao comprador. '}
                 {isPartial
                   ? 'O pedido continuará como PAGO, com registro do valor devolvido. Os ingressos permanecem válidos para o evento.'
                   : 'O pedido mudará para status REEMBOLSADO e todos os ingressos vinculados serão automaticamente CANCELADOS.'}
               </p>
             </div>
           </div>
+
+          {viaMp && (
+            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-gray-200 bg-gray-50 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={registerOnly}
+                onChange={(e) => setRegisterOnly(e.target.checked)}
+                disabled={loading}
+                className="mt-0.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              <span className="text-gray-700">
+                <strong className="text-gray-900">Já estornei no painel do Mercado Pago</strong> — apenas registrar no sistema, sem estornar de novo.
+              </span>
+            </label>
+          )}
 
           {/* Mensagem de Erro */}
           {errorMsg && (
@@ -216,7 +239,7 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
               className="px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl transition-all shadow-md shadow-purple-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-              <span>Confirmar Reembolso</span>
+              <span>{refundsOnMp ? 'Estornar no Mercado Pago' : 'Confirmar Reembolso'}</span>
             </button>
           </div>
         </form>

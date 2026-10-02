@@ -123,7 +123,11 @@ serve(async (req) => {
         status: "pending",
         payment_method: payment_method || "mercadopago",
         convenience_fee: fee,
-        convenience_fee_percentage: Number(convenience_fee_percentage) || 0
+        convenience_fee_percentage: Number(convenience_fee_percentage) || 0,
+        // Decomposição usada pelo controle de repasses (migration 044)
+        tickets_amount: Number(subtotal.toFixed(2)),
+        installment_interest: 0,
+        fee_source: "checkout",
       })
       .select()
       .single();

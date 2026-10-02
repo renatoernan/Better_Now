@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Lock, Loader2, Eye, Search, DollarSign, Receipt, Wallet, Ticket,
-  CheckCircle2, Clock, Ban, RotateCcw, Gift, AlertTriangle, Filter,
+  CheckCircle2, Clock, Ban, RotateCcw, Gift, AlertTriangle, Filter, FileText, Hourglass, Send,
+  ChevronRight, X,
 } from 'lucide-react';
 import { supabase } from '../../shared/services/lib/supabase';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
@@ -19,6 +20,16 @@ interface OrderRow {
   net: number;
   status: string;
   created_at: string;
+  payout: PayoutInfo | null;
+}
+
+interface PayoutInfo {
+  status: 'pendente' | 'a_liberar' | 'repassado' | 'estornado' | 'estornado_apos_repasse';
+  paid_at: string | null;
+  registered_at: string | null;
+  method: string | null;
+  reference: string | null;
+  proof_url: string | null;
 }
 
 interface Totals {
@@ -49,6 +60,91 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     <span className={`px-2.5 py-1 text-xs font-bold rounded-lg inline-flex items-center gap-1 ${s.cls}`}>
       <s.Icon className="w-3.5 h-3.5" /> {s.label}
     </span>
+  );
+};
+
+const PAYOUT_META: Record<string, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
+  repassado: { label: 'Repassado', cls: 'bg-emerald-100 text-emerald-800', Icon: Send },
+  pendente: { label: 'A repassar', cls: 'bg-amber-100 text-amber-800', Icon: Clock },
+  a_liberar: { label: 'Aguardando Mercado Pago', cls: 'bg-sky-100 text-sky-800', Icon: Hourglass },
+  estornado: { label: 'Estornado', cls: 'bg-gray-200 text-gray-700', Icon: RotateCcw },
+  estornado_apos_repasse: { label: 'Estornado após repasse', cls: 'bg-red-100 text-red-800', Icon: RotateCcw },
+};
+
+const NO_PAYOUT_LABEL = 'Sem repasse (não pago)';
+
+type StatusGroupKey = 'paid' | 'courtesy' | 'failed' | 'refunded' | 'pending' | 'cancelled';
+
+const STATUS_GROUPS: { key: StatusGroupKey; label: string; cls: string; Icon: typeof CheckCircle2; always: boolean }[] = [
+  { key: 'paid', label: 'Pagos', cls: 'bg-emerald-50 text-emerald-700', Icon: CheckCircle2, always: true },
+  { key: 'courtesy', label: 'Cortesias', cls: 'bg-teal-50 text-teal-700', Icon: Gift, always: true },
+  { key: 'failed', label: 'Recusados', cls: 'bg-red-50 text-red-700', Icon: Ban, always: true },
+  { key: 'refunded', label: 'Reembolsados', cls: 'bg-purple-50 text-purple-700', Icon: RotateCcw, always: true },
+  { key: 'pending', label: 'Pendentes', cls: 'bg-amber-50 text-amber-700', Icon: Clock, always: false },
+  { key: 'cancelled', label: 'Cancelados', cls: 'bg-gray-100 text-gray-600', Icon: Ban, always: false },
+];
+
+const statusGroupOf = (o: OrderRow): StatusGroupKey | null => {
+  const isFree = o.method === 'cortesia' || o.method === 'free';
+  if (o.status === 'paid' || o.status === 'approved') return isFree ? 'courtesy' : 'paid';
+  if (o.status === 'failed') return 'failed';
+  if (o.status === 'refunded') return 'refunded';
+  if (o.status === 'pending' || o.status === 'pending_proof') return 'pending';
+  if (o.status === 'cancelled') return 'cancelled';
+  return null;
+};
+
+const payoutLabel = (status: string) => PAYOUT_META[status]?.label || NO_PAYOUT_LABEL;
+
+const fmtDay = (d: string) =>
+  new Date(d.length === 10 ? `${d}T12:00:00` : d).toLocaleDateString('pt-BR');
+
+/**
+ * O repasse guarda o dia da transferência e o momento em que foi registrado.
+ * A hora só é mostrada quando o registro foi no mesmo dia da transferência —
+ * em lançamento retroativo ela seria a hora do registro, não a do Pix.
+ */
+const payoutWhen = (p: PayoutInfo): string | null => {
+  if (!p.paid_at) return null;
+  const day = fmtDay(p.paid_at);
+  if (!p.registered_at) return day;
+  const reg = new Date(p.registered_at);
+  const sameDay = reg.toLocaleDateString('pt-BR') === day;
+  return sameDay
+    ? `${day} às ${reg.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+    : day;
+};
+
+const PayoutCell: React.FC<{ payout: PayoutInfo | null }> = ({ payout }) => {
+  if (!payout) return <span className="text-gray-400">—</span>;
+  const meta = PAYOUT_META[payout.status] || PAYOUT_META.pendente;
+  const when = payoutWhen(payout);
+  return (
+    <div className="space-y-1">
+      <span className={`px-2.5 py-1 text-xs font-bold rounded-lg inline-flex items-center gap-1 whitespace-nowrap ${meta.cls}`}>
+        <meta.Icon className="w-3.5 h-3.5" /> {meta.label}
+      </span>
+      {when && (
+        <div className="text-xs text-gray-500 whitespace-nowrap">
+          {when}{payout.method ? ` · ${payout.method}` : ''}
+        </div>
+      )}
+      {payout.reference && (
+        <div className="text-[11px] text-gray-400 font-mono truncate max-w-[180px]" title={payout.reference}>
+          {payout.reference}
+        </div>
+      )}
+      {payout.proof_url && (
+        <a
+          href={payout.proof_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+        >
+          <FileText className="w-3.5 h-3.5" /> Comprovante
+        </a>
+      )}
+    </div>
   );
 };
 
@@ -85,6 +181,8 @@ const PublicEventOrders: React.FC = () => {
   const [term, setTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [methodFilter, setMethodFilter] = useState('all');
+  const [payoutFilter, setPayoutFilter] = useState('all');
+  const [showStatusSummary, setShowStatusSummary] = useState(false);
 
   const unlock = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +251,11 @@ const PublicEventOrders: React.FC = () => {
     [data]
   );
 
+  const payoutOptions = useMemo(
+    () => data ? buildOptions(data.orders.map(o => o.payout?.status || null), v => payoutLabel(v)) : [],
+    [data]
+  );
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const q = term.trim().toLowerCase();
@@ -166,12 +269,16 @@ const PublicEventOrders: React.FC = () => {
         const group = methodOptions.find(m => m.label === methodFilter);
         if (!group?.raws.includes(o.method || '')) return false;
       }
+      if (payoutFilter !== 'all') {
+        const group = payoutOptions.find(p => p.label === payoutFilter);
+        if (!group?.raws.includes(o.payout?.status || '')) return false;
+      }
       if (!q) return true;
       return o.buyer.toLowerCase().includes(q)
         || o.code.toLowerCase().includes(q)
         || o.batch.toLowerCase().includes(q);
     });
-  }, [data, term, statusFilter, methodFilter, statusOptions, methodOptions]);
+  }, [data, term, statusFilter, methodFilter, payoutFilter, statusOptions, methodOptions, payoutOptions]);
 
   // Os totais acompanham o filtro, senão o cabeçalho contradiz a tabela
   const shownTotals = useMemo(() => {
@@ -180,10 +287,44 @@ const PublicEventOrders: React.FC = () => {
       gross: paid.reduce((s, o) => s + o.gross, 0),
       fee: paid.reduce((s, o) => s + o.fee, 0),
       net: paid.reduce((s, o) => s + o.net, 0),
+      // Repassado conta também o pedido estornado depois do repasse: o
+      // dinheiro saiu, e é isso que o card de repasses precisa somar
+      paidOut: filtered
+        .filter(o => o.payout?.status === 'repassado' || o.payout?.status === 'estornado_apos_repasse')
+        .reduce((s, o) => s + o.net, 0),
+      toPay: paid.filter(o => o.payout?.status === 'pendente').reduce((s, o) => s + o.net, 0),
+      awaitingMp: paid.filter(o => o.payout?.status === 'a_liberar').reduce((s, o) => s + o.net, 0),
+      refundedAfter: filtered
+        .filter(o => o.payout?.status === 'estornado_apos_repasse')
+        .reduce((s, o) => s + o.net, 0),
       paidOrders: paid.length,
       tickets: paid.reduce((s, o) => s + o.quantity, 0),
+      // O total de ingressos junta vendas e cortesias; o card mostra a divisão
+      courtesyTickets: paid
+        .filter(o => o.method === 'cortesia' || o.method === 'free')
+        .reduce((s, o) => s + o.quantity, 0),
     };
   }, [filtered]);
+
+  const statusSummary = useMemo(() => {
+    const acc = new Map<StatusGroupKey, { orders: number; tickets: number; gross: number }>();
+    for (const o of filtered) {
+      const key = statusGroupOf(o);
+      if (!key) continue;
+      const cur = acc.get(key) || { orders: 0, tickets: 0, gross: 0 };
+      acc.set(key, { orders: cur.orders + 1, tickets: cur.tickets + o.quantity, gross: cur.gross + o.gross });
+    }
+    const rows = STATUS_GROUPS
+      .map(g => ({ ...g, ...(acc.get(g.key) || { orders: 0, tickets: 0, gross: 0 }) }))
+      .filter(g => g.always || g.orders > 0);
+    const total = rows.reduce(
+      (t, r) => ({ orders: t.orders + r.orders, tickets: t.tickets + r.tickets, gross: t.gross + r.gross }),
+      { orders: 0, tickets: 0, gross: 0 }
+    );
+    return { rows, total };
+  }, [filtered]);
+
+  const hasFilters = statusFilter !== 'all' || methodFilter !== 'all' || payoutFilter !== 'all' || term.trim() !== '';
 
   if (!data) {
     return (
@@ -248,24 +389,61 @@ const PublicEventOrders: React.FC = () => {
           </div>
         </header>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5">
           {[
             { label: 'Receita Bruta', value: formatPrice(shownTotals.gross), hint: `${shownTotals.paidOrders} pedidos pagos`, Icon: DollarSign, cls: 'bg-emerald-50 text-emerald-600' },
             { label: 'Taxas', value: formatPrice(shownTotals.fee), hint: 'Taxas de serviço', Icon: Receipt, cls: 'bg-amber-50 text-amber-600' },
             { label: 'Receita Líquida', value: formatPrice(shownTotals.net), hint: 'Bruto menos taxas', Icon: Wallet, cls: 'bg-indigo-50 text-indigo-600' },
-            { label: 'Ingressos', value: String(shownTotals.tickets), hint: `${filtered.length} pedidos listados`, Icon: Ticket, cls: 'bg-blue-50 text-blue-600' },
-          ].map(k => (
-            <div key={k.label} className="bg-white p-4 rounded-2xl shadow-xs border border-gray-100 flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${k.cls}`}>
-                <k.Icon className="w-5 h-5" />
+            {
+              label: 'Repassado',
+              value: formatPrice(shownTotals.paidOut),
+              hint: [
+                shownTotals.toPay > 0 ? `${formatPrice(shownTotals.toPay)} a repassar` : null,
+                shownTotals.awaitingMp > 0 ? `${formatPrice(shownTotals.awaitingMp)} no Mercado Pago` : null,
+                shownTotals.refundedAfter > 0 ? `${formatPrice(shownTotals.refundedAfter)} estornado após repasse` : null,
+              ].filter(Boolean).join(' · ') || (shownTotals.paidOrders > 0 ? 'Tudo repassado' : 'Nenhum repasse'),
+              Icon: Send,
+              cls: 'bg-teal-50 text-teal-600',
+            },
+            {
+              label: 'Ingressos · pagos + cortesias',
+              value: String(shownTotals.tickets),
+              hint: `${shownTotals.tickets - shownTotals.courtesyTickets} pagos + ${shownTotals.courtesyTickets} cortesia${shownTotals.courtesyTickets !== 1 ? 's' : ''}`,
+              Icon: Ticket,
+              cls: 'bg-blue-50 text-blue-600',
+              onClick: () => setShowStatusSummary(true),
+            },
+          ].map((k: { label: string; value: string; hint: string; Icon: typeof Ticket; cls: string; onClick?: () => void }) => {
+            const content = (
+              <>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${k.cls}`}>
+                  <k.Icon className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-[11px] font-semibold text-gray-500 truncate">{k.label}</p>
+                  <h3 className="text-base font-black text-gray-900 truncate">{k.value}</h3>
+                  <p className={`text-[11px] truncate ${k.onClick ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>{k.hint}</p>
+                </div>
+                {k.onClick && <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
+              </>
+            );
+            return k.onClick ? (
+              <button
+                key={k.label}
+                type="button"
+                onClick={k.onClick}
+                title="Ver resumo por status"
+                aria-label={`${k.label}: ${k.value}. Ver resumo por status`}
+                className="bg-white p-4 rounded-2xl shadow-xs border border-gray-100 flex items-center gap-3 hover:border-blue-200 hover:shadow-sm transition-all"
+              >
+                {content}
+              </button>
+            ) : (
+              <div key={k.label} className="bg-white p-4 rounded-2xl shadow-xs border border-gray-100 flex items-center gap-3">
+                {content}
               </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-gray-500 truncate">{k.label}</p>
-                <h3 className="text-base font-black text-gray-900 truncate">{k.value}</h3>
-                <p className="text-[11px] text-gray-500 truncate">{k.hint}</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
@@ -308,13 +486,24 @@ const PublicEventOrders: React.FC = () => {
                 ))}
               </select>
 
+              <select
+                value={payoutFilter}
+                onChange={(e) => setPayoutFilter(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              >
+                <option value="all">Todos os repasses</option>
+                {payoutOptions.map(p => (
+                  <option key={p.label} value={p.label}>{p.label}</option>
+                ))}
+              </select>
+
               <span className="text-xs text-gray-500">
                 {filtered.length} de {data.orders.length} pedido{data.orders.length !== 1 ? 's' : ''}
               </span>
 
-              {(statusFilter !== 'all' || methodFilter !== 'all' || term) && (
+              {(statusFilter !== 'all' || methodFilter !== 'all' || payoutFilter !== 'all' || term) && (
                 <button
-                  onClick={() => { setStatusFilter('all'); setMethodFilter('all'); setTerm(''); }}
+                  onClick={() => { setStatusFilter('all'); setMethodFilter('all'); setPayoutFilter('all'); setTerm(''); }}
                   className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
                 >
                   Limpar
@@ -335,12 +524,13 @@ const PublicEventOrders: React.FC = () => {
                   <th className="px-4 py-3 text-right font-semibold text-xs uppercase tracking-wide">Taxa</th>
                   <th className="px-4 py-3 text-right font-semibold text-xs uppercase tracking-wide">Valor Líquido</th>
                   <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide">Status</th>
+                  <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide">Repasse</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
                       Nenhum pedido encontrado.
                     </td>
                   </tr>
@@ -375,6 +565,7 @@ const PublicEventOrders: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-indigo-950">{formatPrice(o.net)}</td>
                     <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
+                    <td className="px-4 py-3"><PayoutCell payout={o.payout} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -385,6 +576,72 @@ const PublicEventOrders: React.FC = () => {
         <p className="text-center text-xs text-gray-400 pb-4">
           Página de consulta. Os dados não podem ser alterados por aqui.
         </p>
+
+        {showStatusSummary && (
+          <div
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowStatusSummary(false); }}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="flex items-start justify-between p-5 border-b border-gray-100">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Resumo por status</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {hasFilters ? 'Considerando os filtros aplicados' : 'Todos os pedidos do evento'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowStatusSummary(false)}
+                  className="p-1.5 hover:bg-gray-100 rounded-lg"
+                  aria-label="Fechar"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-500">
+                  <tr>
+                    <th className="px-5 py-2.5 text-left font-semibold text-xs uppercase tracking-wide">Status</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-xs uppercase tracking-wide">Pedidos</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-xs uppercase tracking-wide">Ingressos</th>
+                    <th className="px-5 py-2.5 text-right font-semibold text-xs uppercase tracking-wide">Valor bruto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {statusSummary.rows.map(r => (
+                    <tr key={r.key} className={r.orders === 0 ? 'text-gray-400' : ''}>
+                      <td className="px-5 py-3">
+                        <span className={`px-2.5 py-1 text-xs font-bold rounded-lg inline-flex items-center gap-1 ${r.cls}`}>
+                          <r.Icon className="w-3.5 h-3.5" /> {r.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums">{r.orders}</td>
+                      <td className="px-3 py-3 text-right tabular-nums font-semibold">{r.tickets}</td>
+                      <td className="px-5 py-3 text-right tabular-nums">
+                        {r.key === 'courtesy' ? <span className="text-gray-400">—</span> : formatPrice(r.gross)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 font-bold text-gray-900">
+                  <tr>
+                    <td className="px-5 py-3 text-xs uppercase text-gray-500">Total</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{statusSummary.total.orders}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{statusSummary.total.tickets}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{formatPrice(statusSummary.total.gross)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              <p className="px-5 py-3 text-[11px] text-gray-500 border-t border-gray-100">
+                Recusados e reembolsados não entram na receita. O card Ingressos soma pagos e cortesias.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
