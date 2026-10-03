@@ -29,7 +29,9 @@ export const scheduleItemSchema = z.object({
   description: z.string().max(500, 'Descrição muito longa').optional(),
 });
 
-export const priceBatchSchema = z.object({
+// Objeto base separado da validação de datas: a partir do Zod 4.6, .omit()
+// não pode ser usado em schema com .refine() e derruba o app ao carregar
+const priceBatchBaseSchema = z.object({
   id: z.string().uuid(),
   event_id: z.string().uuid(),
   name: z.string().min(1, 'Nome é obrigatório').max(100, 'Nome muito longo'),
@@ -40,10 +42,15 @@ export const priceBatchSchema = z.object({
   end_date: z.string().datetime(),
   is_active: z.boolean(),
   show_when_closed: z.boolean().optional(),
-}).refine(data => new Date(data.end_date) > new Date(data.start_date), {
-  message: 'Data de fim deve ser posterior à data de início',
-  path: ['end_date'],
 });
+
+const batchDatesInOrder = {
+  check: (data: { start_date: string; end_date: string }) =>
+    new Date(data.end_date) > new Date(data.start_date),
+  options: { message: 'Data de fim deve ser posterior à data de início', path: ['end_date'] },
+};
+
+export const priceBatchSchema = priceBatchBaseSchema.refine(batchDatesInOrder.check, batchDatesInOrder.options);
 
 export const eventSchema = z.object({
   id: z.string().uuid(),
@@ -156,11 +163,11 @@ export const eventFormDataSchema = eventSchema.omit({
   id: true,
   current_guests: true,
 }).extend({
-  price_batches: z.array(priceBatchSchema.omit({
+  price_batches: z.array(priceBatchBaseSchema.omit({
     id: true,
     event_id: true,
     sold_quantity: true,
-  })).optional(),
+  }).refine(batchDatesInOrder.check, batchDatesInOrder.options)).optional(),
   schedule: z.array(scheduleItemSchema.omit({ id: true })).optional(),
 });
 
