@@ -456,6 +456,45 @@ serve(async (req: Request) => {
 
     // 5. Criação ou Atualização do Pedido em app_event_orders com valores auditados
     const cleanDoc = client_document ? String(client_document).replace(/\D/g, "") : null;
+
+    // Trava contra cobrança duplicada: mesmo comprador, mesmo evento, mesmo
+    // valor e quantidade, pago há poucos minutos = é a mesma compra sendo
+    // repetida (tela que não mostrou a aprovação, clique duplo). Devolve a
+    // compra já aprovada em vez de cobrar o cartão de novo. Em 04/10/2026 três
+    // compradoras repetiram o pagamento e só o antifraude do MP evitou a
+    // segunda cobrança.
+    if (payment_method === "credit_card" && (cleanDoc || client_email)) {
+      const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      let dupQuery = supabase
+        .from("app_event_orders")
+        .select("id, stripe_session_id")
+        .eq("event_id", event_id)
+        .in("status", ["paid", "approved"])
+        .eq("amount_total", finalChargedAmount)
+        .eq("quantity", Number(quantity))
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      dupQuery = cleanDoc ? dupQuery.eq("client_document", cleanDoc) : dupQuery.eq("client_email", client_email);
+
+      const { data: recentPaid } = await dupQuery;
+      const already = recentPaid?.[0];
+      if (already && already.id !== existing_order_id) {
+        console.warn(`Cobrança duplicada evitada: pedido ${already.id} já pago para este comprador.`);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            status: "approved",
+            duplicate: true,
+            orderId: already.id,
+            paymentId: already.stripe_session_id || "",
+            amountTotal: finalChargedAmount,
+            message: "Seu pagamento já foi aprovado! Os ingressos foram enviados para o seu WhatsApp e e-mail. 🎉",
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
     let orderId = existing_order_id || null;
     let orderRecord = null;
 
@@ -655,7 +694,7 @@ serve(async (req: Request) => {
 
             if (!existingUsage) {
               const discAmt = validatedDiscount || 0;
-              const origAmt = (totalAmount || 0) + discAmt;
+              const origAmt = (finalChargedAmount || 0) + discAmt;
 
               await supabase.from("app_event_coupon_usages").insert({
                 coupon_id: validCouponId,
@@ -668,7 +707,7 @@ serve(async (req: Request) => {
                 batch_index: bIndex ?? 0,
                 discount_applied: discAmt,
                 original_amount: origAmt,
-                final_amount: totalAmount || 0,
+                final_amount: finalChargedAmount || 0,
                 used_at: new Date().toISOString(),
               });
             }
@@ -705,7 +744,7 @@ serve(async (req: Request) => {
           statusDetail,
           orderId: orderId || "",
           paymentId,
-          amountTotal: totalAmount,
+          amountTotal: finalChargedAmount,
           message: "Pagamento aprovado com sucesso! Seus ingressos foram emitidos! 🎉",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -721,15 +760,9 @@ serve(async (req: Request) => {
       const ticketUrl = transactionData?.ticket_url;
       const expirationDate = mpData.date_of_expiration;
 
-      // Disparar notificação de pedido criado (Aguardando pagamento Pix)
-      sendOrderNotificationsFromBackend({
-        supabase,
-        orderId: orderId || orderRecord?.id,
-        orderData: { ...orderRecord, payment_url: ticketUrl },
-        type: "created",
-      }).catch((notifErr) => {
-        console.warn("Aviso no envio de notificações de criação de Pix:", notifErr);
-      });
+      // "Aguardando pagamento" não sai aqui: o QR Code está na tela e quase
+      // todo Pix é pago em segundos. Quem continuar pendente depois de 5 min
+      // recebe o aviso com o link pelo job send-pending-order-reminders.
 
       return new Response(
         JSON.stringify({
@@ -741,24 +774,16 @@ serve(async (req: Request) => {
           qrCodeBase64,
           ticketUrl,
           expirationDate,
-          amount: totalAmount,
+          amount: finalChargedAmount,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 11. Resposta para Cartão em Análise ou Pendente
-    if (paymentStatus === "in_process" || paymentStatus === "pending") {
-      // Disparar notificação de pedido criado (Aguardando análise da operadora) para cliente e cópia no backstage
-      sendOrderNotificationsFromBackend({
-        supabase,
-        orderId: orderId || orderRecord?.id,
-        orderData: { ...orderRecord, status: "pending" },
-        type: "created",
-      }).catch((notifErr) => {
-        console.warn("Aviso no envio de notificações de cartão em análise:", notifErr);
-      });
-    }
+    // 11. Cartão em análise ou pendente: sem aviso imediato. A análise
+    // antifraude do MP costuma decidir em segundos — o comprador recebia
+    // "aguardando" e logo depois a confirmação (ou nada, se recusado). Se
+    // continuar pendente após 5 min, o job send-pending-order-reminders avisa.
 
     return new Response(
       JSON.stringify({

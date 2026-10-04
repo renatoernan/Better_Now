@@ -243,16 +243,8 @@ const StripeCheckoutModal: React.FC<StripeCheckoutModalProps> = ({
       if (res.success && res.qrCode) {
         setPixData(res);
         setPixTimer(900);
-
-        if (res.orderId) {
-          // Disparar notificação de pedido gerado (Aguardando Pagamento)
-          sendOrderNotifications({
-            type: 'created',
-            orderId: res.orderId,
-          }).catch((notifErr) => {
-            console.warn('Aviso no envio de notificação de pedido criado:', notifErr);
-          });
-        }
+        // "Aguardando pagamento" não sai aqui: se o Pix continuar pendente
+        // depois de 5 min, o job send-pending-order-reminders avisa com o link.
       } else {
         setPixError(res.error || 'Não foi possível gerar a chave Pix. Tente novamente.');
       }
