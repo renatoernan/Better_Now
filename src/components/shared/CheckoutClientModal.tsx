@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, User, Phone, Mail, FileText, MapPin, Globe, CheckCircle2, 
   Loader2, Sparkles, UserPlus, Briefcase, Building2, Calendar, 
-  Ticket, ArrowLeft, ArrowRight, Copy, Check
+  Ticket, ArrowLeft, ArrowRight, Copy, Check, AlertTriangle
 } from 'lucide-react';
 import { PhoneInput } from '../ui/PhoneInput';
 import { CheckoutFieldConfig } from '../../shared/types/types/event';
@@ -346,10 +346,50 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
     toast.success('Endereço do comprador copiado com sucesso!');
   };
 
+  /**
+   * Cada ingresso precisa de um titular diferente: o mesmo CPF (ou documento
+   * estrangeiro) ou o mesmo nome em dois ingressos da compra não é aceito.
+   * Devolve qual campo repete e com qual ingresso, para a mensagem ser clara.
+   */
+  const normName = (v?: string) =>
+    String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const docKey = (a?: CheckoutClientData) => {
+    if (!a) return '';
+    if (a.is_foreign) return a.foreign_document?.trim() ? `est:${a.foreign_document.trim().toUpperCase()}` : '';
+    const d = String(a.documento || a.cpf || '').replace(/\D/g, '');
+    return d.length === 11 ? `cpf:${d}` : '';
+  };
+
+  const findDuplicate = (idx: number): { field: 'cpf' | 'nome'; other: number } | null => {
+    if (actualQty < 2) return null;
+    const att = attendees[idx];
+    if (!att) return null;
+    const myDoc = docKey(att);
+    const myName = normName(att.nome);
+    for (let j = 0; j < actualQty; j++) {
+      if (j === idx) continue;
+      const other = attendees[j];
+      if (!other) continue;
+      if (myDoc && myDoc === docKey(other)) return { field: 'cpf', other: j };
+      if (myName && myName === normName(other.nome)) return { field: 'nome', other: j };
+    }
+    return null;
+  };
+
+  const duplicateMessage = (idx: number): string | null => {
+    const dup = findDuplicate(idx);
+    if (!dup) return null;
+    const label = dup.other === 0 ? 'o comprador (Ingresso 1)' : `o titular do Ingresso ${dup.other + 1}`;
+    return dup.field === 'cpf'
+      ? `Este ${attendees[idx]?.is_foreign ? 'documento' : 'CPF'} já foi usado para ${label}. Cada ingresso precisa de um titular diferente.`
+      : `Este nome já foi usado para ${label}. Cada ingresso precisa de um titular diferente.`;
+  };
+
   // Validação de um participante específico
   const isAttendeeValid = (idx: number): boolean => {
     const att = attendees[idx];
     if (!att) return false;
+    if (findDuplicate(idx)) return false;
 
     // Se tem campo CPF, precisa ter consultado ou marcado estrangeiro
     if (hasCpfField) {
@@ -497,6 +537,13 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
       }
     });
 
+    const dup = findDuplicate(activeIndex);
+    if (dup) {
+      const msg = duplicateMessage(activeIndex) || 'Titular repetido.';
+      if (dup.field === 'cpf') newErrors[attendees[activeIndex]?.is_foreign ? 'foreign_document' : 'cpf'] = msg;
+      else newErrors.nome = msg;
+    }
+
     setErrorsList(prev => {
       const next = [...prev];
       next[activeIndex] = newErrors;
@@ -512,7 +559,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
         setActiveIndex(prev => prev + 1);
       }
     } else {
-      toast.error('Por favor, complete os campos obrigatórios deste ingresso.');
+      toast.error(duplicateMessage(activeIndex) || 'Por favor, complete os campos obrigatórios deste ingresso.');
     }
   };
 
@@ -537,7 +584,10 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
     if (firstInvalidIndex !== -1) {
       setActiveIndex(firstInvalidIndex);
       validateCurrentTab();
-      toast.error(`Por favor, complete todos os campos do Ingresso ${firstInvalidIndex + 1}.`);
+      const dupMsg = duplicateMessage(firstInvalidIndex);
+      toast.error(dupMsg
+        ? `Ingresso ${firstInvalidIndex + 1}: ${dupMsg}`
+        : `Por favor, complete todos os campos do Ingresso ${firstInvalidIndex + 1}.`);
       return;
     }
 
@@ -1072,6 +1122,7 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
               {attendees.map((_, idx) => {
                 const isValid = isAttendeeValid(idx);
                 const isActive = idx === activeIndex;
+                const isDuplicate = Boolean(findDuplicate(idx));
 
                 return (
                   <button
@@ -1086,7 +1137,14 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
                   >
                     <Ticket className="w-3.5 h-3.5" />
                     <span>{idx === 0 ? '1. Comprador' : `${idx + 1}º Ingresso`}</span>
-                    {isValid ? (
+                    {isDuplicate ? (
+                      <span
+                        className="w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold"
+                        title="Titular repetido em outro ingresso"
+                      >
+                        !
+                      </span>
+                    ) : isValid ? (
                       <span className="w-4 h-4 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[10px]">
                         ✓
                       </span>
@@ -1121,6 +1179,16 @@ export const CheckoutClientModal: React.FC<CheckoutClientModalProps> = ({
                   Copiar endereço do comprador
                 </button>
               )}
+            </div>
+          )}
+
+          {actualQty > 1 && duplicateMessage(activeIndex) && (
+            <div className="flex items-start gap-2.5 p-3 rounded-xl border border-red-200 bg-red-50 text-red-800 text-xs" role="alert">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Titular repetido</p>
+                <p className="mt-0.5">{duplicateMessage(activeIndex)} Informe os dados da pessoa que vai usar este ingresso.</p>
+              </div>
             </div>
           )}
 

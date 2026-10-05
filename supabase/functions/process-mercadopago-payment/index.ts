@@ -341,6 +341,31 @@ serve(async (req: Request) => {
     const unitPrice = Number(targetBatch?.price) || 0;
     const batchName = targetBatch?.name || `Lote ${bIndex + 1}`;
 
+    // Cada ingresso precisa de um titular diferente (mesma regra do formulário
+    // de participantes). Bloqueia antes de cobrar o cartão.
+    if (Array.isArray(attendees) && attendees.length > 1) {
+      const norm = (v: unknown) =>
+        String(v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+      const docs = new Set<string>();
+      const names = new Set<string>();
+      for (const att of attendees) {
+        const doc = String(att?.documento || att?.cpf || "").replace(/\D/g, "") || norm(att?.foreign_document);
+        const name = norm(att?.nome);
+        if ((doc && docs.has(doc)) || (name && names.has(name))) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              status: "rejected",
+              error: "Cada ingresso precisa de um titular diferente. Há nome ou CPF repetido entre os ingressos.",
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (doc) docs.add(doc);
+        if (name) names.add(name);
+      }
+    }
+
     // 3. Validação de Estoque / Lote Esgotado
     if (targetBatch && targetBatch.quantity && Number(targetBatch.quantity) > 0) {
       const { data: approvedOrders } = await supabase
