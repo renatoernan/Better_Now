@@ -5,7 +5,8 @@ import { isMercadoPagoOrder, runOrderRefund } from '../../services/mercadoPagoRe
 import { 
   sendOrderNotifications, 
   sendOrderWhatsAppNotification, 
-  sendOrderEmailNotification, 
+  sendOrderEmailNotification,
+  sendTicketTransferNotifications,
   OrderNotificationType 
 } from '../../services/orderNotificationService';
 import { toast } from 'sonner';
@@ -817,6 +818,43 @@ export const useEventOrders = (eventId?: string) => {
         targetPersonId = newPerson.id;
       }
 
+      // 2.1. Contato de quem está transferindo, lido antes da troca de titular:
+      // cadastro da pessoa → participante nominal do pedido → comprador (ingresso 1)
+      const { data: ticketBefore } = await supabase
+        .from('app_event_tickets')
+        .select('ticket_number, client_id')
+        .eq('id', ticketId)
+        .maybeSingle();
+      const ticketNumber = ticketBefore?.ticket_number || 1;
+
+      const { data: orderBefore } = orderId
+        ? await supabase
+            .from('app_event_orders')
+            .select('client_phone, client_name, cancellation_reason')
+            .eq('id', orderId)
+            .maybeSingle()
+        : { data: null as any };
+
+      let fromPhone: string | null = null;
+      let fromName = fromPersonName || 'Titular anterior';
+      const previousPersonId = fromPersonId || ticketBefore?.client_id;
+      if (previousPersonId) {
+        const { data: prevPerson } = await supabase
+          .from('app_people')
+          .select('nome, whatsapp, telefone')
+          .eq('id', previousPersonId)
+          .maybeSingle();
+        fromPhone = prevPerson?.whatsapp || prevPerson?.telefone || null;
+        if (!fromPersonName && prevPerson?.nome) fromName = prevPerson.nome;
+      }
+      if (!fromPhone && typeof orderBefore?.cancellation_reason === 'string' && orderBefore.cancellation_reason.trim().startsWith('[')) {
+        try {
+          const prevAtt = JSON.parse(orderBefore.cancellation_reason)[ticketNumber - 1];
+          fromPhone = prevAtt?.whatsapp || prevAtt?.telefone || null;
+        } catch { /* JSON inválido: segue sem telefone */ }
+      }
+      if (!fromPhone && ticketNumber === 1) fromPhone = orderBefore?.client_phone || null;
+
       // 3. Atualizar o ticket com o novo client_id (pessoa titular)
       const { error: ticketUpdateError } = await supabase
         .from('app_event_tickets')
@@ -878,7 +916,9 @@ export const useEventOrders = (eventId?: string) => {
 
       // 4. Registrar log na tabela app_ticket_transfers (ignora se a tabela não existir ainda no banco)
       try {
-        await supabase
+        // O Supabase devolve o erro em vez de lançá-lo: sem conferir, uma
+        // recusa do banco passava em silêncio (ver migration 047)
+        const { error: logError } = await supabase
           .from('app_ticket_transfers')
           .insert({
             ticket_id: ticketId,
@@ -892,11 +932,40 @@ export const useEventOrders = (eventId?: string) => {
             transferred_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
           });
+        if (logError) {
+          console.warn('Histórico de transferência não gravado:', logError);
+          toast.warning('Transferência feita, mas o histórico não foi registrado.');
+        }
       } catch (logErr) {
         console.warn('Aviso ao registrar log de transferência:', logErr);
       }
 
       toast.success(`Ingresso transferido para ${toPerson.nome} com sucesso! 🎉`);
+
+      // 5. Avisar as duas pontas por WhatsApp. Falha no envio não desfaz a
+      // transferência, só é informada para o admin reenviar se preciso.
+      sendTicketTransferNotifications({
+        ticketId,
+        orderId,
+        eventId: targetEventId,
+        ticketNumber,
+        from: { name: fromName, phone: fromPhone },
+        to: { name: toPerson.nome.trim(), phone: toPerson.whatsapp || null },
+      }).then(({ from, to, backstage }) => {
+        const sent = [
+          from?.success && 'quem transferiu',
+          to?.success && 'quem recebeu',
+          backstage?.success && 'o Backstage',
+        ].filter(Boolean);
+        const failed = [
+          from && !from.success && `quem transferiu (${from.message})`,
+          to && !to.success && `quem recebeu (${to.message})`,
+          backstage && !backstage.success && `o Backstage (${backstage.message})`,
+        ].filter(Boolean);
+        if (sent.length) toast.success(`WhatsApp da transferência enviado para ${sent.join(' e ')}.`);
+        if (failed.length) toast.warning(`WhatsApp da transferência não enviado para ${failed.join(' e ')}.`);
+      });
+
       await fetchOrders();
       return true;
     } catch (err: any) {

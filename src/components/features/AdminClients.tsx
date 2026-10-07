@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
-import { Users, Plus, Search, Filter, Edit, Trash2, History, Download, Phone, Mail, MapPin, Calendar, X, Save, FileText, ChevronDown, Eye, Link, Unlink, RotateCcw, RefreshCw, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Baby, User } from 'lucide-react';
+import { Users, Plus, Search, Filter, Edit, Trash2, History, Download, Phone, Mail, MapPin, Calendar, X, Save, FileText, ChevronDown, Eye, Link, Unlink, RotateCcw, RefreshCw, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Baby, User, UserPlus, UserPen, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSupabaseClients } from '../../shared/hooks/hooks/useSupabaseClients';
@@ -10,6 +10,7 @@ import { clientFormDataSchema, type ClientFormData } from '../../shared/types/sc
 import { Client as BaseClient } from '../../shared/types/types/core';
 import { ActivityLogger } from '../../shared/utils/utils/activityLogger';
 import { formatBrazilDate } from '../../shared/utils/utils/eventUtils';
+import { formatCPF } from '../../shared/utils/utils/cpfUtils';
 import { toast } from 'sonner';
 import Loading from '../ui/Loading';
 import { PhoneInput } from '../ui/PhoneInput';
@@ -90,6 +91,75 @@ const formatFullAddress = (client: Client): string => {
 
   return parts.join(' - ');
 };
+
+// Valores do formulário em branco. O reset() sem argumentos voltaria aos
+// valores do último cliente editado, pois reset(valores) os torna o novo padrão
+const emptyClientForm: ClientFormData = {
+  name: '',
+  apelido: '',
+  documento: '',
+  whatsapp: '',
+  email: '',
+  cep: '',
+  logradouro: '',
+  numero: '',
+  complemento: '',
+  bairro: '',
+  cidade: '',
+  uf: '',
+  notes: '',
+  validated: true
+};
+
+const inputClass = (hasError: boolean) =>
+  `w-full px-3 py-2 text-sm text-slate-900 bg-white border rounded-lg placeholder:text-slate-400 transition focus:outline-none focus:ring-4 ${hasError
+    ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10'
+    : 'border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/10'
+  }`;
+
+const FormSection: React.FC<{
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description?: string;
+  className?: string;
+  children: React.ReactNode;
+}> = ({ icon: Icon, title, description, className = '', children }) => (
+  <section className={className}>
+    <div className="flex items-center gap-2.5 mb-4">
+      <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div>
+        <h3 className="text-sm font-semibold text-slate-900 leading-tight">{title}</h3>
+        {description && <p className="text-xs text-slate-500">{description}</p>}
+      </div>
+    </div>
+    {children}
+  </section>
+);
+
+const FormField: React.FC<{
+  label: string;
+  htmlFor: string;
+  required?: boolean;
+  error?: string;
+  className?: string;
+  children: React.ReactNode;
+}> = ({ label, htmlFor, required, error, className = '', children }) => (
+  <div className={className}>
+    <label htmlFor={htmlFor} className="block text-sm font-medium text-slate-700 mb-1.5">
+      {label}
+      {required && <span className="text-red-500 ml-0.5">*</span>}
+    </label>
+    {children}
+    {error && (
+      <p className="flex items-center gap-1 mt-1.5 text-xs text-red-600">
+        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+        {error}
+      </p>
+    )}
+  </div>
+);
 
 const AdminClients: React.FC = () => {
   const { clients, deletedClients, loading, createClient: addClient, updateClient, deleteClient, searchClients, restoreClient, permanentDeleteClient, fetchClients, fetchDeletedClients, fetchClientEvents, linkClientToEvent, unlinkClientFromEvent } = useSupabaseClients();
@@ -255,31 +325,18 @@ const AdminClients: React.FC = () => {
   const {
     register,
     handleSubmit,
-    formState: { errors, isDirty },
+    formState: { errors, isSubmitting },
     setValue,
-    watch,
     reset
   } = useForm<ClientFormData>({
     resolver: zodResolver(clientFormDataSchema) as any,
-    defaultValues: {
-      name: '',
-      apelido: '',
-      whatsapp: '',
-      email: '',
-      cep: '',
-      logradouro: '',
-      numero: '',
-      complemento: '',
-      bairro: '',
-      cidade: '',
-      uf: '',
-      notes: '',
-      validated: true
-    }
+    defaultValues: emptyClientForm
   });
 
+  const documentoField = register('documento');
+  const cepField = register('cep');
+
   const [loadingCep, setLoadingCep] = useState(false);
-  const watchedCep = watch('cep');
 
   // Função para buscar dados do CEP via ViaCEP
   const fetchAddressByCep = useCallback(async (cep: string) => {
@@ -307,13 +364,6 @@ const AdminClients: React.FC = () => {
       setLoadingCep(false);
     }
   }, [setValue]);
-
-  // Effect para buscar CEP quando alterado
-  useEffect(() => {
-    if (watchedCep && watchedCep.length === 8) {
-      fetchAddressByCep(watchedCep);
-    }
-  }, [watchedCep, fetchAddressByCep]);
 
   // Função para carregar clientes excluídos
   const loadTrashClients = useCallback(async () => {
@@ -360,7 +410,7 @@ const AdminClients: React.FC = () => {
 
       setShowModal(false);
       setEditingClient(null);
-      reset();
+      reset(emptyClientForm);
     } catch (error) {
       toast.error('Erro ao salvar cliente');
     }
@@ -372,6 +422,7 @@ const AdminClients: React.FC = () => {
     reset({
       name: client.name,
       apelido: client.apelido || '',
+      documento: formatCPF(client.documento || client.cpf || ''),
       whatsapp: client.whatsapp || '',
       email: client.email || '',
       cep: client.cep || '',
@@ -674,7 +725,7 @@ const AdminClients: React.FC = () => {
   const openNewClientModal = () => {
     setEditingClient(null);
     setWhatsappValue('');
-    reset();
+    reset(emptyClientForm);
     setShowModal(true);
   };
 
@@ -1189,312 +1240,251 @@ const AdminClients: React.FC = () => {
 
       {/* Client Form Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] flex flex-col mx-3 sm:mx-0">
-            {/* Header fixo */}
-            <div className="p-4 sm:p-6 border-b border-gray-200 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 z-50 animate-fadeIn">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="client-modal-title"
+            className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-xl lg:max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-scaleIn"
+          >
+            {/* Cabeçalho */}
+            <div className="flex items-center gap-3 sm:gap-4 px-5 sm:px-7 py-4 sm:py-5 bg-gradient-to-r from-blue-50 via-indigo-50/40 to-white border-b border-slate-100 flex-shrink-0">
+              <div className="hidden sm:flex w-11 h-11 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white items-center justify-center shadow-md shadow-blue-600/20 shrink-0">
+                {editingClient ? <UserPen className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 id="client-modal-title" className="text-lg font-semibold text-slate-900 leading-tight">
                   {editingClient ? 'Editar Cliente' : 'Novo Cliente'}
                 </h2>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1"
-                >
-                  <X className="h-6 w-6" />
-                </button>
+                <p className="hidden sm:block text-sm text-slate-500 truncate">
+                  {editingClient
+                    ? `Atualize os dados de ${editingClient.name}`
+                    : 'Preencha os dados para cadastrar um novo cliente'}
+                </p>
               </div>
+              <label
+                title="Indica se o cliente foi validado no sistema"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white border border-slate-200 shadow-sm cursor-pointer select-none shrink-0 hover:border-slate-300 transition-colors"
+              >
+                <input type="checkbox" {...register('validated')} className="sr-only peer" />
+                <span className="relative w-9 h-5 rounded-full bg-slate-200 transition-colors peer-checked:bg-blue-600 peer-focus-visible:ring-4 peer-focus-visible:ring-blue-500/20 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4" />
+                <span className="text-sm font-medium text-slate-700">Validado</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                aria-label="Fechar"
+                className="p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-white transition-colors shrink-0"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
-            {/* Conteúdo scrollável */}
-            <div className="flex-1 overflow-y-auto">
-              <form id="client-form" onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 pb-20">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Cliente Validado
-                      </label>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Indica se o cliente foi validado no sistema
-                      </p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
+            {/* Conteúdo (rola apenas em telas baixas) */}
+            <form
+              id="client-form"
+              onSubmit={handleSubmit(onSubmit)}
+              className="flex-1 overflow-y-auto px-5 sm:px-7 py-5 sm:py-6"
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
+                <FormSection icon={User} title="Dados pessoais">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+                    <FormField label="Nome" htmlFor="client-name" required error={errors.name?.message} className="col-span-2">
                       <input
-                        type="checkbox"
-                        {...register('validated')}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nome *
-                    </label>
-                    <input
-                      type="text"
-                      {...register('name')}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.name ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                      placeholder="Nome completo do cliente"
-                    />
-                    {errors.name && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.name.message}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Apelido
-                    </label>
-                    <input
-                      type="text"
-                      {...register('apelido')}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.apelido ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                      placeholder="Nome informal ou apelido"
-                    />
-                    {errors.apelido && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.apelido.message}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      WhatsApp
-                    </label>
-                    <PhoneInput
-                      value={whatsappValue}
-                      onChange={(value) => {
-                        setWhatsappValue(value);
-                        setValue('whatsapp', value);
-                      }}
-                      placeholder="Ex: (11) 99999-9999"
-
-                      disabled={loading}
-                      className="w-full"
-                    />
-                    {errors.whatsapp && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.whatsapp.message}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      {...register('email')}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.email ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                      placeholder="cliente@email.com"
-                    />
-                    {errors.email && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.email.message}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Campos de Endereço */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      CEP
-                    </label>
-                    <div className="relative">
-                      <input
+                        id="client-name"
                         type="text"
-                        {...register('cep')}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.cep ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                        placeholder="00000-000"
-                        maxLength={8}
+                        autoFocus
+                        {...register('name')}
+                        className={inputClass(!!errors.name)}
+                        placeholder="Nome completo do cliente"
                       />
-                      {loadingCep && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                        </div>
-                      )}
-                    </div>
-                    {errors.cep && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.cep.message}
-                      </div>
-                    )}
-                  </div>
+                    </FormField>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Logradouro
-                    </label>
-                    <input
-                      type="text"
-                      {...register('logradouro')}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.logradouro ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                      placeholder="Rua, Avenida, etc."
-                    />
-                    {errors.logradouro && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.logradouro.message}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Número
-                      </label>
+                    <FormField label="Apelido" htmlFor="client-apelido" error={errors.apelido?.message} className="col-span-2 sm:col-span-1">
                       <input
+                        id="client-apelido"
+                        type="text"
+                        {...register('apelido')}
+                        className={inputClass(!!errors.apelido)}
+                        placeholder="Como prefere ser chamado"
+                      />
+                    </FormField>
+
+                    <FormField label="CPF" htmlFor="client-documento" error={errors.documento?.message} className="col-span-2 sm:col-span-1">
+                      <input
+                        id="client-documento"
+                        type="text"
+                        inputMode="numeric"
+                        {...documentoField}
+                        onChange={(e) => {
+                          e.target.value = formatCPF(e.target.value);
+                          documentoField.onChange(e);
+                        }}
+                        className={inputClass(!!errors.documento)}
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                      />
+                    </FormField>
+
+                    <FormField label="WhatsApp" htmlFor="client-whatsapp" error={errors.whatsapp?.message} className="col-span-2">
+                      <PhoneInput
+                        id="client-whatsapp"
+                        value={whatsappValue}
+                        onChange={(value) => {
+                          setWhatsappValue(value);
+                          setValue('whatsapp', value);
+                        }}
+                        placeholder="(11) 99999-9999"
+                        error={!!errors.whatsapp}
+                        disabled={loading}
+                        className="w-full"
+                      />
+                    </FormField>
+
+                    <FormField label="Email" htmlFor="client-email" error={errors.email?.message} className="col-span-2">
+                      <input
+                        id="client-email"
+                        type="email"
+                        {...register('email')}
+                        className={inputClass(!!errors.email)}
+                        placeholder="cliente@email.com"
+                      />
+                    </FormField>
+                  </div>
+                </FormSection>
+
+                <FormSection
+                  icon={MapPin}
+                  title="Endereço"
+                  description="Informe o CEP para preencher automaticamente"
+                  className="lg:border-l lg:border-slate-100 lg:pl-8"
+                >
+                  <div className="grid grid-cols-6 gap-x-3 gap-y-4">
+                    <FormField label="CEP" htmlFor="client-cep" error={errors.cep?.message} className="col-span-6 sm:col-span-2">
+                      <div className="relative">
+                        <input
+                          id="client-cep"
+                          type="text"
+                          inputMode="numeric"
+                          {...cepField}
+                          onChange={(e) => {
+                            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8);
+                            cepField.onChange(e);
+                            if (e.target.value.length === 8) fetchAddressByCep(e.target.value);
+                          }}
+                          className={`${inputClass(!!errors.cep)} pr-9`}
+                          placeholder="00000-000"
+                        />
+                        {loadingCep && (
+                          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-600" />
+                        )}
+                      </div>
+                    </FormField>
+
+                    <FormField label="Logradouro" htmlFor="client-logradouro" error={errors.logradouro?.message} className="col-span-6 sm:col-span-4">
+                      <input
+                        id="client-logradouro"
+                        type="text"
+                        {...register('logradouro')}
+                        className={inputClass(!!errors.logradouro)}
+                        placeholder="Rua, Avenida, etc."
+                      />
+                    </FormField>
+
+                    <FormField label="Número" htmlFor="client-numero" error={errors.numero?.message} className="col-span-2">
+                      <input
+                        id="client-numero"
                         type="text"
                         {...register('numero')}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.numero ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                        placeholder="Número do endereço"
+                        className={inputClass(!!errors.numero)}
+                        placeholder="Nº"
                       />
-                      {errors.numero && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                          <AlertCircle className="h-4 w-4" />
-                          {errors.numero.message}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Complemento
-                      </label>
+                    </FormField>
+
+                    <FormField label="Complemento" htmlFor="client-complemento" error={errors.complemento?.message} className="col-span-4">
                       <input
+                        id="client-complemento"
                         type="text"
                         {...register('complemento')}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.complemento ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                        className={inputClass(!!errors.complemento)}
                         placeholder="Apartamento, casa, etc."
                       />
-                      {errors.complemento && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                          <AlertCircle className="h-4 w-4" />
-                          {errors.complemento.message}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    </FormField>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Bairro
-                    </label>
-                    <input
-                      type="text"
-                      {...register('bairro')}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.bairro ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                      placeholder="Nome do bairro"
-                    />
-                    {errors.bairro && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.bairro.message}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Cidade
-                      </label>
+                    <FormField label="Bairro" htmlFor="client-bairro" error={errors.bairro?.message} className="col-span-6">
                       <input
+                        id="client-bairro"
+                        type="text"
+                        {...register('bairro')}
+                        className={inputClass(!!errors.bairro)}
+                        placeholder="Nome do bairro"
+                      />
+                    </FormField>
+
+                    <FormField label="Cidade" htmlFor="client-cidade" error={errors.cidade?.message} className="col-span-4">
+                      <input
+                        id="client-cidade"
                         type="text"
                         {...register('cidade')}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.cidade ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                        className={inputClass(!!errors.cidade)}
                         placeholder="Nome da cidade"
                       />
-                      {errors.cidade && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                          <AlertCircle className="h-4 w-4" />
-                          {errors.cidade.message}
-                        </div>
-                      )}
-                    </div>
-                    <div className="w-2/5">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        UF
-                      </label>
+                    </FormField>
+
+                    <FormField label="UF" htmlFor="client-uf" error={errors.uf?.message} className="col-span-2">
                       <select
+                        id="client-uf"
                         {...register('uf')}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white ${errors.uf ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                        className={inputClass(!!errors.uf)}
                       >
-                        <option value="">Selecione UF</option>
+                        <option value="">UF</option>
                         {brasilUFs.map(uf => (
                           <option key={uf} value={uf}>{uf}</option>
                         ))}
                       </select>
-                      {errors.uf && (
-                        <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                          <AlertCircle className="h-4 w-4" />
-                          {errors.uf.message}
-                        </div>
-                      )}
-                    </div>
+                    </FormField>
                   </div>
+                </FormSection>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Observações
-                    </label>
-                    <textarea
-                      {...register('notes')}
-                      rows={3}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.notes ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                      placeholder="Observações sobre o cliente"
-                    />
-                    {errors.notes && (
-                      <div className="flex items-center gap-1 mt-1 text-red-600 text-sm">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.notes.message}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </form>
-            </div>
+                <FormField
+                  label="Observações"
+                  htmlFor="client-notes"
+                  error={errors.notes?.message}
+                  className="lg:col-span-2 pt-5 border-t border-slate-100"
+                >
+                  <textarea
+                    id="client-notes"
+                    {...register('notes')}
+                    rows={2}
+                    className={`${inputClass(!!errors.notes)} resize-none`}
+                    placeholder="Informações adicionais sobre o cliente"
+                  />
+                </FormField>
+              </div>
+            </form>
 
-            {/* Botões flutuantes fixos na parte inferior */}
-            <div className="flex-shrink-0 bg-white border-t border-gray-200 p-4 sm:p-6">
-              <div className="flex gap-3">
+            {/* Rodapé */}
+            <div className="flex items-center justify-between gap-3 px-5 sm:px-7 py-4 border-t border-slate-100 bg-slate-50/70 flex-shrink-0">
+              <p className="hidden sm:block text-xs text-slate-400">
+                <span className="text-red-500">*</span> Campo obrigatório
+              </p>
+              <div className="flex gap-3 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex-1 sm:flex-none px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-60"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   form="client-form"
-                  onClick={handleSubmit(onSubmit)}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 shadow-md shadow-blue-600/20 hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Save className="h-4 w-4" />
-                  {editingClient ? 'Atualizar' : 'Cadastrar'}
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {isSubmitting ? 'Salvando...' : editingClient ? 'Salvar alterações' : 'Cadastrar cliente'}
                 </button>
               </div>
             </div>

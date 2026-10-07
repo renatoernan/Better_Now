@@ -34,6 +34,11 @@ interface PaymentSuccessModalProps {
   onClose: () => void;
   sessionId: string;
   eventTitle?: string;
+  /**
+   * Link de ingresso transferido: mostra só este ingresso, sem os demais do
+   * pedido nem os dados de contato e o valor pago pelo comprador.
+   */
+  onlyTicketId?: string | null;
 }
 
 const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
@@ -41,6 +46,7 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
   onClose,
   sessionId,
   eventTitle,
+  onlyTicketId = null,
 }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<boolean>(true);
@@ -85,9 +91,9 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
             const key = String(t.ticket_number || t.id);
             if (!map.has(key)) map.set(key, t);
           });
-          const uniqueList = Array.from(map.values()).sort(
-            (a, b) => Number(a.ticket_number || 0) - Number(b.ticket_number || 0)
-          );
+          const uniqueList = Array.from(map.values())
+            .filter((t) => !onlyTicketId || t.id === onlyTicketId)
+            .sort((a, b) => Number(a.ticket_number || 0) - Number(b.ticket_number || 0));
           setTickets(uniqueList);
         } else {
           setTickets([]);
@@ -248,6 +254,7 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
               }
             </p>
 
+            {!onlyTicketId && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               <div className={`flex items-center gap-2.5 p-2.5 bg-white/90 rounded-xl border text-xs font-medium shadow-2xs ${
                 isOrderPaid ? 'border-emerald-200/70 text-emerald-900' : 'border-amber-200/70 text-amber-900'
@@ -277,6 +284,7 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
                 </div>
               </div>
             </div>
+            )}
           </div>
 
           {loading ? (
@@ -303,6 +311,11 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
                     </span>
                   </div>
 
+                  {onlyTicketId ? (
+                    <p className="text-xs text-gray-600 pt-1">
+                      Ingresso transferido para você. Apresente o QR Code abaixo e um documento com foto na portaria.
+                    </p>
+                  ) : (
                   <div className="grid grid-cols-2 gap-3 text-xs pt-1">
                     <div>
                       <p className="text-gray-500 text-[11px]">Comprador</p>
@@ -323,6 +336,7 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
                       </p>
                     </div>
                   </div>
+                  )}
                 </div>
               )}
 
@@ -341,7 +355,10 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
 
                   {tickets.length > 0 ? (
                     <div className="space-y-3">
-                      {tickets.map((t, idx) => {
+                      {tickets.map((t, listIdx) => {
+                        // Titular nominal pelo número do ingresso: com a lista
+                        // filtrada (link de transferência) a posição não serve
+                        const idx = (t.ticket_number || listIdx + 1) - 1;
                         const isExplicitHolder = (t.client as any)?.id && (
                           ((t.client as any).id !== order?.client_id) || (!order?.client_id)
                         );

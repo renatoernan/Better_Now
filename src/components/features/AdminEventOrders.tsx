@@ -34,6 +34,8 @@ export interface FlattenedTicketItem {
   order: EventOrderRecord;
   ticket?: EventTicketRecord;
   holderName: string;
+  /** false quando holderName é só o rótulo genérico "Participante N" */
+  hasNamedHolder: boolean;
   holderDoc?: string;
   holderPhone?: string;
   holderEmail?: string;
@@ -103,37 +105,6 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
     );
   };
 
-  // Filtragem das ordens
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const matchesSearch =
-        !searchTerm ||
-        order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.client_phone?.includes(searchTerm) ||
-        order.client_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.client_document?.includes(searchTerm) ||
-        order.ip_address?.includes(searchTerm) ||
-        order.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const isOrderRefunded = order.status === 'refunded' || !!order.refunded_at;
-
-      const matchesStatus =
-        selectedStatuses.length === 0 ||
-        (selectedStatuses.includes('paid') && (order.status === 'paid' || (order.status as string) === 'approved')) ||
-        (selectedStatuses.includes('pending') && (order.status === 'pending' || order.status === 'pending_proof')) ||
-        (selectedStatuses.includes('cancelled') && (order.status === 'cancelled' || order.status === 'failed')) ||
-        (selectedStatuses.includes('refunded') && isOrderRefunded);
-
-      const matchesPayment =
-        paymentFilter === 'all' || order.payment_method === paymentFilter;
-
-      const matchesBatch =
-        batchFilter === 'all' || order.batch_name === batchFilter || String(order.batch_index) === batchFilter;
-
-      return matchesSearch && matchesStatus && matchesPayment && matchesBatch;
-    });
-  }, [orders, searchTerm, selectedStatuses, paymentFilter, batchFilter]);
-
   // Transformação das ordens em lista de ingressos individuais (Flattened)
   const flattenedTickets = useMemo<FlattenedTicketItem[]>(() => {
     const list: FlattenedTicketItem[] = [];
@@ -154,7 +125,8 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
       if (order.tickets && order.tickets.length > 0) {
         order.tickets.forEach((t, idx) => {
           const attendee = attendeesParsed[idx] || null;
-          const holderName = t.person?.nome || attendee?.nome || (idx === 0 ? order.client_name : `Participante ${idx + 1}`);
+          const namedHolder = t.person?.nome || attendee?.nome || (idx === 0 ? order.client_name : undefined);
+          const holderName = namedHolder || `Participante ${idx + 1}`;
           const holderDoc = t.person?.documento || attendee?.documento || attendee?.cpf || (idx === 0 ? order.client_document : undefined);
           const holderPhone = t.person?.whatsapp || attendee?.whatsapp || attendee?.telefone || (idx === 0 ? order.client_phone : undefined);
           const holderEmail = t.person?.email || attendee?.email || (idx === 0 ? order.client_email : undefined);
@@ -166,6 +138,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
             order,
             ticket: t,
             holderName,
+            hasNamedHolder: !!namedHolder,
             holderDoc,
             holderPhone,
             holderEmail,
@@ -182,7 +155,8 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         // Pedidos pendentes ou sem tickets emitidos ainda: cria cota individual
         for (let i = 0; i < qty; i++) {
           const attendee = attendeesParsed[i] || null;
-          const holderName = attendee?.nome || (i === 0 ? order.client_name : `Participante ${i + 1}`) || 'Aguardando Emissão';
+          const namedHolder = attendee?.nome || (i === 0 ? order.client_name : undefined);
+          const holderName = namedHolder || (i === 0 ? 'Aguardando Emissão' : `Participante ${i + 1}`);
           const holderDoc = attendee?.documento || attendee?.cpf || (i === 0 ? order.client_document : undefined);
           const holderPhone = attendee?.whatsapp || attendee?.telefone || (i === 0 ? order.client_phone : undefined);
           const holderEmail = attendee?.email || (i === 0 ? order.client_email : undefined);
@@ -193,6 +167,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
             ticketNumber: `${i + 1}`,
             order,
             holderName,
+            hasNamedHolder: !!namedHolder,
             holderDoc,
             holderPhone,
             holderEmail,
@@ -209,6 +184,55 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
 
     return list;
   }, [orders]);
+
+  // Titulares nominais de cada pedido: exibidos junto ao comprador e usados na
+  // busca, para achar o pedido de quem recebeu um ingresso transferido
+  const holdersByOrder = useMemo(() => {
+    const map: Record<string, FlattenedTicketItem[]> = {};
+    flattenedTickets.forEach((item) => {
+      if (!item.hasNamedHolder) return;
+      if (!map[item.order.id]) map[item.order.id] = [];
+      map[item.order.id].push(item);
+    });
+    return map;
+  }, [flattenedTickets]);
+
+  // Filtragem das ordens
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const holders = holdersByOrder[order.id] || [];
+
+      const matchesSearch =
+        !searchTerm ||
+        order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.client_phone?.includes(searchTerm) ||
+        order.client_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.client_document?.includes(searchTerm) ||
+        order.ip_address?.includes(searchTerm) ||
+        order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        holders.some((h) =>
+          h.holderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (h.holderDoc && h.holderDoc.includes(searchTerm))
+        );
+
+      const isOrderRefunded = order.status === 'refunded' || !!order.refunded_at;
+
+      const matchesStatus =
+        selectedStatuses.length === 0 ||
+        (selectedStatuses.includes('paid') && (order.status === 'paid' || (order.status as string) === 'approved')) ||
+        (selectedStatuses.includes('pending') && (order.status === 'pending' || order.status === 'pending_proof')) ||
+        (selectedStatuses.includes('cancelled') && (order.status === 'cancelled' || order.status === 'failed')) ||
+        (selectedStatuses.includes('refunded') && isOrderRefunded);
+
+      const matchesPayment =
+        paymentFilter === 'all' || order.payment_method === paymentFilter;
+
+      const matchesBatch =
+        batchFilter === 'all' || order.batch_name === batchFilter || String(order.batch_index) === batchFilter;
+
+      return matchesSearch && matchesStatus && matchesPayment && matchesBatch;
+    });
+  }, [orders, holdersByOrder, searchTerm, selectedStatuses, paymentFilter, batchFilter]);
 
   // Filtragem dos Ingressos Individuais
   const filteredTickets = useMemo(() => {
@@ -631,7 +655,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={
                 viewMode === 'orders'
-                  ? "Buscar por comprador, CPF, WhatsApp, e-mail, IP ou #código..."
+                  ? "Buscar por comprador, titular, CPF, WhatsApp, e-mail, IP ou #código..."
                   : "Buscar por titular nominal, comprador, CPF, WhatsApp, e-mail ou #código..."
               }
               className="w-full pl-10 pr-4 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-colors"
@@ -799,6 +823,10 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                 <tbody className="divide-y divide-gray-100 text-gray-700">
                   {filteredOrders.map((order) => {
                     const isPaid = order.status === 'paid' || (order.status as string) === 'approved';
+                    // Só lista os titulares quando algum ingresso não é do próprio comprador
+                    const holders = holdersByOrder[order.id] || [];
+                    const buyerKey = (order.client_name || '').trim().toLowerCase();
+                    const showHolders = holders.some((h) => h.holderName.trim().toLowerCase() !== buyerKey);
                     return (
                       <tr key={order.id} className="hover:bg-gray-50/70 transition-colors">
                         <td className="px-5 py-4">
@@ -823,6 +851,15 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                               <span className="text-gray-400 font-mono text-[10.5px]">({formatCPF(order.client_document)})</span>
                             )}
                           </div>
+                          {showHolders && (
+                            <div className="text-[11px] text-indigo-900 flex items-start gap-1 mt-1" title="Titulares nominais dos ingressos deste pedido">
+                              <User className="w-3 h-3 text-indigo-500 mt-0.5 shrink-0" />
+                              <span>
+                                <span className="text-gray-500">{holders.length > 1 ? 'Titulares:' : 'Titular:'}</span>{' '}
+                                <span className="font-semibold">{holders.map((h) => h.holderName).join(', ')}</span>
+                              </span>
+                            </div>
+                          )}
                         </td>
 
                         <td className="px-5 py-4">

@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { validateCPF as isValidCPF } from '../../utils/utils/cpfUtils';
 
 // Base schemas
 export const baseEntitySchema = z.object({
@@ -179,6 +180,11 @@ export const clientFormDataSchema = z.object({
   apelido: z.string()
     .max(255, 'Apelido deve ter no máximo 255 caracteres')
     .optional(),
+  documento: z.string()
+    .optional()
+    .refine((val) => !val || isValidCPF(val), {
+      message: 'CPF inválido'
+    }),
   whatsapp: z.string()
     .optional()
     .refine(validateInternationalPhone, {

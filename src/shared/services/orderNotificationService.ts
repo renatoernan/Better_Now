@@ -22,6 +22,13 @@ const DEFAULT_WAHA_TEMPLATES = {
   cancelled: 'Olá, {cliente}. Informamos que seu pedido #{numero_pedido} para o evento *{evento}* foi cancelado.\n\nSe você tiver alguma dúvida, entre em contato conosco.',
 };
 
+/** Cortesia: substitui "pagamento confirmado" quando o pedido é gratuito. */
+export const DEFAULT_WAHA_MSG_COMPLIMENTARY = '🎁 Olá, {cliente}! Você recebeu uma *cortesia* para o evento *{evento}*.\n\n🎟️ *Ingressos:* {quantidade}\n📅 *Data:* {data_evento}\n📍 *Local:* {local_evento}\n\nSeus ingressos com QR Code para entrada estão aqui: {link_acesso}\n\nApresente o QR Code e um documento com foto na portaria. Aproveite o evento!';
+
+/** Transferência de ingresso: {cliente} é sempre quem recebe a mensagem. */
+export const DEFAULT_WAHA_MSG_TRANSFER_FROM = 'Olá, {cliente}! Confirmamos a transferência do seu ingresso #{numero_ingresso} do pedido #{numero_pedido} para o evento *{evento}*.\n\n🔁 *Novo titular:* {novo_titular}\n\nA partir de agora este ingresso não é mais válido no seu nome. Se você não reconhece esta transferência, fale conosco.';
+export const DEFAULT_WAHA_MSG_TRANSFER_TO = '🎟️ Olá, {cliente}! {titular_anterior} transferiu um ingresso para você no evento *{evento}*.\n\n📅 *Data:* {data_evento}\n📍 *Local:* {local_evento}\n🔖 *Ingresso:* #{numero_ingresso}\n\nAcesse seu ingresso com o QR Code para entrada: {link_ingresso}\n\nApresente o QR Code e um documento com foto na portaria.';
+
 const DEFAULT_EMAIL_TEMPLATES = {
   created: {
     subject: 'Pedido Recebido #{numero_pedido} - {evento}',
@@ -665,9 +672,18 @@ export const sendOrderWhatsAppNotification = async ({
     }
     let eventLocation = eventRow?.location || 'Local a definir';
 
+    // Cortesia não é compra: usa o template próprio no lugar de "pagamento
+    // confirmado", tanto na emissão quanto no reenvio manual
+    const isComplimentary = type === 'confirmed'
+      && (order.payment_method === 'cortesia' || order.payment_method === 'free');
+
     // Templates customizados do evento
     let customTemplate = '';
-    if (eventRow) {
+    if (isComplimentary) {
+      let parsedObs: any = {};
+      try { parsedObs = eventRow?.observations ? JSON.parse(eventRow.observations) : {}; } catch { /* sem configuração */ }
+      customTemplate = parsedObs.waha_msg_order_complimentary || DEFAULT_WAHA_MSG_COMPLIMENTARY;
+    } else if (eventRow) {
       if (type === 'created') customTemplate = eventRow.waha_msg_order_created;
       if (type === 'confirmed') customTemplate = eventRow.waha_msg_order_confirmed;
       if (type === 'cancelled') customTemplate = eventRow.waha_msg_order_cancelled;
@@ -737,12 +753,18 @@ export const sendOrderWhatsAppNotification = async ({
     }
 
     if (backstageGroupId && typeof backstageGroupId === 'string' && backstageGroupId.trim() !== '') {
+      // Na cortesia o grupo recebe um cabeçalho dizendo que é cortesia, para
+      // não ser confundida com uma venda
+      const groupText = isComplimentary
+        ? `🎁 *Cortesia emitida* — ${order.client_name || 'Convidado'} · ${order.quantity || 1} ingresso(s)\n\n${formattedMessage}`
+        : formattedMessage;
+
       sendWahaTextMessage({
         apiUrl: wahaConfig.apiUrl,
         sessionName: wahaConfig.sessionName,
         apiKey: wahaConfig.apiKey,
         phone: backstageGroupId.trim(),
-        text: formattedMessage,
+        text: groupText,
       })
         .then((groupRes) => {
           if (groupRes.success) {
@@ -761,6 +783,208 @@ export const sendOrderWhatsAppNotification = async ({
     console.error(`[WhatsApp] Erro inesperado ao enviar notificação "${type}":`, err);
     return { success: false, message: err.message || 'Erro inesperado ao enviar notificação.' };
   }
+};
+
+export interface TicketTransferNotificationParams {
+  ticketId: string;
+  orderId: string;
+  eventId: string;
+  ticketNumber?: number | null;
+  from: { name: string; phone?: string | null };
+  to: { name: string; phone?: string | null };
+  /** Quem recebe este envio. Padrão: as duas pontas e o Backstage. */
+  targets?: { from?: boolean; to?: boolean; backstage?: boolean };
+  /** Reenvio manual: o Backstage vê que não é uma transferência nova. */
+  isResend?: boolean;
+}
+
+export interface TicketTransferNotificationResult {
+  /** null quando essa ponta não foi selecionada para o envio */
+  from: { success: boolean; message: string } | null;
+  to: { success: boolean; message: string } | null;
+  /** Cópia no grupo de Backstage do evento; null quando o evento não tem grupo. */
+  backstage: { success: boolean; message: string } | null;
+}
+
+/**
+ * Avisa por WhatsApp as duas pontas de uma transferência de ingresso: quem
+ * transferiu (o ingresso deixa de valer no nome dele) e quem recebeu (com o
+ * link que abre só o ingresso transferido). Templates editáveis por evento em
+ * Editar Evento › Mensagens WhatsApp, itens 4 e 5.
+ */
+export const sendTicketTransferNotifications = async (
+  params: TicketTransferNotificationParams
+): Promise<TicketTransferNotificationResult> => {
+  const fail = (message: string): TicketTransferNotificationResult => ({
+    from: { success: false, message },
+    to: { success: false, message },
+    backstage: null,
+  });
+
+  try {
+    const wahaConfig = await getWahaSettings();
+    if (!wahaConfig.enabled || !wahaConfig.apiUrl) {
+      return fail('Serviço de WhatsApp (WAHA) não está ativo ou configurado.');
+    }
+
+    const { data: eventRow } = await supabase
+      .from('app_events')
+      .select('*')
+      .eq('id', params.eventId)
+      .maybeSingle();
+
+    let parsedObs: any = {};
+    if (eventRow?.observations) {
+      try { parsedObs = JSON.parse(eventRow.observations) || {}; } catch { /* sem configuração */ }
+    }
+
+    let eventDate = eventRow?.event_date ? formatBrazilDate(eventRow.event_date) : '';
+    if (eventRow?.start_time) {
+      eventDate = eventDate ? `${eventDate} às ${eventRow.start_time}` : eventRow.start_time;
+    }
+
+    const origin = (typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('localhost'))
+      ? window.location.origin
+      : 'https://betternow.cesire.com.br';
+    // Link que abre somente o ingresso transferido (sem os demais do pedido)
+    const ticketLink = `${origin}/eventos/${params.eventId}?ticket=${params.ticketId}`;
+
+    const baseVars = {
+      evento: eventRow?.title || 'Evento',
+      data_evento: eventDate || 'A definir',
+      local_evento: eventRow?.location || 'Local a definir',
+      numero_pedido: params.orderId.substring(0, 8).toUpperCase(),
+      numero_ingresso: params.ticketNumber ?? '',
+      titular_anterior: params.from.name,
+      novo_titular: params.to.name,
+      link_ingresso: ticketLink,
+      link_acesso: ticketLink,
+    };
+
+    const send = async (
+      phone: string | null | undefined,
+      template: string,
+      recipientName: string
+    ): Promise<{ success: boolean; message: string }> => {
+      if (!phone || phone.replace(/\D/g, '').length < 10) {
+        return { success: false, message: 'Sem WhatsApp cadastrado.' };
+      }
+      return sendWahaTextMessage({
+        apiUrl: wahaConfig.apiUrl,
+        sessionName: wahaConfig.sessionName,
+        apiKey: wahaConfig.apiKey,
+        phone,
+        text: formatMessageTemplate(template, { ...baseVars, cliente: recipientName }),
+      });
+    };
+
+    const fromTemplate = parsedObs.waha_msg_ticket_transfer_from || DEFAULT_WAHA_MSG_TRANSFER_FROM;
+    const toTemplate = parsedObs.waha_msg_ticket_transfer_to || DEFAULT_WAHA_MSG_TRANSFER_TO;
+
+    const targets = { from: true, to: true, backstage: true, ...(params.targets || {}) };
+
+    const [fromRes, toRes] = await Promise.all([
+      targets.from ? send(params.from.phone, fromTemplate, params.from.name) : Promise.resolve(null),
+      targets.to ? send(params.to.phone, toTemplate, params.to.name) : Promise.resolve(null),
+    ]);
+
+    // Cópia para o grupo de Backstage do evento, igual às demais notificações:
+    // as duas mensagens numa só, com quem recebeu cada uma e se foi entregue
+    let backstage: TicketTransferNotificationResult['backstage'] = null;
+    const backstageGroupId = String(eventRow?.backstage_whatsapp_group_id || parsedObs.backstage_whatsapp_group_id || '').trim();
+    if (backstageGroupId && targets.backstage) {
+      const status = (r: { success: boolean; message: string } | null) =>
+        !r ? '— não incluída neste envio' : r.success ? '✅ enviada' : `⚠️ não enviada (${r.message})`;
+      const groupText = [
+        `🔁 *${params.isResend ? 'Reenvio — ' : ''}Transferência de ingresso* — ${baseVars.evento}`,
+        `Ingresso #${baseVars.numero_ingresso} · Pedido #${baseVars.numero_pedido}`,
+        `*De:* ${params.from.name}`,
+        `*Para:* ${params.to.name}`,
+        '',
+        `📩 *Mensagem para ${params.from.name}* (${status(fromRes)}):`,
+        formatMessageTemplate(fromTemplate, { ...baseVars, cliente: params.from.name }),
+        '',
+        `📩 *Mensagem para ${params.to.name}* (${status(toRes)}):`,
+        formatMessageTemplate(toTemplate, { ...baseVars, cliente: params.to.name }),
+      ].join('\n');
+
+      backstage = await sendWahaTextMessage({
+        apiUrl: wahaConfig.apiUrl,
+        sessionName: wahaConfig.sessionName,
+        apiKey: wahaConfig.apiKey,
+        phone: backstageGroupId,
+        text: groupText,
+      });
+    }
+
+    return { from: fromRes, to: toRes, backstage };
+  } catch (err: any) {
+    console.error('[WhatsApp] Erro ao avisar transferência de ingresso:', err);
+    return fail(err.message || 'Erro inesperado ao enviar as mensagens.');
+  }
+};
+
+export interface OrderTicketTransfer {
+  id: string;
+  ticketId: string;
+  ticketNumber: number | null;
+  transferredAt: string | null;
+  from: { name: string; phone: string | null };
+  to: { name: string; phone: string | null };
+}
+
+const normName = (v?: string | null) =>
+  String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * Transferências registradas de um pedido, da mais recente para a mais antiga,
+ * com o WhatsApp atual de cada lado. Quem transferiu sem cadastro vinculado
+ * (registros antigos) cai no telefone do comprador quando é ele.
+ */
+export const getOrderTicketTransfers = async (order: {
+  id: string;
+  client_id?: string | null;
+  client_name?: string | null;
+  client_phone?: string | null;
+}): Promise<OrderTicketTransfer[]> => {
+  const { data: rows, error } = await supabase
+    .from('app_ticket_transfers')
+    .select('id, ticket_id, from_person_id, to_person_id, from_person_name, to_person_name, transferred_at, created_at')
+    .eq('order_id', order.id)
+    .order('transferred_at', { ascending: false, nullsFirst: false });
+
+  if (error || !rows?.length) return [];
+
+  const ticketIds = [...new Set(rows.map(r => r.ticket_id))];
+  const personIds = [...new Set(rows.flatMap(r => [r.from_person_id, r.to_person_id]).concat(order.client_id || null).filter(Boolean))];
+
+  const [{ data: tickets }, { data: people }] = await Promise.all([
+    supabase.from('app_event_tickets').select('id, ticket_number').in('id', ticketIds),
+    personIds.length
+      ? supabase.from('app_people').select('id, nome, whatsapp, telefone').in('id', personIds as string[])
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
+  const ticketNumber = new Map((tickets || []).map((t: any) => [t.id, t.ticket_number]));
+  const person = new Map((people || []).map((p: any) => [p.id, p]));
+  const phoneOf = (id?: string | null) => {
+    const p = id ? person.get(id) : null;
+    return p?.whatsapp || p?.telefone || null;
+  };
+  const buyerPhone = phoneOf(order.client_id) || order.client_phone || null;
+
+  return rows.map((r: any) => {
+    let fromPhone = phoneOf(r.from_person_id);
+    if (!fromPhone && normName(r.from_person_name) === normName(order.client_name)) fromPhone = buyerPhone;
+    return {
+      id: r.id,
+      ticketId: r.ticket_id,
+      ticketNumber: ticketNumber.get(r.ticket_id) ?? null,
+      transferredAt: r.transferred_at || r.created_at || null,
+      from: { name: r.from_person_name || person.get(r.from_person_id)?.nome || 'Titular anterior', phone: fromPhone },
+      to: { name: r.to_person_name || person.get(r.to_person_id)?.nome || 'Novo titular', phone: phoneOf(r.to_person_id) },
+    };
+  });
 };
 
 // Cache em memória para deduplicação de disparos (janela de 10s para o mesmo tipo e pedido)

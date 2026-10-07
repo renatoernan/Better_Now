@@ -9,6 +9,9 @@ import EventWahaTestModal from '../shared/EventWahaTestModal';
 import EventEmailTestModal from '../shared/EventEmailTestModal';
 import { toast } from 'sonner';
 import { PhoneInput } from '../ui/PhoneInput';
+import {
+  DEFAULT_WAHA_MSG_TRANSFER_FROM, DEFAULT_WAHA_MSG_TRANSFER_TO, DEFAULT_WAHA_MSG_COMPLIMENTARY,
+} from '../../shared/services/orderNotificationService';
 
 const DEFAULT_WAHA_MSG_CREATED = 'Olá, {cliente}! Recebemos seu pedido #{numero_pedido} para o evento *{evento}*.\n\n💰 *Total:* {total}\n⏳ *Status:* Aguardando Pagamento\n\n💳 *Link para Pagamento:* {link_pagamento}\n\nAssim que o pagamento for confirmado, você receberá seus ingressos por aqui!';
 const DEFAULT_WAHA_MSG_CONFIRMED = '🎉 Parabéns, {cliente}! Seu pagamento para o evento *{evento}* foi confirmado com sucesso!\n\n🎟️ *Quantidade de Ingressos:* {quantidade}\n📅 *Data:* {data_evento}\n📍 *Local:* {local_evento}\n\nVocê pode acessar seus ingressos a qualquer momento através do link: {link_acesso}';
@@ -131,6 +134,9 @@ const EventForm: React.FC<EventFormProps> = ({
       waha_msg_order_created: DEFAULT_WAHA_MSG_CREATED,
       waha_msg_order_confirmed: DEFAULT_WAHA_MSG_CONFIRMED,
       waha_msg_order_cancelled: DEFAULT_WAHA_MSG_CANCELLED,
+      waha_msg_order_complimentary: DEFAULT_WAHA_MSG_COMPLIMENTARY,
+      waha_msg_ticket_transfer_from: DEFAULT_WAHA_MSG_TRANSFER_FROM,
+      waha_msg_ticket_transfer_to: DEFAULT_WAHA_MSG_TRANSFER_TO,
       backstage_whatsapp_group_id: '',
       email_msg_order_created_subject: DEFAULT_EMAIL_MSG_CREATED_SUBJECT,
       email_msg_order_created_body: DEFAULT_EMAIL_MSG_CREATED_BODY,
@@ -176,6 +182,9 @@ const EventForm: React.FC<EventFormProps> = ({
       setValue('waha_msg_order_created', event.waha_msg_order_created || DEFAULT_WAHA_MSG_CREATED, { shouldValidate: true });
       setValue('waha_msg_order_confirmed', event.waha_msg_order_confirmed || DEFAULT_WAHA_MSG_CONFIRMED, { shouldValidate: true });
       setValue('waha_msg_order_cancelled', event.waha_msg_order_cancelled || DEFAULT_WAHA_MSG_CANCELLED, { shouldValidate: true });
+      setValue('waha_msg_order_complimentary', event.waha_msg_order_complimentary || DEFAULT_WAHA_MSG_COMPLIMENTARY, { shouldValidate: true });
+      setValue('waha_msg_ticket_transfer_from', event.waha_msg_ticket_transfer_from || DEFAULT_WAHA_MSG_TRANSFER_FROM, { shouldValidate: true });
+      setValue('waha_msg_ticket_transfer_to', event.waha_msg_ticket_transfer_to || DEFAULT_WAHA_MSG_TRANSFER_TO, { shouldValidate: true });
       setValue('backstage_whatsapp_group_id', event.backstage_whatsapp_group_id || '', { shouldValidate: true });
       setValue('email_msg_order_created_subject', event.email_msg_order_created_subject || DEFAULT_EMAIL_MSG_CREATED_SUBJECT, { shouldValidate: true });
       setValue('email_msg_order_created_body', event.email_msg_order_created_body || DEFAULT_EMAIL_MSG_CREATED_BODY, { shouldValidate: true });
@@ -2159,11 +2168,37 @@ const EventForm: React.FC<EventFormProps> = ({
                       />
                     </div>
 
+                    {/* Mensagem de Cortesia */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label htmlFor="waha_msg_order_complimentary" className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          3. Cortesia Emitida (Ingresso Gratuito)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setValue('waha_msg_order_complimentary', DEFAULT_WAHA_MSG_COMPLIMENTARY, { shouldDirty: true })}
+                          className="text-xs text-emerald-700 hover:text-emerald-800 font-medium flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Restaurar Padrão
+                        </button>
+                      </div>
+                      <textarea
+                        {...register('waha_msg_order_complimentary')}
+                        id="waha_msg_order_complimentary"
+                        rows={3}
+                        className="w-full px-4 py-3 bg-slate-50/70 border border-gray-300 rounded-xl text-gray-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs leading-relaxed"
+                        placeholder="Mensagem de cortesia..."
+                      />
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        Enviada no lugar de "Pagamento Confirmado" quando o ingresso é cortesia (emitida pelo admin ou por cupom de 100%). O Backstage recebe uma cópia identificada como cortesia.
+                      </p>
+                    </div>
+
                     {/* Mensagem de Cancelamento */}
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label htmlFor="waha_msg_order_cancelled" className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                          3. Pedido Cancelado / Recusado
+                          4. Pedido Cancelado / Recusado
                         </label>
                         <button
                           type="button"
@@ -2180,6 +2215,81 @@ const EventForm: React.FC<EventFormProps> = ({
                         className="w-full px-4 py-3 bg-slate-50/70 border border-gray-300 rounded-xl text-gray-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs leading-relaxed"
                         placeholder="Mensagem de cancelamento..."
                       />
+                    </div>
+
+                    {/* Transferência de ingresso */}
+                    <div className="pt-4 mt-2 border-t border-gray-100 space-y-4">
+                      <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-3">
+                        <p className="text-xs font-bold text-indigo-900 mb-1">Transferência de Ingresso</p>
+                        <p className="text-[11px] text-indigo-800 mb-2">
+                          Enviadas assim que uma transferência de titularidade é confirmada. Além das tags acima, use:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {['{titular_anterior}', '{novo_titular}', '{numero_ingresso}', '{link_ingresso}'].map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(tag);
+                                setCopiedTag(tag);
+                                setTimeout(() => setCopiedTag(null), 2000);
+                                toast.success(`Tag ${tag} copiada!`);
+                              }}
+                              className="bg-white hover:bg-indigo-100 border border-indigo-300 text-indigo-800 text-xs px-2.5 py-1 rounded-lg font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              {copiedTag === tag ? <Check className="w-3 h-3 text-indigo-600" /> : <Copy className="w-3 h-3 text-indigo-500" />}
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-indigo-700/80 mt-2">
+                          {'{cliente}'} é sempre quem recebe a mensagem. {'{link_ingresso}'} abre somente o ingresso transferido, sem os demais ingressos do pedido.
+                        </p>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label htmlFor="waha_msg_ticket_transfer_from" className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            5. Transferência — Para Quem Transfere
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setValue('waha_msg_ticket_transfer_from', DEFAULT_WAHA_MSG_TRANSFER_FROM, { shouldDirty: true })}
+                            className="text-xs text-emerald-700 hover:text-emerald-800 font-medium flex items-center gap-1 cursor-pointer"
+                          >
+                            <RefreshCw className="w-3 h-3" /> Restaurar Padrão
+                          </button>
+                        </div>
+                        <textarea
+                          {...register('waha_msg_ticket_transfer_from')}
+                          id="waha_msg_ticket_transfer_from"
+                          rows={3}
+                          className="w-full px-4 py-3 bg-slate-50/70 border border-gray-300 rounded-xl text-gray-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs leading-relaxed"
+                          placeholder="Mensagem para o titular anterior..."
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label htmlFor="waha_msg_ticket_transfer_to" className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            6. Transferência — Para Quem Recebe
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setValue('waha_msg_ticket_transfer_to', DEFAULT_WAHA_MSG_TRANSFER_TO, { shouldDirty: true })}
+                            className="text-xs text-emerald-700 hover:text-emerald-800 font-medium flex items-center gap-1 cursor-pointer"
+                          >
+                            <RefreshCw className="w-3 h-3" /> Restaurar Padrão
+                          </button>
+                        </div>
+                        <textarea
+                          {...register('waha_msg_ticket_transfer_to')}
+                          id="waha_msg_ticket_transfer_to"
+                          rows={3}
+                          className="w-full px-4 py-3 bg-slate-50/70 border border-gray-300 rounded-xl text-gray-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs leading-relaxed"
+                          placeholder="Mensagem para o novo titular..."
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -73,6 +73,33 @@ const EventDetails: React.FC = () => {
   const [mercadoPagoCheckoutUrl, setMercadoPagoCheckoutUrl] = useState<string | null>(null);
   const [currentClientId, setCurrentClientId] = useState<string | null>(null);
 
+  // Link de ingresso transferido (?ticket=<id>): abre só esse ingresso
+  const [onlyTicketId, setOnlyTicketId] = useState<string | null>(null);
+  useEffect(() => {
+    const ticketParam = searchParams.get('ticket');
+    if (!ticketParam) return;
+
+    (async () => {
+      const { data: ticketRow } = await supabase
+        .from('app_event_tickets')
+        .select('id, order_id')
+        .eq('id', ticketParam)
+        .maybeSingle();
+
+      if (ticketRow?.order_id) {
+        setOnlyTicketId(ticketRow.id);
+        setStripeSessionId(ticketRow.order_id);
+        setShowPaymentSuccessModal(true);
+      } else {
+        toast.error('Ingresso não encontrado. Confira o link recebido.');
+      }
+    })();
+
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('ticket');
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // Efeito para verificar parâmetros de retorno de pagamento (?payment=success&order_id=... ou &session_id=... ou ?order_id=...)
   useEffect(() => {
     const paymentStatus = searchParams.get('payment');
@@ -1085,9 +1112,10 @@ const EventDetails: React.FC = () => {
 
       <PaymentSuccessModal
         isOpen={showPaymentSuccessModal}
-        onClose={() => setShowPaymentSuccessModal(false)}
+        onClose={() => { setShowPaymentSuccessModal(false); setOnlyTicketId(null); }}
         sessionId={stripeSessionId}
         eventTitle={event?.title}
+        onlyTicketId={onlyTicketId}
       />
 
       {/* Modal de Alerta de Preço Atualizado em Tempo Real */}

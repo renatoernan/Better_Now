@@ -100,6 +100,15 @@ const enrichEventFromDb = (dbItem: any): Event => {
         if (parsed.waha_msg_order_cancelled) {
           dbItem.waha_msg_order_cancelled = parsed.waha_msg_order_cancelled;
         }
+        if (parsed.waha_msg_order_complimentary) {
+          dbItem.waha_msg_order_complimentary = parsed.waha_msg_order_complimentary;
+        }
+        if (parsed.waha_msg_ticket_transfer_from) {
+          dbItem.waha_msg_ticket_transfer_from = parsed.waha_msg_ticket_transfer_from;
+        }
+        if (parsed.waha_msg_ticket_transfer_to) {
+          dbItem.waha_msg_ticket_transfer_to = parsed.waha_msg_ticket_transfer_to;
+        }
         if (parsed.backstage_whatsapp_group_id) {
           dbItem.backstage_whatsapp_group_id = parsed.backstage_whatsapp_group_id;
         }
@@ -176,6 +185,9 @@ const enrichEventFromDb = (dbItem: any): Event => {
     waha_msg_order_created: dbItem.waha_msg_order_created || '',
     waha_msg_order_confirmed: dbItem.waha_msg_order_confirmed || '',
     waha_msg_order_cancelled: dbItem.waha_msg_order_cancelled || '',
+    waha_msg_order_complimentary: dbItem.waha_msg_order_complimentary || '',
+    waha_msg_ticket_transfer_from: dbItem.waha_msg_ticket_transfer_from || '',
+    waha_msg_ticket_transfer_to: dbItem.waha_msg_ticket_transfer_to || '',
     backstage_whatsapp_group_id: dbItem.backstage_whatsapp_group_id || '',
     email_msg_order_created_subject: dbItem.email_msg_order_created_subject || '',
     email_msg_order_created_body: dbItem.email_msg_order_created_body || '',
@@ -268,6 +280,9 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
   const wahaMsgCreatedVal = eventData.waha_msg_order_created || '';
   const wahaMsgConfirmedVal = eventData.waha_msg_order_confirmed || '';
   const wahaMsgCancelledVal = eventData.waha_msg_order_cancelled || '';
+  const wahaMsgComplimentaryVal = eventData.waha_msg_order_complimentary || '';
+  const wahaMsgTransferFromVal = eventData.waha_msg_ticket_transfer_from || '';
+  const wahaMsgTransferToVal = eventData.waha_msg_ticket_transfer_to || '';
   const backstageWhatsappGroupIdVal = eventData.backstage_whatsapp_group_id || '';
   const emailMsgCreatedSubjVal = eventData.email_msg_order_created_subject || '';
   const emailMsgCreatedBodyVal = eventData.email_msg_order_created_body || '';
@@ -307,6 +322,9 @@ const toEventDbPayload = (eventData: Partial<Event>): any => {
     waha_msg_order_created: wahaMsgCreatedVal,
     waha_msg_order_confirmed: wahaMsgConfirmedVal,
     waha_msg_order_cancelled: wahaMsgCancelledVal,
+    waha_msg_order_complimentary: wahaMsgComplimentaryVal,
+    waha_msg_ticket_transfer_from: wahaMsgTransferFromVal,
+    waha_msg_ticket_transfer_to: wahaMsgTransferToVal,
     backstage_whatsapp_group_id: backstageWhatsappGroupIdVal,
     email_msg_order_created_subject: emailMsgCreatedSubjVal,
     email_msg_order_created_body: emailMsgCreatedBodyVal,
