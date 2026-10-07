@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   Gift,
@@ -11,10 +11,11 @@ import {
   Loader2,
   Sparkles,
   Send,
+  Search,
 } from 'lucide-react';
 import { Event } from '../../shared/types/types/event';
 import { createComplimentaryOrder } from '../../shared/services/complimentaryOrderService';
-import { formatPrice, processPriceBatches } from '../../shared/utils/utils/eventUtils';
+import { formatPrice, processPriceBatches, getBatchStatus, isBatchSoldOut } from '../../shared/utils/utils/eventUtils';
 import { formatCPF } from '../../shared/utils/utils/cpfUtils';
 import { supabase } from '../../shared/services/lib/supabase';
 import { toast } from 'sonner';
@@ -65,6 +66,30 @@ export const formatBrazilianPhone = (phone: string): string => {
   return digits;
 };
 
+interface PersonOption {
+  id: string;
+  nome: string | null;
+  apelido: string | null;
+  documento: string | null;
+  whatsapp: string | null;
+  telefone: string | null;
+  email: string | null;
+}
+
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0][0];
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+  return `${first}${last}`.toUpperCase();
+};
+
+// Lote vigente: o primeiro dentro do período e com ingressos disponíveis
+const getCurrentBatchIndex = (priceBatches: any): number => {
+  const idx = processPriceBatches(priceBatches).findIndex((b) => getBatchStatus(b) === 'active');
+  return idx >= 0 ? idx : 0;
+};
+
 export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModalProps> = ({
   isOpen,
   onClose,
@@ -86,6 +111,15 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
   const [foundPersonId, setFoundPersonId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Busca de contemplado no cadastro de clientes (app_people)
+  const [selectedClient, setSelectedClient] = useState<PersonOption | null>(null);
+  const [clientSearch, setClientSearch] = useState<string>('');
+  const [clientResults, setClientResults] = useState<PersonOption[]>([]);
+  const [searchingClients, setSearchingClients] = useState<boolean>(false);
+  const [showClientResults, setShowClientResults] = useState<boolean>(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
+  const clientSearchRef = useRef<HTMLInputElement>(null);
+
   // Limpa todos os dados digitados e feedbacks do formulário
   const resetForm = useCallback(() => {
     setSelectedBatchIndex(0);
@@ -102,14 +136,68 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
     setPersonFound(null);
     setFoundPersonId(null);
     setErrorMsg(null);
+    setSelectedClient(null);
+    setClientSearch('');
+    setClientResults([]);
+    setShowClientResults(false);
   }, []);
 
-  // Limpa automaticamente o formulário sempre que o modal for fechado
+  // Limpa o formulário ao fechar e já seleciona o lote vigente ao abrir
   useEffect(() => {
     if (!isOpen) {
       resetForm();
+    } else {
+      setSelectedBatchIndex(getCurrentBatchIndex(event.price_batches));
     }
-  }, [isOpen, resetForm]);
+    // Só no abrir/fechar: um refetch do evento não deve trocar o lote já escolhido
+  }, [isOpen, event.id, resetForm]);
+
+  // Consulta o cadastro de clientes enquanto o usuário digita (com debounce)
+  useEffect(() => {
+    // Vírgulas e parênteses quebram a sintaxe do filtro .or() do PostgREST
+    const term = clientSearch.replace(/[,()%*\\]/g, ' ').trim();
+    if (term.length < 2) {
+      setClientResults([]);
+      setSearchingClients(false);
+      return;
+    }
+
+    setSearchingClients(true);
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const digits = term.replace(/\D/g, '');
+      const filters = [
+        `nome.ilike.%${term}%`,
+        `apelido.ilike.%${term}%`,
+        `email.ilike.%${term}%`,
+        `whatsapp.ilike.%${term}%`,
+      ];
+      if (digits.length >= 3) {
+        filters.push(`documento.ilike.%${digits}%`, `whatsapp.ilike.%${digits}%`);
+      }
+
+      const { data, error } = await supabase
+        .from('app_people')
+        .select('id, nome, apelido, documento, whatsapp, telefone, email')
+        .is('deleted_at', null)
+        .or(filters.join(','))
+        .order('nome', { ascending: true })
+        .limit(8);
+
+      if (cancelled) return;
+      if (error) {
+        console.error('Erro ao buscar clientes em app_people:', error);
+      }
+      setClientResults((data as PersonOption[]) || []);
+      setHighlightedIndex(0);
+      setSearchingClients(false);
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [clientSearch]);
 
   const handleClose = () => {
     if (loading) return;
@@ -189,10 +277,60 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
     }
   };
 
+  // Preenche a cortesia com os dados do cliente escolhido no cadastro
+  const handleSelectClient = (person: PersonOption) => {
+    setSelectedClient(person);
+    setCpf(person.documento ? formatCPF(person.documento) : '');
+    setNome(person.nome || person.apelido || '');
+    setWhatsapp(formatBrazilianPhone(person.whatsapp || person.telefone || ''));
+    setEmail(person.email || '');
+    setPersonFound(null);
+    setFoundPersonId(null);
+    setErrorMsg(null);
+    setClientSearch('');
+    setClientResults([]);
+    setShowClientResults(false);
+  };
+
+  // Desfaz a seleção e limpa os dados que vieram do cadastro
+  const handleClearSelectedClient = () => {
+    setSelectedClient(null);
+    setCpf('');
+    setNome('');
+    setWhatsapp('');
+    setEmail('');
+    setTimeout(() => clientSearchRef.current?.focus(), 0);
+  };
+
+  const handleClientSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Enter na busca nunca deve submeter a cortesia
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (showClientResults && clientResults[highlightedIndex]) {
+        handleSelectClient(clientResults[highlightedIndex]);
+      }
+      return;
+    }
+    if (!showClientResults || clientResults.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i + 1) % clientResults.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i - 1 + clientResults.length) % clientResults.length);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowClientResults(false);
+    }
+  };
+
   // Formatação e disparo de busca de CPF em tempo real
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatCPF(e.target.value);
     setCpf(formatted);
+
+    // Com cliente escolhido na busca, o CPF digitado só completa/corrige o cadastro dele
+    if (selectedClient) return;
 
     const clean = formatted.replace(/\D/g, '');
     if (clean.length === 11) {
@@ -244,7 +382,7 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
         client_phone: cleanPhone,
         client_email: email.trim() || undefined,
         client_document: cleanCpf || undefined,
-        client_id: foundPersonId || undefined,
+        client_id: selectedClient?.id || foundPersonId || undefined,
         notes: notePayload,
         send_whatsapp: sendWhatsApp,
       });
@@ -322,11 +460,22 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
                 className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-emerald-500 shadow-xs"
                 disabled={loading}
               >
-                {priceBatches.map((b, idx) => (
-                  <option key={idx} value={idx}>
-                    {b.name || `Lote ${idx + 1}`} ({formatPrice(b.price || 0)})
-                  </option>
-                ))}
+                {priceBatches.map((b, idx) => {
+                  const status = getBatchStatus(b);
+                  const statusLabel =
+                    status === 'active'
+                      ? ''
+                      : status === 'upcoming'
+                        ? ' · Em breve'
+                        : isBatchSoldOut(b)
+                          ? ' · Esgotado'
+                          : ' · Encerrado';
+                  return (
+                    <option key={idx} value={idx}>
+                      {`${b.name || `Lote ${idx + 1}`} (${formatPrice(b.price || 0)})${statusLabel}`}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -361,22 +510,143 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
               )}
             </div>
 
-            {/* 1. CPF do Contemplado (Primeiro Campo) */}
+            {/* 0. Busca no cadastro de clientes */}
+            {selectedClient ? (
+              <div className="p-3 bg-emerald-50/90 border border-emerald-200 rounded-xl flex items-center gap-3 animate-in fade-in duration-200">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center text-xs font-bold shadow-sm shrink-0">
+                  {getInitials(selectedClient.nome || selectedClient.apelido || '')}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="truncate">{selectedClient.nome || selectedClient.apelido}</span>
+                  </span>
+                  <span className="block text-[11px] text-emerald-700 truncate">
+                    Cliente do cadastro · dados preenchidos abaixo
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearSelectedClient}
+                  disabled={loading}
+                  className="px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100 rounded-lg transition-colors shrink-0 cursor-pointer"
+                >
+                  Trocar
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <label
+                  htmlFor="complimentary-client-search"
+                  className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1.5"
+                >
+                  <Search className="w-3.5 h-3.5 text-emerald-600" />
+                  Buscar no Cadastro de Clientes
+                </label>
+                <div className="relative">
+                  <input
+                    id="complimentary-client-search"
+                    ref={clientSearchRef}
+                    type="text"
+                    value={clientSearch}
+                    onChange={(e) => {
+                      setClientSearch(e.target.value);
+                      setShowClientResults(true);
+                    }}
+                    onFocus={() => setShowClientResults(true)}
+                    onBlur={() => setShowClientResults(false)}
+                    onKeyDown={handleClientSearchKeyDown}
+                    placeholder="Nome, apelido, CPF ou e-mail do cliente"
+                    autoComplete="off"
+                    role="combobox"
+                    aria-expanded={showClientResults && clientSearch.trim().length >= 2}
+                    aria-controls="complimentary-client-results"
+                    className="w-full pl-3.5 pr-9 py-2.5 text-xs font-medium rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-emerald-500 shadow-xs"
+                    disabled={loading}
+                  />
+                  {searchingClients && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-emerald-600" />
+                  )}
+                </div>
+
+                {/* onMouseDown evita que o clique tire o foco do input antes de selecionar */}
+                {showClientResults &&
+                  clientSearch.trim().length >= 2 &&
+                  (clientResults.length > 0 || !searchingClients) && (
+                    <ul
+                      id="complimentary-client-results"
+                      role="listbox"
+                      onMouseDown={(e) => e.preventDefault()}
+                      className="absolute z-20 left-0 right-0 mt-1.5 max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl py-1"
+                    >
+                      {clientResults.length === 0 ? (
+                        <li className="px-3.5 py-3 text-xs text-gray-500">
+                          Nenhum cliente encontrado. Preencha os dados abaixo para cadastrar.
+                        </li>
+                      ) : (
+                        clientResults.map((person, idx) => {
+                          const name = person.nome || person.apelido || 'Sem nome';
+                          const phone = person.whatsapp || person.telefone;
+                          const details = [
+                            person.documento ? formatCPF(person.documento) : 'Sem CPF',
+                            phone ? formatBrazilianPhone(phone) : null,
+                            person.email,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ');
+
+                          return (
+                            <li
+                              key={person.id}
+                              role="option"
+                              aria-selected={idx === highlightedIndex}
+                              onClick={() => handleSelectClient(person)}
+                              onMouseEnter={() => setHighlightedIndex(idx)}
+                              className={`px-3 py-2 flex items-center gap-2.5 cursor-pointer transition-colors ${
+                                idx === highlightedIndex ? 'bg-emerald-50' : ''
+                              }`}
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-[11px] font-bold shrink-0">
+                                {getInitials(name)}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="block text-xs font-semibold text-gray-900 truncate">
+                                  {name}
+                                  {person.nome && person.apelido && (
+                                    <span className="font-normal text-gray-500"> ({person.apelido})</span>
+                                  )}
+                                </span>
+                                <span className="block text-[11px] text-gray-500 truncate">{details}</span>
+                              </div>
+                            </li>
+                          );
+                        })
+                      )}
+                    </ul>
+                  )}
+              </div>
+            )}
+
+            {/* 1. CPF do Contemplado */}
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-emerald-600" />
                   CPF do Contemplado *
                 </span>
-                <span className="text-[10px] font-normal text-gray-500">
-                  Busca automática em app_people
-                </span>
+                {!selectedClient && (
+                  <span className="text-[10px] font-normal text-gray-500">
+                    Busca automática em app_people
+                  </span>
+                )}
               </label>
               <input
                 type="text"
                 value={cpf}
                 onChange={handleCpfChange}
-                onBlur={() => handleSearchPersonByDoc(cpf)}
+                onBlur={() => {
+                  if (!selectedClient) handleSearchPersonByDoc(cpf);
+                }}
                 placeholder="000.000.000-00"
                 maxLength={14}
                 className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 shadow-xs transition-all tracking-wide"
