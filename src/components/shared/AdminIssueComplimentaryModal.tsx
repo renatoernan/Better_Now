@@ -14,7 +14,12 @@ import {
   Search,
 } from 'lucide-react';
 import { Event } from '../../shared/types/types/event';
-import { createComplimentaryOrder } from '../../shared/services/complimentaryOrderService';
+import {
+  createComplimentaryOrder,
+  findActiveCourtesyByDocument,
+  courtesyAlreadyIssuedMessage,
+  type ExistingCourtesy,
+} from '../../shared/services/complimentaryOrderService';
 import { formatPrice, processPriceBatches, getBatchStatus, isBatchSoldOut } from '../../shared/utils/utils/eventUtils';
 import { formatCPF } from '../../shared/utils/utils/cpfUtils';
 import { supabase } from '../../shared/services/lib/supabase';
@@ -120,6 +125,9 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
   const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
   const clientSearchRef = useRef<HTMLInputElement>(null);
 
+  // Cortesia já emitida para o CPF neste evento (só uma por CPF)
+  const [existingCourtesy, setExistingCourtesy] = useState<ExistingCourtesy | null>(null);
+
   // Limpa todos os dados digitados e feedbacks do formulário
   const resetForm = useCallback(() => {
     setSelectedBatchIndex(0);
@@ -151,6 +159,26 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
     }
     // Só no abrir/fechar: um refetch do evento não deve trocar o lote já escolhido
   }, [isOpen, event.id, resetForm]);
+
+  // Avisa assim que o CPF completo já tiver uma cortesia neste evento
+  useEffect(() => {
+    const cleanDoc = cpf.replace(/\D/g, '');
+    if (!isOpen || cleanDoc.length !== 11) {
+      setExistingCourtesy(null);
+      return;
+    }
+
+    let cancelled = false;
+    findActiveCourtesyByDocument(event.id, cleanDoc)
+      .then((found) => {
+        if (!cancelled) setExistingCourtesy(found);
+      })
+      .catch((err) => console.warn('Erro ao verificar cortesias do CPF:', err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cpf, isOpen, event.id]);
 
   // Consulta o cadastro de clientes enquanto o usuário digita (com debounce)
   useEffect(() => {
@@ -352,6 +380,11 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
     const cleanCpf = cpf.replace(/\D/g, '');
     if (cleanCpf && cleanCpf.length !== 11) {
       setErrorMsg('Por favor, informe um CPF válido com 11 dígitos.');
+      return;
+    }
+
+    if (existingCourtesy) {
+      setErrorMsg(courtesyAlreadyIssuedMessage(existingCourtesy));
       return;
     }
 
@@ -649,10 +682,18 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
                 }}
                 placeholder="000.000.000-00"
                 maxLength={14}
-                className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 shadow-xs transition-all tracking-wide"
+                className={`w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border bg-gray-50 focus:bg-white focus:ring-2 shadow-xs transition-all tracking-wide ${
+                  existingCourtesy ? 'border-red-400 focus:ring-red-500' : 'border-gray-300 focus:ring-emerald-500'
+                }`}
                 disabled={loading}
                 required
               />
+              {existingCourtesy && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-700 animate-in fade-in duration-200">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span>{courtesyAlreadyIssuedMessage(existingCourtesy)}</span>
+                </div>
+              )}
             </div>
 
             {/* Feedback Visual da Consulta em app_people */}
@@ -800,7 +841,7 @@ export const AdminIssueComplimentaryModal: React.FC<AdminIssueComplimentaryModal
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !!existingCourtesy}
               className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {loading ? (

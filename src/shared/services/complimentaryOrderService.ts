@@ -51,6 +51,13 @@ export const findOrCreatePerson = async (data: {
 
     let existingPerson: any = null;
 
+    // Um cadastro com outro CPF é outra pessoa: nunca reaproveitar nem sobrescrever
+    // (casais e famílias costumam dividir o mesmo WhatsApp)
+    const isSamePersonDoc = (person: any): boolean => {
+      const personDoc = String(person?.documento || '').replace(/\D/g, '');
+      return !cleanDoc || !personDoc || personDoc === cleanDoc;
+    };
+
     // 1. Se já veio um clientId válido, buscar o registro existente
     if (data.clientId) {
       const { data: existing } = await supabase
@@ -58,7 +65,7 @@ export const findOrCreatePerson = async (data: {
         .select('*')
         .eq('id', data.clientId)
         .maybeSingle();
-      if (existing?.id) existingPerson = existing;
+      if (existing?.id && isSamePersonDoc(existing)) existingPerson = existing;
     }
 
     // 2. Se não encontrou por ID, tentar encontrar por CPF/Documento
@@ -83,8 +90,9 @@ export const findOrCreatePerson = async (data: {
       if (byDoc?.id) existingPerson = byDoc;
     }
 
-    // 3. Se não encontrou por CPF, tentar por WhatsApp / Telefone
-    if (!existingPerson && cleanPhone) {
+    // 3. Sem CPF informado, tentar por WhatsApp / Telefone. Com CPF que não está na
+    // base é uma pessoa nova: o WhatsApp pode ser de outra pessoa da mesma família
+    if (!existingPerson && !cleanDoc && cleanPhone) {
       const { data: byPhone } = await supabase
         .from('app_people')
         .select('*')
@@ -104,9 +112,11 @@ export const findOrCreatePerson = async (data: {
         updatePayload.nome = inputName;
       }
 
+      // Compara sem o DDI 55 para não regravar "+55(11) 99999-9999" como "11999999999"
+      const withoutBrDdi = (digits: string) => (digits.length >= 12 && digits.startsWith('55') ? digits.slice(2) : digits);
       const inputPhone = rawPhone || cleanPhone;
       const existingCleanPhone = (existingPerson.whatsapp || existingPerson.telefone || '').replace(/\D/g, '');
-      if (cleanPhone && cleanPhone !== existingCleanPhone) {
+      if (cleanPhone && withoutBrDdi(cleanPhone) !== withoutBrDdi(existingCleanPhone)) {
         updatePayload.whatsapp = inputPhone;
       }
 
@@ -185,6 +195,39 @@ export const findOrCreatePerson = async (data: {
   }
 };
 
+export interface ExistingCourtesy {
+  id: string;
+  client_name: string | null;
+}
+
+/**
+ * Cortesia ainda válida emitida para o CPF no evento. Canceladas, estornadas e
+ * falhas não contam, para que o CPF possa receber uma nova.
+ */
+export const findActiveCourtesyByDocument = async (
+  eventId: string,
+  document: string
+): Promise<ExistingCourtesy | null> => {
+  const cleanDoc = document.replace(/\D/g, '');
+  if (!cleanDoc) return null;
+
+  const { data, error } = await supabase
+    .from('app_event_orders')
+    .select('id, client_name')
+    .eq('event_id', eventId)
+    .eq('payment_method', 'cortesia')
+    .eq('client_document', cleanDoc)
+    .not('status', 'in', '(cancelled,refunded,failed)')
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+};
+
+export const courtesyAlreadyIssuedMessage = (courtesy: ExistingCourtesy): string =>
+  `Este CPF já recebeu uma cortesia neste evento (pedido #${String(courtesy.id).slice(0, 8).toUpperCase()}${courtesy.client_name ? ` – ${courtesy.client_name}` : ''}).`;
+
 export interface ComplimentaryOrderResponse {
   success: boolean;
   orderId?: string;
@@ -200,6 +243,19 @@ export const createComplimentaryOrder = async (
     const cleanDoc = params.client_document?.replace(/\D/g, '') || null;
     const originalSubtotal = (params.unit_price || 0) * params.quantity;
     const discount = params.discount_amount !== undefined ? params.discount_amount : originalSubtotal;
+
+    // 0. Uma cortesia por CPF em cada evento
+    if (cleanDoc) {
+      let existingCourtesy: ExistingCourtesy | null;
+      try {
+        existingCourtesy = await findActiveCourtesyByDocument(params.event_id, cleanDoc);
+      } catch {
+        return { success: false, error: 'Não foi possível verificar cortesias anteriores deste CPF. Tente novamente.' };
+      }
+      if (existingCourtesy) {
+        return { success: false, error: courtesyAlreadyIssuedMessage(existingCourtesy) };
+      }
+    }
 
     // 1. Validar estoque restante do lote no evento
     const { data: eventRow } = await supabase

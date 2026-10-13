@@ -274,9 +274,17 @@ export const useEventOrders = (eventId?: string) => {
 
         // Localizar cadastro mais recente do comprador
         const cleanDoc = (order.client_document || order.documento || order.cpf || '').replace(/\D/g, '');
-        const matchedPerson = (order.client_id ? peopleMap[order.client_id] : null)
+        const linkedPerson = (order.client_id ? peopleMap[order.client_id] : null)
           || (cleanDoc ? peopleByDocMap[cleanDoc] : null)
           || (ticketsByOrder[order.id]?.[0]?.person);
+
+        // Cadastro com outro CPF é outra pessoa (ex.: vínculo errado por WhatsApp
+        // compartilhado): nesse caso vale o que foi gravado no pedido
+        const isSameDocAsOrder = (person: any): boolean => {
+          const personDoc = String(person?.documento || '').replace(/\D/g, '');
+          return !cleanDoc || !personDoc || personDoc === cleanDoc;
+        };
+        const matchedPerson = linkedPerson && isSameDocAsOrder(linkedPerson) ? linkedPerson : null;
 
         const currentPhone = matchedPerson?.whatsapp || matchedPerson?.telefone || order.client_phone;
         const currentName = matchedPerson?.nome || matchedPerson?.name || order.client_name;
@@ -344,14 +352,15 @@ export const useEventOrders = (eventId?: string) => {
 
           // Caso 3: Se não houver attendee no JSON mas for o primeiro ingresso, vincula ao comprador
           if (idx === 0) {
+            const holder = directPerson && isSameDocAsOrder(directPerson) ? directPerson : null;
             return {
               ...ticket,
               person: {
-                id: directPerson?.id || matchedPerson?.id || ticket.person?.id,
-                nome: directPerson?.nome || currentName,
-                documento: directPerson?.documento || currentDoc,
-                whatsapp: directPerson?.whatsapp || directPerson?.telefone || currentPhone,
-                email: directPerson?.email || currentEmail,
+                id: holder?.id || matchedPerson?.id || ticket.person?.id,
+                nome: holder?.nome || currentName,
+                documento: holder?.documento || currentDoc,
+                whatsapp: holder?.whatsapp || holder?.telefone || currentPhone,
+                email: holder?.email || currentEmail,
               }
             };
           }
