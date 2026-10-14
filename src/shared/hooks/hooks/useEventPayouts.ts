@@ -56,6 +56,11 @@ export interface OrderFinancial {
   gateway_financing_fee: number | null;
   gateway_fee_details: { type?: string; amount?: number; fee_payer?: string }[] | null;
   gateway_synced_at: string | null;
+  // Reembolso parcial (migration 048): o repasse é o definido no reembolso
+  is_partially_refunded: boolean;
+  refund_amount: number;
+  original_payout_due: number;
+  refund_payout_missing: boolean;
 }
 
 export interface EventPayoutSummary {
@@ -139,6 +144,8 @@ const normalizeOrder = (r: any): OrderFinancial => ({
   payout_due: num(r.payout_due),
   net_profit: num(r.net_profit),
   paid_out_amount: num(r.paid_out_amount),
+  refund_amount: num(r.refund_amount),
+  original_payout_due: num(r.original_payout_due),
   organizer_fee: num(r.organizer_fee),
   client_convenience_fee: num(r.client_convenience_fee),
   fee_percentage_total: num(r.fee_percentage_total),

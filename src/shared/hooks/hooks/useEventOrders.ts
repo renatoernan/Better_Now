@@ -38,6 +38,10 @@ export interface EventOrderRecord {
   refunded_at?: string;
   refund_amount?: number;
   refund_reason?: string;
+  /** Repasse à organização definido no reembolso parcial (migration 048). */
+  refund_payout_amount?: number | null;
+  tickets_amount?: number | null;
+  organizer_fee?: number | null;
   created_at: string;
   updated_at?: string;
   tickets?: EventTicketRecord[];
@@ -87,6 +91,8 @@ export interface RefundOrderParams {
   isPartial?: boolean;
   /** Estorno já feito no painel do MP: só registra no sistema. */
   registerOnly?: boolean;
+  /** Repasse à organização que fica valendo no reembolso parcial. */
+  payoutAmount?: number | null;
 }
 
 export interface TransferTicketParams {
@@ -708,7 +714,7 @@ export const useEventOrders = (eventId?: string) => {
   };
 
   // Registrar Reembolso de Pedido (Parcial ou Total)
-  const refundOrder = async ({ orderId, amount, reason, isPartial = false, registerOnly = false }: RefundOrderParams) => {
+  const refundOrder = async ({ orderId, amount, reason, isPartial = false, registerOnly = false, payoutAmount = null }: RefundOrderParams) => {
     const targetOrder = orders.find(o => o.id === orderId);
     if (!targetOrder) {
       toast.error('Pedido não encontrado.');
@@ -725,6 +731,7 @@ export const useEventOrders = (eventId?: string) => {
         action: registerOnly ? 'register' : 'refund',
         amount: isPartial ? amount : null,
         reason,
+        payoutAmount: isPartial ? payoutAmount : null,
       });
       toast.success(
         registerOnly
@@ -748,6 +755,7 @@ export const useEventOrders = (eventId?: string) => {
           refunded_at: new Date().toISOString(),
           refund_amount: amount,
           refund_reason: reason,
+          refund_payout_amount: isPartial ? payoutAmount : null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', orderId);
@@ -1055,6 +1063,7 @@ export const useEventOrders = (eventId?: string) => {
           refunded_at: null,
           refund_amount: null,
           refund_reason: null,
+          refund_payout_amount: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', orderId);

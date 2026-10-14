@@ -64,12 +64,12 @@ serve(async (req) => {
       supabase.from("app_events").select("title, event_date").eq("id", eventId).maybeSingle(),
       supabase
         .from("app_event_orders")
-        .select("id, client_name, quantity, batch_name, payment_method, amount_total, convenience_fee, convenience_fee_percentage, status, refunded_at, created_at")
+        .select("id, client_name, quantity, batch_name, payment_method, amount_total, convenience_fee, convenience_fee_percentage, status, refunded_at, refund_amount, created_at")
         .eq("event_id", eventId)
         .order("created_at", { ascending: false }),
       supabase
         .from("app_event_order_financials")
-        .select("order_id, convenience_fee, installment_interest, fee_percentage_total, payout_id, payout_status")
+        .select("order_id, convenience_fee, installment_interest, fee_percentage_total, payout_id, payout_status, payout_due, paid_out_amount, is_partially_refunded")
         .eq("event_id", eventId),
       // Só o que interessa ao organizador: observações internas e quem
       // registrou o repasse ficam de fora
@@ -97,7 +97,16 @@ serve(async (req) => {
         ? Number(fin.fee_percentage_total || 0)
         : Number(o.convenience_fee_percentage || 0);
       const isRefunded = o.status === "refunded" || !!o.refunded_at;
+      // Sem valor gravado, vale o legado: reembolso total
+      const refundAmount = isRefunded ? round2(o.refund_amount ?? gross) : 0;
+      // Parcial: o pedido segue pago e o repasse é o definido no reembolso (048)
+      const isPartialRefund = !!fin?.is_partially_refunded;
       const payout = fin?.payout_id ? payoutById.get(fin.payout_id) : null;
+      // No parcial, o que sobrou do pagamento se divide entre repasse e
+      // plataforma: a taxa é o que a plataforma manteve, para que
+      // bruto − reembolso = taxa + líquido continue fechando
+      const net = isPartialRefund ? round2(fin?.payout_due) : round2(gross - fee);
+      const shownFee = isPartialRefund ? round2(gross - refundAmount - net) : fee;
 
       return {
         code: `#${String(o.id).substring(0, 8).toUpperCase()}`,
@@ -106,15 +115,21 @@ serve(async (req) => {
         quantity: Number(o.quantity || 1),
         method: o.payment_method || null,
         gross,
-        fee,
+        fee: shownFee,
         fee_percentage: percentage,
-        net: Number((gross - fee).toFixed(2)),
-        status: isRefunded ? "refunded" : o.status,
+        // No parcial, o líquido é o repasse definido no reembolso
+        net,
+        // Líquido antes do reembolso, para a tela mostrar quanto o repasse caiu
+        net_before_refund: Number((gross - fee).toFixed(2)),
+        status: isPartialRefund ? "partially_refunded" : isRefunded ? "refunded" : o.status,
+        refund_amount: refundAmount,
         created_at: o.created_at,
         // Repasse só existe para pedido pago; os demais vêm sem
         payout: fin
           ? {
               status: fin.payout_status,
+              partial: isPartialRefund,
+              paid_out: round2(fin.paid_out_amount ?? 0),
               paid_at: payout?.paid_at ?? null,
               registered_at: payout?.created_at ?? null,
               method: payout?.method ?? null,
@@ -125,9 +140,10 @@ serve(async (req) => {
       };
     });
 
-    const paid = rows.filter(r => r.status === "paid" || r.status === "approved");
+    const paid = rows.filter(r => r.status === "paid" || r.status === "approved" || r.status === "partially_refunded");
     const totals = {
-      gross: Number(paid.reduce((s, r) => s + r.gross, 0).toFixed(2)),
+      // Bruto já sem o que voltou ao comprador nos reembolsos parciais
+      gross: Number(paid.reduce((s, r) => s + r.gross - r.refund_amount, 0).toFixed(2)),
       fee: Number(paid.reduce((s, r) => s + r.fee, 0).toFixed(2)),
       net: Number(paid.reduce((s, r) => s + r.net, 0).toFixed(2)),
       paid_orders: paid.length,

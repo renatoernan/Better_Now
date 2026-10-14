@@ -25,6 +25,8 @@ export const runOrderRefund = async (params: {
   action: RefundAction;
   amount?: number | null;
   reason?: string | null;
+  /** Repasse à organização no reembolso parcial. */
+  payoutAmount?: number | null;
 }): Promise<RefundResult> => {
   const { data, error } = await supabase.functions.invoke('refund-mercadopago-payment', {
     body: {
@@ -32,6 +34,7 @@ export const runOrderRefund = async (params: {
       action: params.action,
       amount: params.amount ?? null,
       reason: params.reason ?? null,
+      payout_amount: params.payoutAmount ?? null,
     },
   });
 

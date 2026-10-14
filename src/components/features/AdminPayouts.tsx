@@ -924,7 +924,17 @@ const AdminPayouts: React.FC = () => {
                             </td>
                             <td className="px-3 py-2.5 text-right tabular-nums font-medium">
                               {formatPrice(o.is_paid && !o.is_refunded ? o.payout_due : o.tickets_amount - o.organizer_fee)}
-                              {o.organizer_fee > 0 && (
+                              {o.is_partially_refunded ? (
+                                <span
+                                  className="block text-[10px] text-orange-700 whitespace-nowrap"
+                                  title={o.refund_payout_missing
+                                    ? 'Repasse não informado no reembolso: calculado como ingressos − taxa − reembolso'
+                                    : 'Repasse definido no reembolso parcial'}
+                                >
+                                  reemb. {formatPrice(o.refund_amount)} · era {formatPrice(o.original_payout_due)}
+                                  {o.refund_payout_missing ? ' · estimado' : ''}
+                                </span>
+                              ) : o.organizer_fee > 0 && (
                                 <span className="block text-[10px] text-gray-400">ingressos {formatPrice(o.tickets_amount)}</span>
                               )}
                             </td>

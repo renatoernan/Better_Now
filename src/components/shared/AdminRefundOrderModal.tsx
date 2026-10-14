@@ -14,6 +14,7 @@ interface AdminRefundOrderModalProps {
     reason: string;
     isPartial: boolean;
     registerOnly?: boolean;
+    payoutAmount?: number | null;
   }) => Promise<boolean | void>;
 }
 
@@ -28,6 +29,7 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [registerOnly, setRegisterOnly] = useState<boolean>(false);
+  const [payoutAmount, setPayoutAmount] = useState<string>('');
 
   useEffect(() => {
     if (order) {
@@ -35,6 +37,7 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
       setReason('');
       setErrorMsg('');
       setRegisterOnly(false);
+      setPayoutAmount(order.refund_payout_amount != null ? String(order.refund_payout_amount) : '');
     }
   }, [order, isOpen]);
 
@@ -44,6 +47,11 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
   const isPartial = refundAmount > 0 && refundAmount < totalOrderAmount;
   const viaMp = isMercadoPagoOrder(order);
   const refundsOnMp = viaMp && !registerOnly;
+  // Repasse que o pedido teria sem reembolso: ingressos menos a taxa assumida
+  const originalPayout = order.tickets_amount != null
+    ? Math.max(Number(order.tickets_amount) - Number(order.organizer_fee || 0), 0)
+    : null;
+  const payoutValue = parseFloat(payoutAmount.replace(',', '.'));
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +64,13 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
 
     if (refundAmount > totalOrderAmount) {
       setErrorMsg(`O valor de reembolso não pode ser superior ao total do pedido (${formatPrice(totalOrderAmount)}).`);
+      return;
+    }
+
+    // Não há fórmula para o repasse no parcial: quem absorve a conveniência
+    // devolvida muda caso a caso, então o valor é sempre informado
+    if (isPartial && !(payoutValue >= 0)) {
+      setErrorMsg('Informe o valor do repasse à organização após o reembolso.');
       return;
     }
 
@@ -72,6 +87,7 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
         reason: reason.trim(),
         isPartial,
         registerOnly,
+        payoutAmount: isPartial ? Math.round(payoutValue * 100) / 100 : null,
       });
       onClose();
     } catch (err: any) {
@@ -164,6 +180,42 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Repasse após reembolso parcial */}
+          {isPartial && (
+            <div className="space-y-1.5 p-3.5 rounded-2xl border border-orange-200 bg-orange-50/60">
+              <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
+                <span>Valor do Repasse à organização (R$): *</span>
+                {originalPayout != null && (
+                  <span className="text-[11px] text-gray-500 font-normal">
+                    Repasse sem reembolso: {formatPrice(originalPayout)}
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 font-bold text-xs">
+                  R$
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={payoutAmount}
+                  onChange={(e) => setPayoutAmount(e.target.value)}
+                  placeholder="0,00"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-orange-200 rounded-xl focus:ring-2 focus:ring-orange-400 font-bold text-gray-900 transition-all"
+                  disabled={loading}
+                  required
+                />
+              </div>
+              <p className="text-[11px] text-orange-900/80 leading-relaxed">
+                Quanto a organização recebe deste pedido depois do reembolso. É o valor que entra no controle de repasses e no relatório compartilhado.
+                {originalPayout != null && payoutValue >= 0 && (
+                  <> Diferença: <strong>{formatPrice(originalPayout - payoutValue)}</strong> a menos.</>
+                )}
+              </p>
+            </div>
+          )}
 
           {/* Campo de Motivo */}
           <div className="space-y-1.5">

@@ -14,6 +14,10 @@ import { extractGatewayFinancials, fetchMercadoPagoPayment } from "../_shared/mp
  *   refund   — estorna no MP (total ou parcial) e registra no pedido
  *   register — só registra no sistema; para estorno já feito no painel do MP
  *   undo     — desfaz um reembolso registrado no sistema que não aconteceu no MP
+ *
+ * No reembolso parcial, payout_amount é o repasse à organização que fica
+ * valendo para o pedido (migration 048). Não há fórmula: quem absorve a
+ * conveniência devolvida é decidido em cada reembolso.
  */
 
 const corsHeaders = {
@@ -71,8 +75,17 @@ serve(async (req) => {
       return json({ ok: false, message: "Acesso restrito a administradores." }, 403);
     }
 
-    const { order_id, action = "refund", amount = null, reason = null } = await req.json().catch(() => ({}));
+    const { order_id, action = "refund", amount = null, reason = null, payout_amount = null } =
+      await req.json().catch(() => ({}));
     if (!order_id) return json({ ok: false, message: "Informe o pedido." }, 400);
+    if (payout_amount != null && !(Number(payout_amount) >= 0)) {
+      return json({ ok: false, message: "Valor de repasse inválido." }, 400);
+    }
+    // Total não tem repasse; parcial sem valor informado mantém o que já havia
+    const payoutFields = (isTotal: boolean) =>
+      isTotal
+        ? { refund_payout_amount: null }
+        : payout_amount != null ? { refund_payout_amount: round2(payout_amount) } : {};
 
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: order, error: orderErr } = await admin
@@ -120,7 +133,7 @@ serve(async (req) => {
 
       const { error } = await admin
         .from("app_event_orders")
-        .update({ status: "paid", refunded_at: null, refund_amount: null, refund_reason: null, updated_at: now })
+        .update({ status: "paid", refunded_at: null, refund_amount: null, refund_reason: null, refund_payout_amount: null, updated_at: now })
         .eq("id", order.id);
       if (error) throw error;
 
@@ -150,6 +163,7 @@ serve(async (req) => {
         refunded_at: now,
         refund_amount: refunded,
         refund_reason: reason || "Estorno feito no painel do Mercado Pago",
+        ...payoutFields(isTotal),
       };
       if (payment) await applyMirror(payment, extra);
       else {
@@ -178,6 +192,7 @@ serve(async (req) => {
       // Nada a estornar: só alinha o sistema ao MP
       await applyMirror(before, {
         status: "refunded", refunded_at: order.refunded_at || now, refund_amount: alreadyRefunded,
+        ...payoutFields(true),
       });
       await cancelTickets();
       return json({ ok: true, action: "refund", refunded_amount: alreadyRefunded, total: true, already: true });
@@ -220,6 +235,7 @@ serve(async (req) => {
       refunded_at: now,
       refund_amount: refundedTotal,
       refund_reason: reason || null,
+      ...payoutFields(isTotal),
     });
     if (isTotal) await cancelTickets();
 

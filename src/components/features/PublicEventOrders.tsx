@@ -18,13 +18,19 @@ interface OrderRow {
   fee: number;
   fee_percentage: number;
   net: number;
+  /** Líquido antes do reembolso; difere de net no reembolso parcial. */
+  net_before_refund: number;
   status: string;
+  refund_amount: number;
   created_at: string;
   payout: PayoutInfo | null;
 }
 
 interface PayoutInfo {
   status: 'pendente' | 'a_liberar' | 'repassado' | 'estornado' | 'estornado_apos_repasse';
+  /** Pedido com reembolso parcial: o repasse é o valor definido no reembolso. */
+  partial: boolean;
+  paid_out: number;
   paid_at: string | null;
   registered_at: string | null;
   method: string | null;
@@ -52,6 +58,7 @@ const STATUS_META: Record<string, { label: string; cls: string; Icon: typeof Che
   cancelled: { label: 'Cancelado', cls: 'bg-gray-200 text-gray-700', Icon: Ban },
   failed: { label: 'Recusado', cls: 'bg-red-100 text-red-800', Icon: Ban },
   refunded: { label: 'Reembolsado', cls: 'bg-purple-100 text-purple-800', Icon: RotateCcw },
+  partially_refunded: { label: 'Reembolso parcial', cls: 'bg-fuchsia-100 text-fuchsia-800', Icon: RotateCcw },
 };
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -69,16 +76,18 @@ const PAYOUT_META: Record<string, { label: string; cls: string; Icon: typeof Che
   a_liberar: { label: 'Aguardando Mercado Pago', cls: 'bg-sky-100 text-sky-800', Icon: Hourglass },
   estornado: { label: 'Estornado', cls: 'bg-gray-200 text-gray-700', Icon: RotateCcw },
   estornado_apos_repasse: { label: 'Estornado após repasse', cls: 'bg-red-100 text-red-800', Icon: RotateCcw },
+  repasse_parcial: { label: 'Repasse parcial', cls: 'bg-orange-100 text-orange-800', Icon: Clock },
 };
 
 const NO_PAYOUT_LABEL = 'Sem repasse (não pago)';
 
-type StatusGroupKey = 'paid' | 'courtesy' | 'failed' | 'refunded' | 'pending' | 'cancelled';
+type StatusGroupKey = 'paid' | 'courtesy' | 'failed' | 'partial' | 'refunded' | 'pending' | 'cancelled';
 
 const STATUS_GROUPS: { key: StatusGroupKey; label: string; cls: string; Icon: typeof CheckCircle2; always: boolean }[] = [
   { key: 'paid', label: 'Pagos', cls: 'bg-emerald-50 text-emerald-700', Icon: CheckCircle2, always: true },
   { key: 'courtesy', label: 'Cortesias', cls: 'bg-teal-50 text-teal-700', Icon: Gift, always: true },
   { key: 'failed', label: 'Recusados', cls: 'bg-red-50 text-red-700', Icon: Ban, always: true },
+  { key: 'partial', label: 'Reembolso parcial', cls: 'bg-fuchsia-50 text-fuchsia-700', Icon: RotateCcw, always: false },
   { key: 'refunded', label: 'Reembolsados', cls: 'bg-purple-50 text-purple-700', Icon: RotateCcw, always: true },
   { key: 'pending', label: 'Pendentes', cls: 'bg-amber-50 text-amber-700', Icon: Clock, always: false },
   { key: 'cancelled', label: 'Cancelados', cls: 'bg-gray-100 text-gray-600', Icon: Ban, always: false },
@@ -88,6 +97,7 @@ const statusGroupOf = (o: OrderRow): StatusGroupKey | null => {
   const isFree = o.method === 'cortesia' || o.method === 'free';
   if (o.status === 'paid' || o.status === 'approved') return isFree ? 'courtesy' : 'paid';
   if (o.status === 'failed') return 'failed';
+  if (o.status === 'partially_refunded') return 'partial';
   if (o.status === 'refunded') return 'refunded';
   if (o.status === 'pending' || o.status === 'pending_proof') return 'pending';
   if (o.status === 'cancelled') return 'cancelled';
@@ -95,6 +105,13 @@ const statusGroupOf = (o: OrderRow): StatusGroupKey | null => {
 };
 
 const payoutLabel = (status: string) => PAYOUT_META[status]?.label || NO_PAYOUT_LABEL;
+
+// Repasse ainda não feito de pedido com reembolso parcial ganha rótulo próprio
+const payoutKey = (p: PayoutInfo | null): string => {
+  if (!p) return '';
+  if (p.partial && (p.status === 'pendente' || p.status === 'a_liberar')) return 'repasse_parcial';
+  return p.status;
+};
 
 const fmtDay = (d: string) =>
   new Date(d.length === 10 ? `${d}T12:00:00` : d).toLocaleDateString('pt-BR');
@@ -115,15 +132,21 @@ const payoutWhen = (p: PayoutInfo): string | null => {
     : day;
 };
 
-const PayoutCell: React.FC<{ payout: PayoutInfo | null }> = ({ payout }) => {
+const PayoutCell: React.FC<{ order: OrderRow }> = ({ order }) => {
+  const payout = order.payout;
   if (!payout) return <span className="text-gray-400">—</span>;
-  const meta = PAYOUT_META[payout.status] || PAYOUT_META.pendente;
+  const meta = PAYOUT_META[payoutKey(payout)] || PAYOUT_META.pendente;
   const when = payoutWhen(payout);
   return (
     <div className="space-y-1">
       <span className={`px-2.5 py-1 text-xs font-bold rounded-lg inline-flex items-center gap-1 whitespace-nowrap ${meta.cls}`}>
         <meta.Icon className="w-3.5 h-3.5" /> {meta.label}
       </span>
+      {payoutKey(payout) === 'repasse_parcial' && (
+        <div className="text-xs text-orange-800 whitespace-nowrap">
+          {formatPrice(order.net)} de {formatPrice(order.net_before_refund)}
+        </div>
+      )}
       {when && (
         <div className="text-xs text-gray-500 whitespace-nowrap">
           {when}{payout.method ? ` · ${payout.method}` : ''}
@@ -252,7 +275,7 @@ const PublicEventOrders: React.FC = () => {
   );
 
   const payoutOptions = useMemo(
-    () => data ? buildOptions(data.orders.map(o => o.payout?.status || null), v => payoutLabel(v)) : [],
+    () => data ? buildOptions(data.orders.map(o => payoutKey(o.payout) || null), v => payoutLabel(v)) : [],
     [data]
   );
 
@@ -271,7 +294,7 @@ const PublicEventOrders: React.FC = () => {
       }
       if (payoutFilter !== 'all') {
         const group = payoutOptions.find(p => p.label === payoutFilter);
-        if (!group?.raws.includes(o.payout?.status || '')) return false;
+        if (!group?.raws.includes(payoutKey(o.payout))) return false;
       }
       if (!q) return true;
       return o.buyer.toLowerCase().includes(q)
@@ -282,21 +305,25 @@ const PublicEventOrders: React.FC = () => {
 
   // Os totais acompanham o filtro, senão o cabeçalho contradiz a tabela
   const shownTotals = useMemo(() => {
-    const paid = filtered.filter(o => o.status === 'paid' || o.status === 'approved');
+    // Reembolso parcial segue pago: entra com o que sobrou do pagamento
+    const paid = filtered.filter(o => o.status === 'paid' || o.status === 'approved' || o.status === 'partially_refunded');
     return {
-      gross: paid.reduce((s, o) => s + o.gross, 0),
+      gross: paid.reduce((s, o) => s + o.gross - o.refund_amount, 0),
+      partialRefunds: paid.reduce((s, o) => s + o.refund_amount, 0),
       fee: paid.reduce((s, o) => s + o.fee, 0),
       net: paid.reduce((s, o) => s + o.net, 0),
       // Repassado conta também o pedido estornado depois do repasse: o
       // dinheiro saiu, e é isso que o card de repasses precisa somar
       paidOut: filtered
         .filter(o => o.payout?.status === 'repassado' || o.payout?.status === 'estornado_apos_repasse')
-        .reduce((s, o) => s + o.net, 0),
+        .reduce((s, o) => s + (o.payout?.paid_out ?? o.net), 0),
       toPay: paid.filter(o => o.payout?.status === 'pendente').reduce((s, o) => s + o.net, 0),
       awaitingMp: paid.filter(o => o.payout?.status === 'a_liberar').reduce((s, o) => s + o.net, 0),
+      // O que a organização devolve: tudo no estorno total, a diferença para o
+      // novo repasse no parcial
       refundedAfter: filtered
         .filter(o => o.payout?.status === 'estornado_apos_repasse')
-        .reduce((s, o) => s + o.net, 0),
+        .reduce((s, o) => s + (o.payout?.paid_out ?? o.net) - (o.payout?.partial ? o.net : 0), 0),
       paidOrders: paid.length,
       tickets: paid.reduce((s, o) => s + o.quantity, 0),
       // O total de ingressos junta vendas e cortesias; o card mostra a divisão
@@ -391,7 +418,7 @@ const PublicEventOrders: React.FC = () => {
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5">
           {[
-            { label: 'Receita Bruta', value: formatPrice(shownTotals.gross), hint: `${shownTotals.paidOrders} pedidos pagos`, Icon: DollarSign, cls: 'bg-emerald-50 text-emerald-600' },
+            { label: 'Receita Bruta', value: formatPrice(shownTotals.gross), hint: `${shownTotals.paidOrders} pedidos pagos${shownTotals.partialRefunds > 0 ? ` · −${formatPrice(shownTotals.partialRefunds)} reemb. parciais` : ''}`, Icon: DollarSign, cls: 'bg-emerald-50 text-emerald-600' },
             { label: 'Taxas', value: formatPrice(shownTotals.fee), hint: 'Taxas de serviço', Icon: Receipt, cls: 'bg-amber-50 text-amber-600' },
             { label: 'Receita Líquida', value: formatPrice(shownTotals.net), hint: 'Bruto menos taxas', Icon: Wallet, cls: 'bg-indigo-50 text-indigo-600' },
             {
@@ -552,20 +579,36 @@ const PublicEventOrders: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3"><MethodBadge method={o.method} /></td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatPrice(o.gross)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                      {formatPrice(o.gross)}
+                      {o.refund_amount > 0 && (
+                        <span className="block text-xs font-medium text-purple-700 whitespace-nowrap">
+                          Reemb.: {formatPrice(o.refund_amount)}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right text-amber-700">
                       {o.fee > 0 ? (
                         <>
                           {formatPrice(o.fee)}
-                          {o.fee_percentage > 0 && (
+                          {o.status === 'partially_refunded' ? (
+                            <span className="block text-xs text-gray-400">após reemb.</span>
+                          ) : o.fee_percentage > 0 && (
                             <span className="block text-xs text-gray-400">{o.fee_percentage}%</span>
                           )}
                         </>
                       ) : <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-right font-bold text-indigo-950">{formatPrice(o.net)}</td>
+                    <td className="px-4 py-3 text-right font-bold text-indigo-950">
+                      {formatPrice(o.net)}
+                      {o.status === 'partially_refunded' && o.net !== o.net_before_refund && (
+                        <span className="block text-xs font-medium text-gray-400 whitespace-nowrap">
+                          antes: <s>{formatPrice(o.net_before_refund)}</s>
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
-                    <td className="px-4 py-3"><PayoutCell payout={o.payout} /></td>
+                    <td className="px-4 py-3"><PayoutCell order={o} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -637,7 +680,7 @@ const PublicEventOrders: React.FC = () => {
               </table>
 
               <p className="px-5 py-3 text-[11px] text-gray-500 border-t border-gray-100">
-                Recusados e reembolsados não entram na receita. O card Ingressos soma pagos e cortesias.
+                Recusados e reembolsos totais não entram na receita. Reembolso parcial entra com o valor que ficou após o reembolso, e o repasse dele é o definido no reembolso. O card Ingressos soma pagos e cortesias.
               </p>
             </div>
           </div>
