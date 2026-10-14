@@ -10,6 +10,7 @@ import {
   OrderNotificationType 
 } from '../../services/orderNotificationService';
 import { toast } from 'sonner';
+import { isPartialRefund } from '../../utils/utils/refundReceipt';
 
 export interface EventOrderRecord {
   id: string;
@@ -432,7 +433,8 @@ export const useEventOrders = (eventId?: string) => {
         }
 
         if (o.status === 'paid' || (o.status as string) === 'approved') {
-          const orderTotal = Number(o.amount_total || 0);
+          // Reembolso parcial: entra só o que ficou com a plataforma
+          const orderTotal = Number(o.amount_total || 0) - (isPartialRefund(o) ? Number(o.refund_amount || 0) : 0);
           const orderFee = Number(o.convenience_fee || 0);
           revenue += orderTotal;
           fees += orderFee;

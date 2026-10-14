@@ -21,6 +21,7 @@ import AdminTransferTicketModal from '../shared/AdminTransferTicketModal';
 import AdminSendOrderNotificationModal from '../shared/AdminSendOrderNotificationModal';
 import AdminOrderShareModal from '../shared/AdminOrderShareModal';
 import { toast } from 'sonner';
+import { isPartialRefund } from '../../shared/utils/utils/refundReceipt';
 
 interface AdminEventOrdersProps {
   event: Event;
@@ -396,7 +397,19 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
     }
   };
 
+  const partialRefundChip = (order: EventOrderRecord) => (
+    <span
+      className="px-2.5 py-1 bg-fuchsia-100 text-fuchsia-800 text-[11px] font-bold rounded-lg flex items-center gap-1 w-fit whitespace-nowrap"
+      title={`Devolvido ${formatPrice(Number(order.refund_amount || 0))} de ${formatPrice(Number(order.amount_total || 0))}. O pedido segue pago e os ingressos continuam válidos.`}
+    >
+      <RotateCcw className="w-3 h-3" /> Reembolso parcial
+    </span>
+  );
+
   const getStatusBadge = (order: EventOrderRecord) => {
+    // Parcial: o pedido segue pago, mas o reembolso precisa aparecer
+    if (isPartialRefund(order)) return partialRefundChip(order);
+
     if (order.status === 'refunded' || !!order.refunded_at) {
       return (
         <span className="px-2.5 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded-lg flex items-center gap-1 w-fit">
@@ -429,7 +442,18 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
     );
   };
 
-  const getTicketStatusBadge = (status: string, orderStatus: string) => {
+  const getTicketStatusBadge = (status: string, order: EventOrderRecord) => {
+    const core = getTicketStatusCore(status, order.status);
+    if (!isPartialRefund(order)) return core;
+    return (
+      <div className="flex flex-col gap-1">
+        {core}
+        {partialRefundChip(order)}
+      </div>
+    );
+  };
+
+  const getTicketStatusCore = (status: string, orderStatus: string) => {
     if (orderStatus === 'refunded') {
       return (
         <span className="px-2.5 py-1 bg-purple-100 text-purple-800 text-[11px] font-bold rounded-lg flex items-center gap-1 w-fit">
@@ -911,12 +935,12 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                             </button>
 
                             {/* Botão de Reembolso para Pedidos Pagos */}
-                            {isPaid && (
+                            {(isPaid || order.status === 'refunded') && (
                               <button
                                 type="button"
                                 onClick={() => setOrderToRefund(order)}
                                 className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
-                                title="Registrar Reembolso / Devolução"
+                                title={order.status === 'refunded' ? 'Comprovante de reembolso' : 'Registrar Reembolso / Devolução'}
                               >
                                 <RotateCcw className="w-4 h-4" />
                               </button>
@@ -1084,7 +1108,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
 
                         {/* Status */}
                         <td className="px-5 py-4">
-                          {getTicketStatusBadge(ticketStatus, order.status)}
+                          {getTicketStatusBadge(ticketStatus, order)}
                         </td>
 
                         {/* Ações */}
@@ -1113,12 +1137,12 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
                             )}
 
                             {/* Reembolso do Pedido */}
-                            {isPaid && (
+                            {(isPaid || order.status === 'refunded') && (
                               <button
                                 type="button"
                                 onClick={() => setOrderToRefund(order)}
                                 className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
-                                title="Registrar Reembolso / Devolução"
+                                title={order.status === 'refunded' ? 'Comprovante de reembolso' : 'Registrar Reembolso / Devolução'}
                               >
                                 <RotateCcw className="w-4 h-4" />
                               </button>
@@ -1234,10 +1258,12 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
         isOpen={!!orderToRefund}
         onClose={() => setOrderToRefund(null)}
         order={orderToRefund}
+        eventTitle={event.title}
+        eventDate={event.event_date}
         onConfirmRefund={async ({ orderId, amount, reason, isPartial, registerOnly, payoutAmount }) => {
-          // Erro do Mercado Pago sobe para o modal, que mostra a mensagem e fica aberto
-          await refundOrder({ orderId, amount, reason, isPartial, registerOnly, payoutAmount });
-          setOrderToRefund(null);
+          // Erro do Mercado Pago sobe para o modal, que mostra a mensagem e fica aberto.
+          // Com sucesso o modal continua aberto para gerar o comprovante.
+          return refundOrder({ orderId, amount, reason, isPartial, registerOnly, payoutAmount });
         }}
       />
 

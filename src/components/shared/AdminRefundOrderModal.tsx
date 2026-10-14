@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { X, RotateCcw, AlertTriangle, Loader2, DollarSign, Info } from 'lucide-react';
+import { X, RotateCcw, AlertTriangle, Loader2, DollarSign, Info, FileText, CheckCircle2 } from 'lucide-react';
 import { EventOrderRecord } from '../../shared/hooks/hooks/useEventOrders';
 import { formatPrice } from '../../shared/utils/utils/eventUtils';
 import { isMercadoPagoOrder } from '../../shared/services/mercadoPagoRefundService';
+import { openRefundReceipt, RefundReceiptData } from '../../shared/utils/utils/refundReceipt';
+import { toast } from 'sonner';
 
 interface AdminRefundOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   order: EventOrderRecord | null;
+  eventTitle: string;
+  eventDate?: string | null;
   onConfirmRefund: (params: {
     orderId: string;
     amount: number;
@@ -22,6 +26,8 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
   isOpen,
   onClose,
   order,
+  eventTitle,
+  eventDate,
   onConfirmRefund,
 }) => {
   const [refundAmount, setRefundAmount] = useState<number>(0);
@@ -30,6 +36,8 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [registerOnly, setRegisterOnly] = useState<boolean>(false);
   const [payoutAmount, setPayoutAmount] = useState<string>('');
+  // Reembolso concluído nesta abertura: o modal passa a oferecer o comprovante
+  const [doneReceipt, setDoneReceipt] = useState<RefundReceiptData | null>(null);
 
   useEffect(() => {
     if (order) {
@@ -38,8 +46,12 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
       setErrorMsg('');
       setRegisterOnly(false);
       setPayoutAmount(order.refund_payout_amount != null ? String(order.refund_payout_amount) : '');
+      setDoneReceipt(null);
     }
-  }, [order, isOpen]);
+    // Só ao abrir ou trocar de pedido: o recarregamento da lista após o
+    // reembolso não pode apagar a tela de conclusão
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, isOpen]);
 
   if (!isOpen || !order) return null;
 
@@ -52,6 +64,31 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
     ? Math.max(Number(order.tickets_amount) - Number(order.organizer_fee || 0), 0)
     : null;
   const payoutValue = parseFloat(payoutAmount.replace(',', '.'));
+
+  const receiptFor = (amount: number, refundedAt: string, why?: string | null): RefundReceiptData => ({
+    orderId: order.id,
+    eventTitle,
+    eventDate,
+    buyerName: order.client_name || 'Cliente',
+    buyerDocument: order.client_document,
+    paymentMethod: order.payment_method,
+    quantity: order.quantity,
+    amountPaid: totalOrderAmount,
+    amountRefunded: amount,
+    refundedAt,
+    reason: why,
+    viaMercadoPago: viaMp,
+  });
+
+  // Reembolso já registrado antes desta abertura
+  const existingReceipt = order.refunded_at
+    ? receiptFor(Number(order.refund_amount || totalOrderAmount), order.refunded_at, order.refund_reason)
+    : null;
+  const fullyRefunded = order.status === 'refunded';
+
+  const showReceipt = (r: RefundReceiptData) => {
+    if (!openRefundReceipt(r)) toast.error('O navegador bloqueou a janela do comprovante. Permita pop-ups para este site.');
+  };
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +118,7 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
 
     setLoading(true);
     try {
-      await onConfirmRefund({
+      const ok = await onConfirmRefund({
         orderId: order.id,
         amount: refundAmount,
         reason: reason.trim(),
@@ -89,7 +126,11 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
         registerOnly,
         payoutAmount: isPartial ? Math.round(payoutValue * 100) / 100 : null,
       });
-      onClose();
+      if (ok === false) {
+        setErrorMsg('O reembolso não foi registrado. Tente novamente.');
+        return;
+      }
+      setDoneReceipt(receiptFor(refundAmount, new Date().toISOString(), reason.trim()));
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao processar reembolso.');
     } finally {
@@ -115,14 +156,69 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
               <RotateCcw className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">{refundsOnMp ? 'Estornar no Mercado Pago' : 'Registrar Reembolso'}</h2>
+              <h2 className="text-xl font-bold text-white">
+                {doneReceipt ? 'Reembolso concluído' : fullyRefunded ? 'Comprovante de Reembolso' : refundsOnMp ? 'Estornar no Mercado Pago' : 'Registrar Reembolso'}
+              </h2>
               <p className="text-xs text-purple-200">Controle de Devoluções e Reembolsos</p>
             </div>
           </div>
         </div>
 
+        {(doneReceipt || fullyRefunded) && (() => {
+          const r = doneReceipt || existingReceipt!;
+          return (
+            <div className="p-6 space-y-4 text-sm">
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900">
+                <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">
+                    {r.amountRefunded < r.amountPaid - 0.01 ? 'Reembolso parcial' : 'Reembolso total'} de {formatPrice(r.amountRefunded)}
+                  </p>
+                  <p className="text-xs opacity-80">
+                    Pedido #{order.id.substring(0, 8).toUpperCase()} · {order.client_name || 'Cliente'}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Gere o comprovante para enviar ao comprador. Ele abre pronto para imprimir: escolha <strong>Salvar como PDF</strong> para anexar no e-mail ou no WhatsApp.
+              </p>
+              <div className="pt-2 flex justify-end gap-2.5 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => showReceipt(r)}
+                  className="px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl transition-all shadow-md shadow-purple-600/20 flex items-center gap-2 cursor-pointer"
+                >
+                  <FileText className="w-4 h-4" /> Gerar comprovante (PDF)
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Formulário */}
+        {!doneReceipt && !fullyRefunded && (
         <form onSubmit={handleConfirm} className="p-6 space-y-4 text-sm flex-1">
+          {existingReceipt && (
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-fuchsia-200 bg-fuchsia-50 text-xs text-fuchsia-900">
+              <span>
+                Já há reembolso parcial de <strong>{formatPrice(existingReceipt.amountRefunded)}</strong> neste pedido.
+              </span>
+              <button
+                type="button"
+                onClick={() => showReceipt(existingReceipt)}
+                className="shrink-0 inline-flex items-center gap-1 font-bold text-fuchsia-800 hover:text-fuchsia-950 cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5" /> Comprovante
+              </button>
+            </div>
+          )}
           {/* Card com Detalhes do Pedido */}
           <div className="bg-purple-50/60 p-4 rounded-2xl border border-purple-100 space-y-2 text-xs">
             <div className="flex justify-between items-center border-b border-purple-200/60 pb-2">
@@ -295,6 +391,7 @@ export const AdminRefundOrderModal: React.FC<AdminRefundOrderModalProps> = ({
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );
