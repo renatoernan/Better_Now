@@ -264,8 +264,25 @@ const PublicEventOrders: React.FC = () => {
       .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
   };
 
+  /**
+   * Opções que juntam vários valores, no topo da lista. Só aparecem quando
+   * algum pedido cai nelas, pela mesma regra das opções simples.
+   */
+  const withCombined = (
+    options: { label: string; raws: string[] }[],
+    combined: { label: string; raws: string[] }[]
+  ) => [
+    ...combined.filter(c => options.some(o => o.raws.some(r => c.raws.includes(r)))),
+    ...options,
+  ];
+
   const statusOptions = useMemo(
-    () => data ? buildOptions(data.orders.map(o => o.status), v => STATUS_META[v]?.label || v) : [],
+    () => data
+      ? withCombined(
+          buildOptions(data.orders.map(o => o.status), v => STATUS_META[v]?.label || v),
+          [{ label: 'Pagos & Reembolsados', raws: ['paid', 'approved', 'refunded', 'partially_refunded'] }]
+        )
+      : [],
     [data]
   );
 
@@ -275,7 +292,12 @@ const PublicEventOrders: React.FC = () => {
   );
 
   const payoutOptions = useMemo(
-    () => data ? buildOptions(data.orders.map(o => payoutKey(o.payout) || null), v => payoutLabel(v)) : [],
+    () => data
+      ? withCombined(
+          buildOptions(data.orders.map(o => payoutKey(o.payout) || null), v => payoutLabel(v)),
+          [{ label: 'A repassar & Repasse parcial', raws: ['pendente', 'repasse_parcial'] }]
+        )
+      : [],
     [data]
   );
 
