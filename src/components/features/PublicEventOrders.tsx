@@ -579,13 +579,20 @@ const PublicEventOrders: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3"><MethodBadge method={o.method} /></td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                      {formatPrice(o.gross)}
-                      {o.refund_amount > 0 && (
-                        <span className="block text-xs font-medium text-purple-700 whitespace-nowrap">
-                          Reemb.: {formatPrice(o.refund_amount)}
-                        </span>
-                      )}
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900 whitespace-nowrap">
+                      {/* Com reembolso, a conta fica explícita: pago − reembolso = o que ficou */}
+                      {o.refund_amount > 0 ? (
+                        <div className="inline-grid grid-cols-[auto_auto] gap-x-1.5 text-xs font-medium text-right">
+                          <span className="text-gray-400">pago</span>
+                          <span className="text-gray-700">{formatPrice(o.gross)}</span>
+                          <span className="text-purple-600">reemb.</span>
+                          <span className="text-purple-700">− {formatPrice(o.refund_amount)}</span>
+                          <span className="text-gray-400 border-t border-gray-200 pt-0.5">ficou</span>
+                          <span className="text-sm font-bold text-gray-900 border-t border-gray-200 pt-0.5">
+                            {formatPrice(Math.max(o.gross - o.refund_amount, 0))}
+                          </span>
+                        </div>
+                      ) : formatPrice(o.gross)}
                     </td>
                     <td className="px-4 py-3 text-right text-amber-700">
                       {o.fee > 0 ? (
@@ -599,13 +606,24 @@ const PublicEventOrders: React.FC = () => {
                         </>
                       ) : <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-right font-bold text-indigo-950">
-                      {formatPrice(o.net)}
-                      {o.status === 'partially_refunded' && o.net !== o.net_before_refund && (
-                        <span className="block text-xs font-medium text-gray-400 whitespace-nowrap">
-                          antes: <s>{formatPrice(o.net_before_refund)}</s>
-                        </span>
-                      )}
+                    <td className="px-4 py-3 text-right font-bold text-indigo-950 whitespace-nowrap">
+                      {o.status === 'refunded' ? (
+                        // Reembolso total: não há valor a receber
+                        <>
+                          <s className="text-gray-400 font-medium">{formatPrice(o.net)}</s>
+                          <span className="block text-xs font-semibold text-purple-700">sem repasse</span>
+                        </>
+                      ) : o.status === 'partially_refunded' ? (
+                        <>
+                          {formatPrice(o.net)}
+                          <span className="block text-xs font-semibold text-orange-700">repasse após reemb.</span>
+                          {o.net !== o.net_before_refund && (
+                            <span className="block text-xs font-medium text-gray-400">
+                              era <s>{formatPrice(o.net_before_refund)}</s>
+                            </span>
+                          )}
+                        </>
+                      ) : formatPrice(o.net)}
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
                     <td className="px-4 py-3"><PayoutCell order={o} /></td>
