@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Wallet, RefreshCw, Loader2, AlertTriangle, CheckCircle2, Clock, Send, Undo2, Download,
   FileText, X, ArrowDownLeft, Ban, CloudDownload, AlertCircle, Info, ChevronDown, ChevronRight,
+  Filter, BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -14,7 +15,9 @@ import ConfirmModal from '../shared/ConfirmModal';
 import { runOrderRefund, RefundAction } from '../../shared/services/mercadoPagoRefundService';
 import {
   explainOrder, worstLevel, isGatewayOrder, mpStatusLabel, ReconciliationNotice, NoticeLevel,
+  releaseDateOf, daysSinceRelease,
 } from '../../shared/utils/utils/mpReconciliation';
+import PayoutAgingChart, { AgingScope } from './PayoutAgingChart';
 
 const STATUS_META: Record<PayoutStatus, { label: string; className: string }> = {
   pendente: { label: 'Pendente', className: 'bg-amber-50 text-amber-700' },
@@ -65,23 +68,7 @@ const fmtDate = (d?: string | null) =>
   d ? new Date(d.length === 10 ? `${d}T12:00:00` : d).toLocaleDateString('pt-BR') : '—';
 const csvNumber = (n: number) => n.toFixed(2).replace('.', ',');
 
-/**
- * Quando o dinheiro ficou disponível para repassar: a liberação do Mercado Pago
- * ou, no Pix por chave própria, a própria compra — cai direto na conta.
- */
-const releaseDateOf = (o: OrderFinancial): string | null =>
-  o.payment_method === 'pix_chave' ? o.created_at : o.money_release_date;
 
-/** Dias corridos desde a liberação; negativo enquanto o MP ainda retém o valor. */
-const daysSinceRelease = (o: OrderFinancial): number | null => {
-  const d = releaseDateOf(o);
-  if (!d) return null;
-  const start = new Date(d);
-  start.setHours(0, 0, 0, 0);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.round((now.getTime() - start.getTime()) / 86_400_000);
-};
 
 const DAY_PRESETS = [7, 15, 30];
 
@@ -279,6 +266,8 @@ const AdminPayouts: React.FC = () => {
   const [filter, setFilter] = useState<OrderFilter>('pendente');
   // "Recebidos do MP há mais de N dias" — vazio = qualquer prazo
   const [minDays, setMinDays] = useState('');
+  const [agingBucket, setAgingBucket] = useState<string | null>(null);
+  const [agingScope, setAgingScope] = useState<AgingScope>('pendente');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<'payout' | 'return' | null>(null);
   const [voiding, setVoiding] = useState<EventPayout | null>(null);
@@ -311,7 +300,7 @@ const AdminPayouts: React.FC = () => {
     setEventId(withBalance.event_id);
   }, [summaries, eventId]);
 
-  useEffect(() => { setSelected(new Set()); }, [eventId, filter, minDays]);
+  useEffect(() => { setSelected(new Set()); setAgingBucket(null); }, [eventId, filter, minDays]);
 
   const totals = useMemo(() => summaries.reduce((acc, s) => ({
     gross: acc.gross + s.gross_amount,
@@ -358,11 +347,31 @@ const AdminPayouts: React.FC = () => {
       const days = daysSinceRelease(o);
       if (days === null || days <= minDaysValue) return false;
     }
+    if (agingBucket !== null) {
+      if (agingScope === 'repassado') {
+        const matchesPayoutId = o.payout_id && o.payout_id === agingBucket;
+        const matchesDate = o.payout_paid_at && (o.payout_paid_at === agingBucket || o.payout_paid_at.startsWith(agingBucket));
+        const matchesGeneric = agingBucket === 'repassado' && (o.payout_status === 'repassado' || o.payout_status === 'estornado_apos_repasse');
+        if (!matchesPayoutId && !matchesDate && !matchesGeneric) return false;
+      } else {
+        const days = daysSinceRelease(o);
+        if (agingBucket === '>30') {
+          if (days === null || days <= 30) return false;
+        } else if (agingBucket === '<0') {
+          if (days === null || days >= 0) return false;
+        } else if (agingBucket === 'sem_data') {
+          if (days !== null) return false;
+        } else {
+          const target = Number(agingBucket);
+          if (Number.isNaN(target) || days !== target) return false;
+        }
+      }
+    }
     if (filter === 'todos') return true;
     if (filter === 'observacoes') return hasAttention(o);
     if (filter === 'estornado') return o.payout_status === 'estornado' || o.payout_status === 'estornado_apos_repasse';
     return o.payout_status === filter;
-  }), [orders, filter, minDaysValue, noticesById]);
+  }), [orders, filter, minDaysValue, noticesById, agingBucket, agingScope]);
 
   const selectable = (o: OrderFinancial) => o.payout_status === 'pendente' || o.payout_status === 'a_liberar';
   const selectedOrders = orders.filter(o => selected.has(o.order_id));
@@ -597,9 +606,8 @@ const AdminPayouts: React.FC = () => {
                   <td className="px-4 py-3 text-right tabular-nums">{formatPrice(s.gross_amount)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatPrice(s.payout_due)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-green-700">{formatPrice(s.paid_out - s.returned)}</td>
-                  <td className={`px-4 py-3 text-right tabular-nums font-semibold ${
-                    s.balance < -0.009 ? 'text-red-700' : s.balance > 0.009 ? 'text-amber-700' : 'text-gray-400'
-                  }`}>
+                  <td className={`px-4 py-3 text-right tabular-nums font-semibold ${s.balance < -0.009 ? 'text-red-700' : s.balance > 0.009 ? 'text-amber-700' : 'text-gray-400'
+                    }`}>
                     {formatPrice(s.balance)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-purple-700">{formatPrice(s.net_profit)}</td>
@@ -719,15 +727,34 @@ const AdminPayouts: React.FC = () => {
             <Kpi label="Lucro líquido" value={current.net_profit} tone="brand" hint="Conveniência + juros − taxa MP" />
           </div>
 
+          {/* Gráfico de barras por prazo de liberação */}
+          <PayoutAgingChart
+            orders={orders}
+            payouts={payouts}
+            selectedBucket={agingBucket}
+            onSelectBucket={setAgingBucket}
+            scope={agingScope}
+            onScopeChange={(newScope) => {
+              setAgingScope(newScope);
+              setAgingBucket(null);
+              if (newScope === 'repassado') {
+                setFilter('repassado');
+              } else if (newScope === 'pendente') {
+                setFilter('pendente');
+              } else if (newScope === 'todos') {
+                setFilter('todos');
+              }
+            }}
+          />
+
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="flex items-center gap-1 px-4 border-b border-gray-200">
               {(['pedidos', 'repasses'] as DetailTab[]).map(t => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
-                  className={`px-3 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                    tab === t ? 'border-purple-600 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
+                  className={`px-3 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === t ? 'border-purple-600 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
                 >
                   {t === 'pedidos' ? 'Pedidos' : `Repasses (${payouts.filter(p => !p.voided_at).length})`}
                 </button>
@@ -748,10 +775,19 @@ const AdminPayouts: React.FC = () => {
                     ] as [OrderFilter, string][]).map(([key, label]) => (
                       <button
                         key={key}
-                        onClick={() => setFilter(key)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                          filter === key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
+                        onClick={() => {
+                          setFilter(key);
+                          setAgingBucket(null);
+                          if (key === 'repassado') {
+                            setAgingScope('repassado');
+                          } else if (key === 'pendente' || key === 'a_liberar') {
+                            setAgingScope('pendente');
+                          } else if (key === 'todos') {
+                            setAgingScope('todos');
+                          }
+                        }}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${filter === key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
                       >
                         {label}
                       </button>
@@ -776,9 +812,8 @@ const AdminPayouts: React.FC = () => {
                       <button
                         key={d}
                         onClick={() => setMinDays(String(d))}
-                        className={`px-2 py-1 rounded-md font-medium transition-colors ${
-                          minDaysValue === d ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
+                        className={`px-2 py-1 rounded-md font-medium transition-colors ${minDaysValue === d ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
                       >
                         {d}
                       </button>
@@ -805,6 +840,22 @@ const AdminPayouts: React.FC = () => {
                     </button>
                   )}
                 </div>
+
+                {agingBucket && (
+                  <div className="mx-4 mb-3 flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-900 text-xs border border-purple-200">
+                    <span className="flex items-center gap-1.5">
+                      <Filter className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                      Filtrando tabela pelo gráfico: <strong>{agingBucket === '>30' ? 'Liberado há > 30 dias' : agingBucket === '<0' ? 'A liberar no MP' : `Liberado há ${agingBucket} dias`}</strong>
+                    </span>
+                    <button
+                      onClick={() => setAgingBucket(null)}
+                      className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-purple-700 hover:text-purple-900 hover:bg-purple-100 rounded-md transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Remover filtro
+                    </button>
+                  </div>
+                )}
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -840,7 +891,7 @@ const AdminPayouts: React.FC = () => {
                           <td className="px-3 py-2.5 text-right tabular-nums">{formatPrice(visibleOrders.reduce((s, o) => s + (o.gateway_synced_at ? o.gateway_fee : 0), 0))}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums">{formatPrice(visibleOrders.reduce((s, o) => s + Number(o.gateway_net_amount || 0), 0))}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums">{formatPrice(visibleOrders.reduce((s, o) => s + o.convenience_fee, 0))}</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">{formatPrice(visibleOrders.reduce((s, o) => s + o.tickets_amount - o.organizer_fee, 0))}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{formatPrice(visibleOrders.reduce((s, o) => s + (o.payout_due || 0), 0))}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-purple-700">{formatPrice(visibleOrders.reduce((s, o) => s + o.net_profit, 0))}</td>
                           <td />
                           <td />
@@ -858,7 +909,7 @@ const AdminPayouts: React.FC = () => {
                         const waiting = o.payout_status === 'pendente' && days !== null;
                         const daysTone = waiting && days > 30 ? 'text-red-600 font-semibold'
                           : waiting && days > 7 ? 'text-amber-600 font-semibold'
-                          : 'text-gray-700';
+                            : 'text-gray-700';
                         const notices = noticesById.get(o.order_id) || [];
                         const level = worstLevel(notices);
                         const isOpen = expanded.has(o.order_id);
@@ -866,254 +917,266 @@ const AdminPayouts: React.FC = () => {
                         const synced = viaMp && Boolean(o.gateway_synced_at && o.gateway_status);
                         return (
                           <React.Fragment key={o.order_id}>
-                          <tr className={selected.has(o.order_id) ? 'bg-purple-50/50' : 'hover:bg-gray-50'}>
-                            <td className="px-3 py-2.5">
-                              {selectable(o) && (
-                                <input
-                                  type="checkbox"
-                                  checked={selected.has(o.order_id)}
-                                  onChange={() => toggle(o.order_id)}
-                                  className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                                  aria-label="Selecionar pedido"
-                                />
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 min-w-[180px]">
-                              <p className="font-medium text-gray-900 truncate max-w-[220px]">
-                                {formatPersonName(o.client_name || 'Cliente')}
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                {fmtDate(o.created_at)} · {METHOD_LABEL[o.payment_method || ''] || o.payment_method}
-                                {o.installments && o.installments > 1 ? ` ${o.installments}x` : ''}
-                                {o.batch_name ? ` · ${o.batch_name}` : ''}
-                              </p>
-                              {(viaMp || notices.length > 0) && (
-                                <button
-                                  onClick={() => toggleExpanded(o.order_id)}
-                                  className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded border ${
-                                    level ? NOTICE_STYLE[level].chip : 'bg-gray-50 text-gray-500 border-gray-200'
-                                  }`}
-                                >
-                                  {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                                  {notices.length > 0
-                                    ? `${notices.length} observaç${notices.length !== 1 ? 'ões' : 'ão'}`
-                                    : 'Detalhes MP'}
-                                </button>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 text-right tabular-nums bg-sky-50/30">
-                              {viaMp
-                                ? <MpValue value={o.gateway_gross_amount} synced={synced} strong />
-                                : <span className="text-gray-500" title="Não passa pelo Mercado Pago">{formatPrice(o.gross_amount)}</span>}
-                            </td>
-                            <td className="px-3 py-2.5 text-right tabular-nums bg-sky-50/30">
-                              {viaMp ? <MpValue value={o.gateway_fee} synced={synced} /> : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className="px-3 py-2.5 text-right tabular-nums bg-sky-50/30">
-                              {viaMp
-                                ? <MpValue value={o.gateway_net_amount} synced={synced} />
-                                : <span className="text-gray-500">{formatPrice(o.gross_amount)}</span>}
-                            </td>
-                            <td className="px-3 py-2.5 text-right tabular-nums">
-                              {formatPrice(o.convenience_fee)}
-                              {o.fee_percentage_total > 0 && (
-                                <span className={`block text-[10px] ${o.organizer_fee > 0 ? 'text-indigo-500' : 'text-gray-400'}`}>
-                                  {o.fee_percentage_total}%{o.organizer_fee > 0 ? ' · assumida pela Better Now' : ''}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 text-right tabular-nums font-medium">
-                              {formatPrice(o.is_paid && !o.is_refunded ? o.payout_due : o.tickets_amount - o.organizer_fee)}
-                              {o.is_partially_refunded ? (
-                                <span
-                                  className="block text-[10px] text-orange-700 whitespace-nowrap"
-                                  title={o.refund_payout_missing
-                                    ? 'Repasse não informado no reembolso: calculado como ingressos − taxa − reembolso'
-                                    : 'Repasse definido no reembolso parcial'}
-                                >
-                                  reemb. {formatPrice(o.refund_amount)} · era {formatPrice(o.original_payout_due)}
-                                  {o.refund_payout_missing ? ' · estimado' : ''}
-                                </span>
-                              ) : o.organizer_fee > 0 && (
-                                <span className="block text-[10px] text-gray-400">ingressos {formatPrice(o.tickets_amount)}</span>
-                              )}
-                            </td>
-                            <td className={`px-3 py-2.5 text-right tabular-nums ${o.net_profit < 0 ? 'text-red-600' : 'text-purple-700'}`}>
-                              {formatPrice(o.net_profit)}
-                            </td>
-                            <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                              {days === null ? (
-                                <span className="text-xs text-gray-400" title="Data de liberação ainda não sincronizada com o Mercado Pago">—</span>
-                              ) : days < 0 ? (
-                                <span className="text-xs text-sky-600">libera em {-days} dia{days !== -1 ? 's' : ''}</span>
-                              ) : (
-                                <span className={`tabular-nums ${daysTone}`}>
-                                  {days === 0 ? 'hoje' : `${days} dia${days !== 1 ? 's' : ''}`}
-                                </span>
-                              )}
-                              {days !== null && (
-                                <span className="block text-[10px] text-gray-400">{fmtDate(releaseDateOf(o))}</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full whitespace-nowrap ${meta.className}`}>
-                                {o.payout_status === 'repassado' && <CheckCircle2 className="w-3 h-3" />}
-                                {o.payout_status === 'a_liberar' && <Clock className="w-3 h-3" />}
-                                {meta.label}
-                              </span>
-                              {o.payout_paid_at && (
-                                <span className="block text-[10px] text-gray-400 mt-0.5">em {fmtDate(o.payout_paid_at)}</span>
-                              )}
-                            </td>
-                          </tr>
-                          {isOpen && (
-                            <tr className="bg-gray-50/70">
-                              <td />
-                              <td colSpan={9} className="px-3 py-3">
-                                {resolutionLog[o.order_id] && (() => {
-                                  const entry = resolutionLog[o.order_id];
-                                  const tone = entry.state === 'ok' ? 'bg-green-50 border-green-200 text-green-800'
-                                    : entry.state === 'error' ? 'bg-red-50 border-red-200 text-red-800'
-                                    : 'bg-sky-50 border-sky-200 text-sky-800';
-                                  return (
-                                    <div className={`flex items-start gap-2 mb-3 p-3 rounded-lg border text-xs ${tone}`}>
-                                      {entry.state === 'running' && <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />}
-                                      {entry.state === 'ok' && <CheckCircle2 className="w-4 h-4 flex-shrink-0" />}
-                                      {entry.state === 'error' && <AlertCircle className="w-4 h-4 flex-shrink-0" />}
-                                      <div className="flex-1">
-                                        <p className="font-medium">{entry.message}</p>
-                                        <p className="opacity-70 mt-0.5">{fmtDateTime(entry.at)}</p>
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-                                {(() => {
-                                  const codes = new Set(notices.map(n => n.code));
-                                  const busy = resolvingBusy === o.order_id;
-                                  const btn = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50';
-                                  if (codes.has('refund_missing_on_mp')) {
-                                    return (
-                                      <div className="flex flex-wrap gap-2 mb-3">
-                                        <button
-                                          disabled={busy}
-                                          onClick={() => setResolving({
-                                            order: o,
-                                            action: 'refund',
-                                            title: `Estornar ${formatPrice(Number(o.gateway_gross_amount || 0))} no Mercado Pago?`,
-                                            message: `O valor volta para o comprador (${formatPersonName(o.client_name || 'Cliente')}) pelo mesmo meio de pagamento. O estorno no MP não pode ser desfeito.`,
-                                            confirmText: 'Estornar no MP',
-                                            type: 'danger',
-                                          })}
-                                          className={`${btn} bg-red-600 hover:bg-red-700 text-white`}
-                                        >
-                                          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />}
-                                          Estornar no Mercado Pago
-                                        </button>
-                                        <button
-                                          disabled={busy}
-                                          onClick={() => setResolving({
-                                            order: o,
-                                            action: 'undo',
-                                            title: 'Desfazer o reembolso no sistema?',
-                                            message: 'Use quando o estorno não deveria ter acontecido. O pedido volta para pago, igual ao Mercado Pago, e os ingressos voltam a valer.',
-                                            confirmText: 'Desfazer reembolso',
-                                            type: 'warning',
-                                          })}
-                                          className={`${btn} bg-white border border-gray-300 hover:bg-gray-50 text-gray-700`}
-                                        >
-                                          Desfazer reembolso no sistema
-                                        </button>
-                                      </div>
-                                    );
-                                  }
-                                  if (codes.has('refunded_on_mp') || codes.has('partial_refund')) {
-                                    return (
-                                      <div className="flex flex-wrap gap-2 mb-3">
-                                        <button
-                                          disabled={busy}
-                                          onClick={() => setResolving({
-                                            order: o,
-                                            action: 'register',
-                                            title: 'Registrar no sistema o estorno do Mercado Pago?',
-                                            message: `O pedido passa a refletir o estorno de ${formatPrice(Number(o.gateway_refunded_amount || 0))} feito no MP. Estorno total cancela os ingressos.`,
-                                            confirmText: 'Registrar estorno',
-                                            type: 'warning',
-                                          })}
-                                          className={`${btn} bg-amber-600 hover:bg-amber-700 text-white`}
-                                        >
-                                          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                                          Registrar estorno do MP no sistema
-                                        </button>
-                                      </div>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                                {notices.length > 0 && (
-                                  <ul className="space-y-1.5 mb-3">
-                                    {notices.map(n => {
-                                      const st = NOTICE_STYLE[n.level];
-                                      return (
-                                        <li key={n.code} className={`flex items-start gap-2 text-xs ${st.text}`}>
-                                          <st.Icon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                                          <span>{n.message}</span>
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
+                            <tr className={selected.has(o.order_id) ? 'bg-purple-50/50' : 'hover:bg-gray-50'}>
+                              <td className="px-3 py-2.5">
+                                {selectable(o) && (
+                                  <input
+                                    type="checkbox"
+                                    checked={selected.has(o.order_id)}
+                                    onChange={() => toggle(o.order_id)}
+                                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                    aria-label="Selecionar pedido"
+                                  />
                                 )}
-                                {viaMp && (
-                                  <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
-                                    <div>
-                                      <dt className="text-gray-400">Transação MP</dt>
-                                      <dd className="font-mono text-gray-800">{o.gateway_payment_id || '—'}</dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-400">Status no MP</dt>
-                                      <dd className="text-gray-800">
-                                        {mpStatusLabel(o.gateway_status)}
-                                        {o.gateway_status_detail ? <span className="text-gray-400"> · {o.gateway_status_detail}</span> : null}
-                                      </dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-400">Aprovado em</dt>
-                                      <dd className="text-gray-800">{fmtDateTime(o.gateway_approved_at)}</dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-400">Liberação</dt>
-                                      <dd className="text-gray-800">
-                                        {fmtDateTime(o.money_release_date)}
-                                        {o.money_release_status ? <span className="text-gray-400"> · {o.money_release_status === 'released' ? 'liberado' : 'retido'}</span> : null}
-                                      </dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-400">Total pago pelo comprador</dt>
-                                      <dd className="text-gray-800"><MpValue value={o.gateway_total_paid_amount} synced={synced} /></dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-400">Estornado no MP</dt>
-                                      <dd className="text-gray-800"><MpValue value={o.gateway_refunded_amount} synced={synced} /></dd>
-                                    </div>
-                                    <div className="col-span-2">
-                                      <dt className="text-gray-400">Tarifas detalhadas pelo MP</dt>
-                                      <dd className="text-gray-800">
-                                        {(o.gateway_fee_details || []).length === 0 ? '—' : (o.gateway_fee_details || []).map((f, i) => (
-                                          <span key={i} className="block">
-                                            {FEE_TYPE_LABEL[f.type || ''] || f.type}: {formatPrice(Number(f.amount || 0))}
-                                            {f.fee_payer === 'payer' ? ' (paga pelo comprador)' : ''}
-                                          </span>
-                                        ))}
-                                      </dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-400">Sincronizado em</dt>
-                                      <dd className="text-gray-800">{fmtDateTime(o.gateway_synced_at)}</dd>
-                                    </div>
-                                  </dl>
+                              </td>
+                              <td className="px-3 py-2.5 min-w-[180px]">
+                                <p className="font-medium text-gray-900 truncate max-w-[220px]">
+                                  {formatPersonName(o.client_name || 'Cliente')}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  {fmtDate(o.created_at)} · {METHOD_LABEL[o.payment_method || ''] || o.payment_method}
+                                  {o.installments && o.installments > 1 ? ` ${o.installments}x` : ''}
+                                  {o.batch_name ? ` · ${o.batch_name}` : ''}
+                                </p>
+                                {(viaMp || notices.length > 0) && (
+                                  <button
+                                    onClick={() => toggleExpanded(o.order_id)}
+                                    className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded border ${level ? NOTICE_STYLE[level].chip : 'bg-gray-50 text-gray-500 border-gray-200'
+                                      }`}
+                                  >
+                                    {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                    {notices.length > 0
+                                      ? `${notices.length} observaç${notices.length !== 1 ? 'ões' : 'ão'}`
+                                      : 'Detalhes MP'}
+                                  </button>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-right tabular-nums bg-sky-50/30">
+                                {viaMp
+                                  ? <MpValue value={o.gateway_gross_amount} synced={synced} strong />
+                                  : <span className="text-gray-500" title="Não passa pelo Mercado Pago">{formatPrice(o.gross_amount)}</span>}
+                              </td>
+                              <td className="px-3 py-2.5 text-right tabular-nums bg-sky-50/30">
+                                {viaMp ? <MpValue value={o.gateway_fee} synced={synced} /> : <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="px-3 py-2.5 text-right tabular-nums bg-sky-50/30">
+                                {viaMp
+                                  ? <MpValue value={o.gateway_net_amount} synced={synced} />
+                                  : <span className="text-gray-500">{formatPrice(o.gross_amount)}</span>}
+                              </td>
+                              <td className="px-3 py-2.5 text-right tabular-nums">
+                                {formatPrice(o.convenience_fee)}
+                                {o.fee_percentage_total > 0 && (
+                                  <span className={`block text-[10px] ${o.organizer_fee > 0 ? 'text-indigo-500' : 'text-gray-400'}`}>
+                                    {o.fee_percentage_total}%{o.organizer_fee > 0 ? ' · assumida pela Better Now' : ''}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-right tabular-nums font-medium">
+                                {o.is_refunded ? (
+                                  <>
+                                    <span className="text-gray-400">R$ 0,00</span>
+                                    <span className="block text-[10px] text-gray-400">
+                                      sem repasse · {o.payout_status === 'estornado_apos_repasse'
+                                        ? `repassado ${formatPrice(o.paid_out_amount)}`
+                                        : `era ${formatPrice(o.original_payout_due || o.tickets_amount - o.organizer_fee)}`}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    {formatPrice(o.payout_due)}
+                                    {o.is_partially_refunded ? (
+                                      <span
+                                        className="block text-[10px] text-orange-700 whitespace-nowrap"
+                                        title={o.refund_payout_missing
+                                          ? 'Repasse não informado no reembolso: calculado como ingressos − taxa − reembolso'
+                                          : 'Repasse definido no reembolso parcial'}
+                                      >
+                                        reemb. {formatPrice(o.refund_amount)} · era {formatPrice(o.original_payout_due)}
+                                        {o.refund_payout_missing ? ' · estimado' : ''}
+                                      </span>
+                                    ) : o.organizer_fee > 0 && (
+                                      <span className="block text-[10px] text-gray-400">ingressos {formatPrice(o.tickets_amount)}</span>
+                                    )}
+                                  </>
+                                )}
+                              </td>
+                              <td className={`px-3 py-2.5 text-right tabular-nums ${o.net_profit < 0 ? 'text-red-600' : 'text-purple-700'}`}>
+                                {formatPrice(o.net_profit)}
+                              </td>
+                              <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                                {days === null ? (
+                                  <span className="text-xs text-gray-400" title="Data de liberação ainda não sincronizada com o Mercado Pago">—</span>
+                                ) : days < 0 ? (
+                                  <span className="text-xs text-sky-600">libera em {-days} dia{days !== -1 ? 's' : ''}</span>
+                                ) : (
+                                  <span className={`tabular-nums ${daysTone}`}>
+                                    {days === 0 ? 'hoje' : `${days} dia${days !== 1 ? 's' : ''}`}
+                                  </span>
+                                )}
+                                {days !== null && (
+                                  <span className="block text-[10px] text-gray-400">{fmtDate(releaseDateOf(o))}</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full whitespace-nowrap ${meta.className}`}>
+                                  {o.payout_status === 'repassado' && <CheckCircle2 className="w-3 h-3" />}
+                                  {o.payout_status === 'a_liberar' && <Clock className="w-3 h-3" />}
+                                  {meta.label}
+                                </span>
+                                {o.payout_paid_at && (
+                                  <span className="block text-[10px] text-gray-400 mt-0.5">em {fmtDate(o.payout_paid_at)}</span>
                                 )}
                               </td>
                             </tr>
-                          )}
+                            {isOpen && (
+                              <tr className="bg-gray-50/70">
+                                <td />
+                                <td colSpan={9} className="px-3 py-3">
+                                  {resolutionLog[o.order_id] && (() => {
+                                    const entry = resolutionLog[o.order_id];
+                                    const tone = entry.state === 'ok' ? 'bg-green-50 border-green-200 text-green-800'
+                                      : entry.state === 'error' ? 'bg-red-50 border-red-200 text-red-800'
+                                        : 'bg-sky-50 border-sky-200 text-sky-800';
+                                    return (
+                                      <div className={`flex items-start gap-2 mb-3 p-3 rounded-lg border text-xs ${tone}`}>
+                                        {entry.state === 'running' && <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />}
+                                        {entry.state === 'ok' && <CheckCircle2 className="w-4 h-4 flex-shrink-0" />}
+                                        {entry.state === 'error' && <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                                        <div className="flex-1">
+                                          <p className="font-medium">{entry.message}</p>
+                                          <p className="opacity-70 mt-0.5">{fmtDateTime(entry.at)}</p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                  {(() => {
+                                    const codes = new Set(notices.map(n => n.code));
+                                    const busy = resolvingBusy === o.order_id;
+                                    const btn = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50';
+                                    if (codes.has('refund_missing_on_mp')) {
+                                      return (
+                                        <div className="flex flex-wrap gap-2 mb-3">
+                                          <button
+                                            disabled={busy}
+                                            onClick={() => setResolving({
+                                              order: o,
+                                              action: 'refund',
+                                              title: `Estornar ${formatPrice(Number(o.gateway_gross_amount || 0))} no Mercado Pago?`,
+                                              message: `O valor volta para o comprador (${formatPersonName(o.client_name || 'Cliente')}) pelo mesmo meio de pagamento. O estorno no MP não pode ser desfeito.`,
+                                              confirmText: 'Estornar no MP',
+                                              type: 'danger',
+                                            })}
+                                            className={`${btn} bg-red-600 hover:bg-red-700 text-white`}
+                                          >
+                                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />}
+                                            Estornar no Mercado Pago
+                                          </button>
+                                          <button
+                                            disabled={busy}
+                                            onClick={() => setResolving({
+                                              order: o,
+                                              action: 'undo',
+                                              title: 'Desfazer o reembolso no sistema?',
+                                              message: 'Use quando o estorno não deveria ter acontecido. O pedido volta para pago, igual ao Mercado Pago, e os ingressos voltam a valer.',
+                                              confirmText: 'Desfazer reembolso',
+                                              type: 'warning',
+                                            })}
+                                            className={`${btn} bg-white border border-gray-300 hover:bg-gray-50 text-gray-700`}
+                                          >
+                                            Desfazer reembolso no sistema
+                                          </button>
+                                        </div>
+                                      );
+                                    }
+                                    if (codes.has('refunded_on_mp') || codes.has('partial_refund')) {
+                                      return (
+                                        <div className="flex flex-wrap gap-2 mb-3">
+                                          <button
+                                            disabled={busy}
+                                            onClick={() => setResolving({
+                                              order: o,
+                                              action: 'register',
+                                              title: 'Registrar no sistema o estorno do Mercado Pago?',
+                                              message: `O pedido passa a refletir o estorno de ${formatPrice(Number(o.gateway_refunded_amount || 0))} feito no MP. Estorno total cancela os ingressos.`,
+                                              confirmText: 'Registrar estorno',
+                                              type: 'warning',
+                                            })}
+                                            className={`${btn} bg-amber-600 hover:bg-amber-700 text-white`}
+                                          >
+                                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                            Registrar estorno do MP no sistema
+                                          </button>
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+                                  {notices.length > 0 && (
+                                    <ul className="space-y-1.5 mb-3">
+                                      {notices.map(n => {
+                                        const st = NOTICE_STYLE[n.level];
+                                        return (
+                                          <li key={n.code} className={`flex items-start gap-2 text-xs ${st.text}`}>
+                                            <st.Icon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                                            <span>{n.message}</span>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  )}
+                                  {viaMp && (
+                                    <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+                                      <div>
+                                        <dt className="text-gray-400">Transação MP</dt>
+                                        <dd className="font-mono text-gray-800">{o.gateway_payment_id || '—'}</dd>
+                                      </div>
+                                      <div>
+                                        <dt className="text-gray-400">Status no MP</dt>
+                                        <dd className="text-gray-800">
+                                          {mpStatusLabel(o.gateway_status)}
+                                          {o.gateway_status_detail ? <span className="text-gray-400"> · {o.gateway_status_detail}</span> : null}
+                                        </dd>
+                                      </div>
+                                      <div>
+                                        <dt className="text-gray-400">Aprovado em</dt>
+                                        <dd className="text-gray-800">{fmtDateTime(o.gateway_approved_at)}</dd>
+                                      </div>
+                                      <div>
+                                        <dt className="text-gray-400">Liberação</dt>
+                                        <dd className="text-gray-800">
+                                          {fmtDateTime(o.money_release_date)}
+                                          {o.money_release_status ? <span className="text-gray-400"> · {o.money_release_status === 'released' ? 'liberado' : 'retido'}</span> : null}
+                                        </dd>
+                                      </div>
+                                      <div>
+                                        <dt className="text-gray-400">Total pago pelo comprador</dt>
+                                        <dd className="text-gray-800"><MpValue value={o.gateway_total_paid_amount} synced={synced} /></dd>
+                                      </div>
+                                      <div>
+                                        <dt className="text-gray-400">Estornado no MP</dt>
+                                        <dd className="text-gray-800"><MpValue value={o.gateway_refunded_amount} synced={synced} /></dd>
+                                      </div>
+                                      <div className="col-span-2">
+                                        <dt className="text-gray-400">Tarifas detalhadas pelo MP</dt>
+                                        <dd className="text-gray-800">
+                                          {(o.gateway_fee_details || []).length === 0 ? '—' : (o.gateway_fee_details || []).map((f, i) => (
+                                            <span key={i} className="block">
+                                              {FEE_TYPE_LABEL[f.type || ''] || f.type}: {formatPrice(Number(f.amount || 0))}
+                                              {f.fee_payer === 'payer' ? ' (paga pelo comprador)' : ''}
+                                            </span>
+                                          ))}
+                                        </dd>
+                                      </div>
+                                      <div>
+                                        <dt className="text-gray-400">Sincronizado em</dt>
+                                        <dd className="text-gray-800">{fmtDateTime(o.gateway_synced_at)}</dd>
+                                      </div>
+                                    </dl>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
                           </React.Fragment>
                         );
                       })}

@@ -141,3 +141,21 @@ export const worstLevel = (notices: ReconciliationNotice[]): NoticeLevel | null 
   notices.some(n => n.level === 'error') ? 'error'
     : notices.some(n => n.level === 'warn') ? 'warn'
     : notices.length ? 'info' : null;
+
+/**
+ * Quando o dinheiro ficou disponível para repassar: a liberação do Mercado Pago
+ * ou, no Pix por chave própria, a própria compra — cai direto na conta.
+ */
+export const releaseDateOf = (o: OrderFinancial): string | null =>
+  o.payment_method === 'pix_chave' ? o.created_at : o.money_release_date;
+
+/** Dias corridos desde a liberação; negativo enquanto o MP ainda retém o valor. */
+export const daysSinceRelease = (o: OrderFinancial): number | null => {
+  const d = releaseDateOf(o);
+  if (!d) return null;
+  const start = new Date(d);
+  start.setHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.round((now.getTime() - start.getTime()) / 86_400_000);
+};
