@@ -348,10 +348,12 @@ const AdminPayouts: React.FC = () => {
       if (days === null || days <= minDaysValue) return false;
     }
     if (agingBucket !== null) {
-      if (agingScope === 'repassado') {
-        const matchesPayoutId = o.payout_id && o.payout_id === agingBucket;
-        const matchesDate = o.payout_paid_at && (o.payout_paid_at === agingBucket || o.payout_paid_at.startsWith(agingBucket));
-        const matchesGeneric = agingBucket === 'repassado' && (o.payout_status === 'repassado' || o.payout_status === 'estornado_apos_repasse');
+      const isPayoutKey = agingScope === 'repassado' || agingBucket.startsWith('payout:');
+      if (isPayoutKey) {
+        const cleanKey = agingBucket.replace(/^payout:/, '');
+        const matchesPayoutId = o.payout_id && (o.payout_id === cleanKey || o.payout_id === agingBucket);
+        const matchesDate = o.payout_paid_at && (o.payout_paid_at === cleanKey || o.payout_paid_at.startsWith(cleanKey));
+        const matchesGeneric = (cleanKey === 'repassado' || agingBucket === 'repassado') && (o.payout_status === 'repassado' || o.payout_status === 'estornado_apos_repasse');
         if (!matchesPayoutId && !matchesDate && !matchesGeneric) return false;
       } else {
         const days = daysSinceRelease(o);
