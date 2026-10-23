@@ -160,6 +160,29 @@ export const PublicEventTicketRescue: React.FC = () => {
     setTimeout(() => setCopiedHash(null), 2500);
   };
 
+  // Verifica se a busca localizou ingressos com sucesso
+  const hasFoundTickets = Boolean(
+    searchResult?.ok && searchResult?.found && searchResult.tickets && searchResult.tickets.length > 0
+  );
+
+  // Reseta para a tela de busca com novo CPF
+  const handleResetToSearch = useCallback(() => {
+    setSearchResult(null);
+    setHasSearched(false);
+    setCpfError(null);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('cpf');
+    setSearchParams(nextParams, { replace: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [searchParams, setSearchParams]);
+
+  // Posiciona a rolagem no topo da tela sempre que a tela exclusiva de ingressos for ativada
+  useEffect(() => {
+    if (hasFoundTickets) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [hasFoundTickets]);
+
   // Abre modal para enviar todos os ingressos para o WhatsApp do comprador
   const handleOpenSendAllWhatsApp = () => {
     if (!searchResult?.tickets || searchResult.tickets.length === 0) return;
@@ -266,131 +289,361 @@ export const PublicEventTicketRescue: React.FC = () => {
 
       {/* Conteúdo Central */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6 sm:py-10 space-y-6 sm:space-y-8">
-        {/* Banner e Cabeçalho do Evento */}
-        <div className="relative overflow-hidden rounded-3xl bg-slate-800/80 border border-white/10 shadow-2xl backdrop-blur-xl">
-          {eventInfo?.image_url && (
-            <div className="h-44 sm:h-56 w-full relative overflow-hidden">
-              <img
-                src={eventInfo.image_url}
-                alt={eventInfo.title}
-                className="w-full h-full object-cover filter brightness-60"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent" />
-            </div>
-          )}
+        {hasFoundTickets && searchResult ? (
+          /* ========================================================
+             TELA EXCLUSIVA DE INGRESSOS LOCALIZADOS (Foco imediato no mobile)
+             ======================================================== */
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Barra de Ações Superior & Navegação */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-800/80 border border-white/10 rounded-2xl p-4 shadow-lg backdrop-blur-md">
+              <button
+                type="button"
+                onClick={handleResetToSearch}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 hover:text-white text-xs sm:text-sm font-semibold transition-all cursor-pointer active:scale-95"
+              >
+                <ArrowLeft className="w-4 h-4 text-indigo-400" />
+                <span>Buscar Outro CPF</span>
+              </button>
 
-          <div className="p-6 sm:p-8 space-y-4 relative">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Resgate de Ingressos & QR Code</span>
-            </div>
-
-            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
-              {loadingEvent ? 'Carregando evento...' : eventInfo?.title || 'Resgate de Ingressos do Evento'}
-            </h1>
-
-            {/* Informações de Data e Local */}
-            <div className="flex flex-wrap gap-4 text-xs sm:text-sm text-slate-300 pt-1">
-              {formattedEventDate && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <span>{formattedEventDate}</span>
-                </div>
-              )}
-              {eventInfo?.location && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <span>{eventInfo.location}</span>
-                </div>
-              )}
-            </div>
-
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-2xl pt-1">
-              Perdeu seu ingresso ou o QR Code de entrada? Digite o <strong>CPF do comprador ou convidado VIP</strong> utilizado
-              no momento da compra ou emissão para resgatar todos os seus ingressos e cortesias com QR Code para check-in e enviá-los
-              diretamente para o seu WhatsApp.
-            </p>
-          </div>
-        </div>
-
-        {/* Card do Formulário de Busca por CPF */}
-        <div className="bg-slate-800/90 rounded-3xl p-6 sm:p-8 border border-white/10 shadow-xl backdrop-blur-xl space-y-5">
-          <div className="space-y-1">
-            <label htmlFor="cpf-input" className="block text-sm font-bold text-white">
-              CPF do Comprador ou Convidado
-            </label>
-            <p className="text-xs text-slate-400">
-              Informe o CPF cadastrado na compra paga ou na cortesia VIP para localizar todos os ingressos vinculados deste evento.
-            </p>
-          </div>
-
-          <form onSubmit={handleFormSubmit} className="space-y-4">
-            <div className="relative">
-              <input
-                id="cpf-input"
-                type="text"
-                inputMode="numeric"
-                value={cpfInput}
-                onChange={handleCpfChange}
-                placeholder="000.000.000-00"
-                maxLength={14}
-                autoFocus
-                className={`w-full bg-slate-900/90 text-white placeholder-slate-500 text-lg sm:text-xl font-mono tracking-wider px-4 py-3.5 sm:py-4 rounded-2xl border transition-all outline-none focus:ring-2 ${
-                  cpfError
-                    ? 'border-rose-500 focus:ring-rose-500/40'
-                    : 'border-white/20 focus:border-indigo-400 focus:ring-indigo-500/40'
-                }`}
-              />
-
-              {cpfInput && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCpfInput('');
-                    setSearchResult(null);
-                    setHasSearched(false);
-                  }}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-                  aria-label="Limpar CPF"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {cpfError && (
-              <div className="flex items-center gap-2 text-rose-400 text-xs sm:text-sm font-medium animate-in fade-in">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{cpfError}</span>
+              <div className="flex items-center justify-between sm:justify-end gap-3 text-xs">
+                <span className="text-slate-400">CPF Consultado:</span>
+                <span className="font-mono font-bold text-indigo-300 bg-slate-950 px-2.5 py-1 rounded-lg border border-white/10 select-all">
+                  {formatCPF(cpfInput)}
+                </span>
               </div>
-            )}
+            </div>
 
-            <button
-              type="submit"
-              disabled={searching || !cpfInput}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 sm:py-4 bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm sm:text-base rounded-2xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer select-none"
-            >
-              {searching ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Buscando Ingressos & Cortesias...</span>
-                </>
-              ) : (
-                <>
-                  <Search className="w-5 h-5" />
-                  <span>Buscar Meus Ingressos</span>
-                </>
+            {/* Cabeçalho Compacto do Evento */}
+            <div className="bg-slate-800/60 border border-white/10 rounded-2xl p-4 sm:p-5 backdrop-blur-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {eventInfo?.title || searchResult.event?.title || 'Evento'}
+                </span>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300">
+                  {formattedEventDate && (
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      {formattedEventDate}
+                    </span>
+                  )}
+                  {(eventInfo?.location || searchResult.event?.location) && (
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      {eventInfo?.location || searchResult.event?.location}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{searchResult.total_tickets} {searchResult.total_tickets === 1 ? 'Ingresso Disponível' : 'Ingressos Disponíveis'}</span>
+              </div>
+            </div>
+
+            {/* Banner de Boas-vindas ao Comprador & CTA Principal (WhatsApp) */}
+            <div className="bg-gradient-to-br from-emerald-900/40 via-teal-900/30 to-slate-900/80 border border-emerald-500/40 rounded-3xl p-6 sm:p-8 shadow-xl backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-1.5 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Ingressos Localizados com Sucesso</span>
+                </div>
+
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">
+                  Olá, {searchResult.buyer?.name}! 👋
+                </h2>
+
+                <p className="text-xs sm:text-sm text-slate-300">
+                  Encontramos <strong>{searchResult.total_tickets}</strong> {searchResult.total_tickets === 1 ? 'ingresso / cortesia emitido' : 'ingressos / cortesias emitidos'} vinculados ao seu CPF.
+                </p>
+              </div>
+
+              {/* Botão em Destaque: "Enviar pro meu WhatsApp" */}
+              <button
+                type="button"
+                onClick={handleOpenSendAllWhatsApp}
+                className="w-full md:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-4 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-sm sm:text-base rounded-2xl shadow-xl shadow-emerald-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer select-none shrink-0"
+              >
+                <MessageSquare className="w-5 h-5 fill-white" />
+                <span>Enviar pro meu WhatsApp</span>
+              </button>
+            </div>
+
+            {/* Lista de Cards de Ingressos */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+              {(searchResult.tickets || []).map((ticket) => {
+                const isUsed = ticket.status === 'used';
+                const isCortesia =
+                  ticket.batch_name?.toLowerCase().includes('cortesia') ||
+                  ticket.batch_name?.toLowerCase().includes('vip') ||
+                  ticket.qr_code_hash?.startsWith('VIP-');
+
+                return (
+                  <div
+                    key={ticket.id}
+                    className={`rounded-3xl p-5 sm:p-6 border flex flex-col justify-between transition-all duration-200 ${
+                      isUsed
+                        ? 'bg-slate-900/90 border-slate-700/60 opacity-90'
+                        : isCortesia
+                        ? 'bg-slate-800/90 border-amber-500/30 hover:border-amber-400/60 shadow-xl'
+                        : 'bg-slate-800/90 border-white/10 hover:border-indigo-400/50 shadow-xl'
+                    }`}
+                  >
+                    <div className="space-y-4">
+                      {/* Cabeçalho do Card */}
+                      <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <Ticket className="w-4 h-4 text-indigo-400" />
+                            Ingresso #{ticket.ticket_number}
+                          </span>
+                          {isCortesia && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[10px] font-bold">
+                              <Sparkles className="w-3 h-3 text-amber-400" />
+                              Cortesia VIP
+                            </span>
+                          )}
+                        </div>
+
+                        {isUsed ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[11px] font-bold shrink-0">
+                            <UserCheck className="w-3.5 h-3.5" />
+                            Check-in Realizado
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[11px] font-bold shrink-0">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Válido para Entrada
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Dados do Titular e Lote */}
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+                          Titular do Ingresso
+                        </p>
+                        <h3 className="text-base sm:text-lg font-bold text-white truncate">
+                          {ticket.holder_name}
+                        </h3>
+                        <p className="text-xs text-indigo-300 font-medium">
+                          Lote: {ticket.batch_name || (isCortesia ? 'Cortesia VIP' : 'Geral')}
+                        </p>
+                      </div>
+
+                      {/* Área do QR Code com opção de Ampliar */}
+                      <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-900/90 p-4 rounded-2xl border border-white/5">
+                        <div
+                          onClick={() => setEnlargedTicket(ticket)}
+                          className="bg-white p-2.5 rounded-2xl border border-gray-200 shadow-md cursor-pointer hover:scale-105 transition-transform flex flex-col items-center shrink-0 group"
+                          title="Clique para ampliar o QR Code na tela inteira"
+                        >
+                          <QRCodeSVG
+                            value={ticket.qr_code_hash}
+                            size={110}
+                            level="M"
+                            includeMargin={false}
+                          />
+                          <span className="text-[10px] font-bold text-slate-500 group-hover:text-indigo-600 mt-1.5 flex items-center gap-1">
+                            <Maximize2 className="w-3 h-3" /> Ampliar
+                          </span>
+                        </div>
+
+                        <div className="flex-1 space-y-2 text-center sm:text-left w-full min-w-0">
+                          <p className="text-[11px] text-slate-400 font-medium">
+                            Código do Check-in:
+                          </p>
+                          <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-white/10">
+                            <span className="font-mono text-xs text-indigo-300 truncate select-all flex-1">
+                              {ticket.qr_code_hash}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCode(ticket.qr_code_hash)}
+                              className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                              title="Copiar Código"
+                            >
+                              {copiedHash === ticket.qr_code_hash ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+
+                          <p className="text-[10px] text-slate-500 leading-tight">
+                            Apresente este QR Code no celular na portaria do evento.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ações Individuais do Ingresso */}
+                    <div className="pt-4 border-t border-white/10 mt-4 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEnlargedTicket(ticket)}
+                        className="inline-flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white font-semibold transition-colors cursor-pointer"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                        <span>Ver em Tela Cheia</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenSendSingleTicket(ticket)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition-all cursor-pointer"
+                        title="Encaminhar este ingresso individual no WhatsApp"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span>WhatsApp</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Rodapé da tela exclusiva para facilitar nova consulta */}
+            <div className="pt-4 pb-2 text-center">
+              <button
+                type="button"
+                onClick={handleResetToSearch}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition-all cursor-pointer shadow-md"
+              >
+                <RefreshCw className="w-4 h-4 text-indigo-400" />
+                <span>Fazer Consulta com Outro CPF</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ========================================================
+             TELA DE BUSCA (Formulário do CPF)
+             ======================================================== */
+          <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+            {/* Banner e Cabeçalho do Evento */}
+            <div className="relative overflow-hidden rounded-3xl bg-slate-800/80 border border-white/10 shadow-2xl backdrop-blur-xl">
+              {eventInfo?.image_url && (
+                <div className="h-44 sm:h-56 w-full relative overflow-hidden">
+                  <img
+                    src={eventInfo.image_url}
+                    alt={eventInfo.title}
+                    className="w-full h-full object-cover filter brightness-60"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent" />
+                </div>
               )}
-            </button>
-          </form>
-        </div>
 
-        {/* Resultados da Busca */}
-        {hasSearched && !searching && searchResult && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Caso 1: Nenhum ingresso encontrado para o CPF */}
-            {!searchResult.found ? (
-              <div className="bg-rose-950/40 border border-rose-500/30 rounded-3xl p-6 sm:p-8 text-center space-y-4">
+              <div className="p-6 sm:p-8 space-y-4 relative">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold uppercase tracking-wider">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Resgate de Ingressos & QR Code</span>
+                </div>
+
+                <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
+                  {loadingEvent ? 'Carregando evento...' : eventInfo?.title || 'Resgate de Ingressos do Evento'}
+                </h1>
+
+                {/* Informações de Data e Local */}
+                <div className="flex flex-wrap gap-4 text-xs sm:text-sm text-slate-300 pt-1">
+                  {formattedEventDate && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <span>{formattedEventDate}</span>
+                    </div>
+                  )}
+                  {eventInfo?.location && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <span>{eventInfo.location}</span>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-2xl pt-1">
+                  Perdeu seu ingresso ou o QR Code de entrada? Digite o <strong>CPF do comprador ou convidado VIP</strong> utilizado
+                  no momento da compra ou emissão para resgatar todos os seus ingressos e cortesias com QR Code para check-in e enviá-los
+                  diretamente para o seu WhatsApp.
+                </p>
+              </div>
+            </div>
+
+            {/* Card do Formulário de Busca por CPF */}
+            <div className="bg-slate-800/90 rounded-3xl p-6 sm:p-8 border border-white/10 shadow-xl backdrop-blur-xl space-y-5">
+              <div className="space-y-1">
+                <label htmlFor="cpf-input" className="block text-sm font-bold text-white">
+                  CPF do Comprador ou Convidado
+                </label>
+                <p className="text-xs text-slate-400">
+                  Informe o CPF cadastrado na compra paga ou na cortesia VIP para localizar todos os ingressos vinculados deste evento.
+                </p>
+              </div>
+
+              <form onSubmit={handleFormSubmit} className="space-y-4">
+                <div className="relative">
+                  <input
+                    id="cpf-input"
+                    type="text"
+                    inputMode="numeric"
+                    value={cpfInput}
+                    onChange={handleCpfChange}
+                    placeholder="000.000.000-00"
+                    maxLength={14}
+                    autoFocus
+                    className={`w-full bg-slate-900/90 text-white placeholder-slate-500 text-lg sm:text-xl font-mono tracking-wider px-4 py-3.5 sm:py-4 rounded-2xl border transition-all outline-none focus:ring-2 ${
+                      cpfError
+                        ? 'border-rose-500 focus:ring-rose-500/40'
+                        : 'border-white/20 focus:border-indigo-400 focus:ring-indigo-500/40'
+                    }`}
+                  />
+
+                  {cpfInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCpfInput('');
+                        setSearchResult(null);
+                        setHasSearched(false);
+                      }}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                      aria-label="Limpar CPF"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {cpfError && (
+                  <div className="flex items-center gap-2 text-rose-400 text-xs sm:text-sm font-medium animate-in fade-in">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{cpfError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={searching || !cpfInput}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 sm:py-4 bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm sm:text-base rounded-2xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer select-none"
+                >
+                  {searching ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Buscando Ingressos & Cortesias...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-5 h-5" />
+                      <span>Buscar Meus Ingressos</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* Caso: Nenhum ingresso encontrado para o CPF */}
+            {hasSearched && !searching && searchResult && !searchResult.found && (
+              <div className="bg-rose-950/40 border border-rose-500/30 rounded-3xl p-6 sm:p-8 text-center space-y-4 animate-in fade-in duration-300">
                 <div className="w-14 h-14 bg-rose-500/20 border border-rose-500/40 rounded-full flex items-center justify-center mx-auto text-rose-400">
                   <AlertCircle className="w-7 h-7" />
                 </div>
@@ -410,172 +663,6 @@ export const PublicEventTicketRescue: React.FC = () => {
                     <li>Se o pagamento foi feito por Pix recentemente, pode levar alguns segundos para conciliação.</li>
                     <li>Caso precise de suporte, contate a organização do evento pelo grupo do WhatsApp.</li>
                   </ul>
-                </div>
-              </div>
-            ) : (
-              /* Caso 2: Ingressos encontrados */
-              <div className="space-y-6">
-                {/* Banner de Boas-vindas ao Comprador & CTA Principal */}
-                <div className="bg-gradient-to-br from-emerald-900/40 via-teal-900/30 to-slate-900/80 border border-emerald-500/40 rounded-3xl p-6 sm:p-8 shadow-xl backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-                  <div className="space-y-1.5">
-                    <div className="inline-flex items-center gap-1.5 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Ingressos Localizados com Sucesso</span>
-                    </div>
-
-                    <h2 className="text-xl sm:text-2xl font-extrabold text-white">
-                      Olá, {searchResult.buyer?.name}! 👋
-                    </h2>
-
-                    <p className="text-xs sm:text-sm text-slate-300">
-                      Encontramos <strong>{searchResult.total_tickets}</strong> {searchResult.total_tickets === 1 ? 'ingresso / cortesia emitido' : 'ingressos / cortesias emitidos'} vinculados ao seu CPF.
-                    </p>
-                  </div>
-
-                  {/* Botão em Destaque: "Enviar pro meu WhatsApp" */}
-                  <button
-                    type="button"
-                    onClick={handleOpenSendAllWhatsApp}
-                    className="w-full md:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-4 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-sm sm:text-base rounded-2xl shadow-xl shadow-emerald-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer select-none shrink-0"
-                  >
-                    <MessageSquare className="w-5 h-5 fill-white" />
-                    <span>Enviar pro meu WhatsApp</span>
-                  </button>
-                </div>
-
-                {/* Lista de Cards de Ingressos */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                  {(searchResult.tickets || []).map((ticket, idx) => {
-                    const isUsed = ticket.status === 'used';
-                    const isCortesia =
-                      ticket.batch_name?.toLowerCase().includes('cortesia') ||
-                      ticket.batch_name?.toLowerCase().includes('vip') ||
-                      ticket.qr_code_hash?.startsWith('VIP-');
-
-                    return (
-                      <div
-                        key={ticket.id}
-                        className={`rounded-3xl p-5 sm:p-6 border flex flex-col justify-between transition-all duration-200 ${
-                          isUsed
-                            ? 'bg-slate-900/90 border-slate-700/60 opacity-90'
-                            : isCortesia
-                            ? 'bg-slate-800/90 border-amber-500/30 hover:border-amber-400/60 shadow-xl'
-                            : 'bg-slate-800/90 border-white/10 hover:border-indigo-400/50 shadow-xl'
-                        }`}
-                      >
-                        <div className="space-y-4">
-                          {/* Cabeçalho do Card */}
-                          <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3 flex-wrap">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                <Ticket className="w-4 h-4 text-indigo-400" />
-                                Ingresso #{ticket.ticket_number}
-                              </span>
-                              {isCortesia && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[10px] font-bold">
-                                  <Sparkles className="w-3 h-3 text-amber-400" />
-                                  Cortesia VIP
-                                </span>
-                              )}
-                            </div>
-
-                            {isUsed ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[11px] font-bold shrink-0">
-                                <UserCheck className="w-3.5 h-3.5" />
-                                Check-in Realizado
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[11px] font-bold shrink-0">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                Válido para Entrada
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Dados do Titular e Lote */}
-                          <div className="space-y-1">
-                            <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-                              Titular do Ingresso
-                            </p>
-                            <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                              {ticket.holder_name}
-                            </h3>
-                            <p className="text-xs text-indigo-300 font-medium">
-                              Lote: {ticket.batch_name || (isCortesia ? 'Cortesia VIP' : 'Geral')}
-                            </p>
-                          </div>
-
-                          {/* Área do QR Code com opção de Ampliar */}
-                          <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-900/90 p-4 rounded-2xl border border-white/5">
-                            <div
-                              onClick={() => setEnlargedTicket(ticket)}
-                              className="bg-white p-2.5 rounded-2xl border border-gray-200 shadow-md cursor-pointer hover:scale-105 transition-transform flex flex-col items-center shrink-0 group"
-                              title="Clique para ampliar o QR Code na tela inteira"
-                            >
-                              <QRCodeSVG
-                                value={ticket.qr_code_hash}
-                                size={110}
-                                level="M"
-                                includeMargin={false}
-                              />
-                              <span className="text-[10px] font-bold text-slate-500 group-hover:text-indigo-600 mt-1.5 flex items-center gap-1">
-                                <Maximize2 className="w-3 h-3" /> Ampliar
-                              </span>
-                            </div>
-
-                            <div className="flex-1 space-y-2 text-center sm:text-left w-full min-w-0">
-                              <p className="text-[11px] text-slate-400 font-medium">
-                                Código do Check-in:
-                              </p>
-                              <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-white/10">
-                                <span className="font-mono text-xs text-indigo-300 truncate select-all flex-1">
-                                  {ticket.qr_code_hash}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyCode(ticket.qr_code_hash)}
-                                  className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
-                                  title="Copiar Código"
-                                >
-                                  {copiedHash === ticket.qr_code_hash ? (
-                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                  ) : (
-                                    <Copy className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                              </div>
-
-                              <p className="text-[10px] text-slate-500 leading-tight">
-                                Apresente este QR Code no celular na portaria do evento.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Ações Individuais do Ingresso */}
-                        <div className="pt-4 border-t border-white/10 mt-4 flex items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEnlargedTicket(ticket)}
-                            className="inline-flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white font-semibold transition-colors cursor-pointer"
-                          >
-                            <Maximize2 className="w-3.5 h-3.5" />
-                            <span>Ver em Tela Cheia</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleOpenSendSingleTicket(ticket)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition-all cursor-pointer"
-                            title="Encaminhar este ingresso individual no WhatsApp"
-                          >
-                            <Share2 className="w-3.5 h-3.5" />
-                            <span>WhatsApp</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               </div>
             )}
