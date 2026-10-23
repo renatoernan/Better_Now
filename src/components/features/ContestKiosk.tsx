@@ -3,11 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   X, QrCode, CheckCircle2, AlertTriangle, WifiOff, CloudUpload, Loader2, Search, RotateCcw,
-  Camera, Image as ImageIcon, RefreshCw, Vote, Trophy, Trash2, Tablet,
+  Camera, Image as ImageIcon, RefreshCw, Vote, Trophy, Trash2, Tablet, Users, Heart, User,
 } from 'lucide-react';
 import { supabase } from '../../shared/services/lib/supabase';
 import {
-  useEventContests, searchEventParticipants, EventParticipantOption, ContestEntry,
+  useEventContests, searchEventParticipants, EventParticipantOption, ContestEntry, ContestEntryType, getEntryDisplayName,
 } from '../../shared/hooks/hooks/useEventContests';
 import { uploadEventPhoto } from '../../shared/hooks/hooks/useEventMural';
 import { formatPersonName } from '../../shared/utils/utils/eventAttendees';
@@ -22,8 +22,10 @@ type VoterEntry = 'name' | 'qr';
 type ListTab = 'todo' | 'captured';
 
 interface CaptureTarget {
-  option: EventParticipantOption;
+  option?: EventParticipantOption;
   entry?: ContestEntry;
+  entryType?: ContestEntryType;
+  customLabel?: string;
 }
 
 /** Volta sozinho para a tela de espera: numa fila, ninguém aperta "próximo". */
@@ -181,6 +183,9 @@ const ContestKiosk: React.FC = () => {
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ target: CaptureTarget; votes: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [newCollectiveModalOpen, setNewCollectiveModalOpen] = useState(false);
+  const [collectiveType, setCollectiveType] = useState<'group' | 'couple'>('group');
+  const [collectiveName, setCollectiveName] = useState('');
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -506,9 +511,9 @@ const ContestKiosk: React.FC = () => {
   const entryOf = useCallback(
     (o: EventParticipantOption): ContestEntry | undefined =>
       entries.find(e => o.ticketId && e.participant_ticket_id === o.ticketId)
-      || entries.find(e => !e.participant_ticket_id && (
+      || entries.find(e => !e.participant_ticket_id && (!e.entry_type || e.entry_type === 'individual') && (
         (o.personId && e.participant_person_id === o.personId)
-        || norm(e.participant_name) === norm(o.name)
+        || norm(e.participant_name || '') === norm(o.name)
       )),
     [entries]
   );
@@ -516,13 +521,35 @@ const ContestKiosk: React.FC = () => {
   const { todoList, capturedList } = useMemo(() => {
     const todo: CaptureTarget[] = [];
     const captured: CaptureTarget[] = [];
+    const matchedEntryIds = new Set<string>();
+
     for (const o of filteredOptions) {
       const entry = entryOf(o);
-      if (entry) captured.push({ option: o, entry });
-      else todo.push({ option: o });
+      if (entry) {
+        captured.push({ option: o, entry, entryType: entry.entry_type || 'individual' });
+        matchedEntryIds.add(entry.id);
+      } else {
+        todo.push({ option: o, entryType: 'individual' });
+      }
     }
+
+    // Candidaturas coletivas (grupo, casal ou avulsas sem ingresso específico)
+    const term = manualTerm.trim().toLowerCase();
+    for (const e of entries) {
+      if (!matchedEntryIds.has(e.id)) {
+        const label = getEntryDisplayName(e);
+        if (!term || label.toLowerCase().includes(term)) {
+          captured.push({
+            entry: e,
+            entryType: e.entry_type || (e.participant_ticket_id ? 'individual' : 'group'),
+            customLabel: label,
+          });
+        }
+      }
+    }
+
     return { todoList: todo, capturedList: captured };
-  }, [filteredOptions, entryOf]);
+  }, [filteredOptions, entryOf, entries, manualTerm]);
 
   const resolveTicketHash = async (ticketId: string): Promise<string | null> => {
     const { data } = await supabase
@@ -662,6 +689,11 @@ const ContestKiosk: React.FC = () => {
     if (!shot || !target || !eventId || !contestId || saving) return;
     setSaving(true);
     try {
+      const isCollective = target.entryType && target.entryType !== 'individual';
+      const targetName = isCollective
+        ? (target.customLabel || (target.entryType === 'group' ? 'Grupo' : 'Casal'))
+        : (target.option?.name || 'Candidato');
+
       if (routeToken) {
         const ext = shot.file.name.split('.').pop()?.toLowerCase() || 'jpg';
         const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -679,10 +711,11 @@ const ContestKiosk: React.FC = () => {
           p_token: routeToken,
           p_photo_url: publicUrl,
           p_storage_path: storagePath,
-          p_participant_name: target.option.name,
-          p_participant_ticket_id: target.option.ticketId,
-          p_participant_person_id: target.option.personId || null,
+          p_participant_name: isCollective ? (target.customLabel || null) : (target.option?.name || null),
+          p_participant_ticket_id: isCollective ? null : (target.option?.ticketId || null),
+          p_participant_person_id: isCollective ? null : (target.option?.personId || null),
           p_existing_entry_id: target.entry?.id || null,
+          p_entry_type: target.entryType || 'individual',
         });
 
         if (rpcError) throw rpcError;
@@ -691,25 +724,26 @@ const ContestKiosk: React.FC = () => {
         const photo = await uploadEventPhoto(eventId, shot.file, {
           source: 'admin',
           moderationStatus: 'approved',
-          caption: target.option.name,
-          ticketId: target.option.ticketId || null,
-          personId: target.option.personId || null,
+          caption: targetName,
+          ticketId: isCollective ? null : (target.option?.ticketId || null),
+          personId: isCollective ? null : (target.option?.personId || null),
         });
 
         if (target.entry) {
           await replaceEntryPhoto(target.entry.id, photo.id);
         } else {
           await promotePhoto(contestId, photo.id, {
-            name: target.option.name,
-            personId: target.option.personId,
-            ticketId: target.option.ticketId,
+            name: isCollective ? (target.customLabel || null) : (target.option?.name || null),
+            personId: isCollective ? null : (target.option?.personId || null),
+            ticketId: isCollective ? null : (target.option?.ticketId || null),
+            entryType: target.entryType || 'individual',
           });
         }
       }
 
       setFeedback({
         title: target.entry ? 'Foto substituída' : 'Foto registrada',
-        detail: target.option.name,
+        detail: targetName,
       });
       setStage('done');
       setListTab('captured');
@@ -738,6 +772,10 @@ const ContestKiosk: React.FC = () => {
     if (!confirmDelete?.target.entry || deleting) return;
     setDeleting(true);
     try {
+      const deleteLabel = confirmDelete.target.option?.name
+        || confirmDelete.target.customLabel
+        || (confirmDelete.target.entry ? getEntryDisplayName(confirmDelete.target.entry) : 'Candidatura');
+
       if (routeToken) {
         const { error: rpcError } = await supabase.rpc('kiosk_remove_contest_entry', {
           p_token: routeToken,
@@ -751,8 +789,8 @@ const ContestKiosk: React.FC = () => {
       setFeedback({
         title: 'Foto removida do concurso',
         detail: confirmDelete.votes > 0
-          ? `${confirmDelete.target.option.name} · ${confirmDelete.votes} voto${confirmDelete.votes !== 1 ? 's' : ''} excluído${confirmDelete.votes !== 1 ? 's' : ''}`
-          : confirmDelete.target.option.name,
+          ? `${deleteLabel} · ${confirmDelete.votes} voto${confirmDelete.votes !== 1 ? 's' : ''} excluído${confirmDelete.votes !== 1 ? 's' : ''}`
+          : deleteLabel,
       });
       setConfirmDelete(null);
       setStage('done');
@@ -882,30 +920,41 @@ const ContestKiosk: React.FC = () => {
     showEligibility = false
   ) => {
     const photo = t.entry?.photo?.photo_url;
-    const alreadyVoted = showEligibility && votedTickets.has(t.option.ticketId);
-    const blocked = showEligibility && (alreadyVoted || (requiresCheckin && !t.option.checkedIn));
+    const isCollective = t.entryType && t.entryType !== 'individual';
+    const displayName = t.option?.name || t.customLabel || (t.entry ? getEntryDisplayName(t.entry) : 'Candidato');
+    const ticketId = t.option?.ticketId;
+    const alreadyVoted = showEligibility && ticketId ? votedTickets.has(ticketId) : false;
+    const blocked = showEligibility && (alreadyVoted || (requiresCheckin && !t.option?.checkedIn));
+    const cardKey = ticketId || t.entry?.id || t.customLabel || Math.random().toString();
+
     return (
       <button
-        key={t.option.ticketId}
+        key={cardKey}
         onClick={() => onPick(t)}
         disabled={alreadyVoted}
-        className={`flex flex-col items-center gap-1.5 bg-gray-800 hover:bg-gray-700 rounded-xl transition-colors active:scale-[0.97] text-center ${
+        className={`flex flex-col items-center gap-1.5 bg-gray-800 hover:bg-gray-700 rounded-xl transition-colors active:scale-[0.97] text-center relative ${
           photo ? 'p-2' : 'px-2 py-3 justify-center min-h-[80px]'
         } ${blocked ? 'opacity-60' : ''} ${alreadyVoted ? 'cursor-not-allowed' : ''}`}
       >
+        {isCollective && (
+          <span className="absolute top-2 right-2 z-10 text-[10px] px-1.5 py-0.5 bg-purple-600/80 backdrop-blur-sm text-purple-100 rounded-full flex items-center gap-1 font-medium shadow">
+            {t.entryType === 'group' ? <Users className="w-3 h-3" /> : <Heart className="w-3 h-3 text-rose-300" />}
+            {t.entryType === 'group' ? 'Grupo' : 'Casal'}
+          </span>
+        )}
         {photo && (
           <div className="w-full aspect-square rounded-lg overflow-hidden bg-gray-900">
             <img
               src={photo}
-              alt={t.option.name}
+              alt={displayName}
               loading="lazy"
               className={`w-full h-full object-contain ${showEligibility ? 'grayscale contrast-110' : ''}`}
               style={showEligibility ? { filter: 'grayscale(100%) contrast(1.1)' } : undefined}
             />
           </div>
         )}
-        <span className="text-xs font-medium leading-tight line-clamp-3 w-full">{t.option.name}</span>
-        {showEligibility && (
+        <span className="text-xs font-medium leading-tight line-clamp-3 w-full">{displayName}</span>
+        {showEligibility && t.option && (
           alreadyVoted ? (
             <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded-full">
               já votou
@@ -1086,22 +1135,36 @@ const ContestKiosk: React.FC = () => {
               </>
             ) : mode === 'photo' ? (
               <>
-                <div className="flex gap-2 flex-shrink-0 mb-3">
+                <div className="flex items-center gap-2 flex-shrink-0 mb-3">
+                  <div className="flex-1 flex gap-2">
+                    <button
+                      onClick={() => setListTab('todo')}
+                      className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                        listTab === 'todo' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      }`}
+                    >
+                      Capturar ({todoList.length})
+                    </button>
+                    <button
+                      onClick={() => setListTab('captured')}
+                      className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                        listTab === 'captured' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      }`}
+                    >
+                      Fotos capturadas ({capturedList.length})
+                    </button>
+                  </div>
                   <button
-                    onClick={() => setListTab('todo')}
-                    className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                      listTab === 'todo' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    }`}
+                    onClick={() => {
+                      setCollectiveType('group');
+                      setCollectiveName('');
+                      setNewCollectiveModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-sm font-medium shadow-md shadow-purple-900/40 transition-all active:scale-95 flex-shrink-0"
+                    title="Fotografar e inscrever um grupo ou casal"
                   >
-                    Capturar ({todoList.length})
-                  </button>
-                  <button
-                    onClick={() => setListTab('captured')}
-                    className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                      listTab === 'captured' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    }`}
-                  >
-                    Fotos capturadas ({capturedList.length})
+                    <Users className="w-4 h-4" />
+                    <span>+ Grupo / Casal</span>
                   </button>
                 </div>
 
@@ -1199,9 +1262,13 @@ const ContestKiosk: React.FC = () => {
           <div className="w-full max-w-md mx-auto flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between flex-shrink-0 mb-3">
               <div className="min-w-0">
-                <p className="text-lg font-bold truncate">{target?.option.name}</p>
+                <p className="text-lg font-bold truncate">
+                  {target?.option?.name || target?.customLabel || (target?.entry ? getEntryDisplayName(target.entry) : 'Candidatura')}
+                </p>
                 <p className="text-xs text-gray-400">
-                  {target?.entry ? 'Substituindo a foto atual' : 'Nova foto para o concurso'}
+                  {target?.entryType && target.entryType !== 'individual'
+                    ? `${target.entryType === 'group' ? 'Grupo' : 'Casal'} · ${target?.entry ? 'Substituindo a foto' : 'Nova foto para o concurso'}`
+                    : target?.entry ? 'Substituindo a foto atual' : 'Nova foto para o concurso'}
                 </p>
               </div>
               <button
@@ -1297,28 +1364,38 @@ const ContestKiosk: React.FC = () => {
           ) : (
             <div className="flex-1 overflow-y-auto p-4">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {entries.map(e => (
-                  <button
-                    key={e.id}
-                    onClick={() => vote(e.id, e.participant_name)}
-                    disabled={submitting}
-                    className="group relative rounded-xl overflow-hidden bg-gray-800 disabled:opacity-50 active:scale-95 transition-transform"
-                  >
-                    <div className="aspect-square">
-                      {e.photo && (
-                        <img
-                          src={e.photo.photo_url}
-                          alt={e.participant_name}
-                          loading="lazy"
-                          className="w-full h-full object-contain"
-                        />
+                {entries.map(e => {
+                  const displayName = getEntryDisplayName(e);
+                  const isCollective = e.entry_type && e.entry_type !== 'individual';
+                  return (
+                    <button
+                      key={e.id}
+                      onClick={() => vote(e.id, displayName)}
+                      disabled={submitting}
+                      className="group relative rounded-xl overflow-hidden bg-gray-800 disabled:opacity-50 active:scale-95 transition-transform"
+                    >
+                      <div className="aspect-square">
+                        {e.photo && (
+                          <img
+                            src={e.photo.photo_url}
+                            alt={displayName}
+                            loading="lazy"
+                            className="w-full h-full object-contain"
+                          />
+                        )}
+                      </div>
+                      {isCollective && (
+                        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-black/70 backdrop-blur-sm text-white flex items-center gap-1 border border-white/20 shadow">
+                          {e.entry_type === 'group' ? <Users className="w-3 h-3 text-purple-400" /> : <Heart className="w-3 h-3 text-rose-400" />}
+                          {e.entry_type === 'group' ? 'Grupo' : 'Casal'}
+                        </div>
                       )}
-                    </div>
-                    <div className="absolute bottom-0 inset-x-0 px-2 py-2 bg-gradient-to-t from-black/90 to-transparent">
-                      <p className="text-sm font-medium truncate text-left">{formatPersonName(e.participant_name)}</p>
-                    </div>
-                  </button>
-                ))}
+                      <div className="absolute bottom-0 inset-x-0 px-2 py-2 bg-gradient-to-t from-black/90 to-transparent">
+                        <p className="text-sm font-medium truncate text-left">{displayName}</p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1343,82 +1420,193 @@ const ContestKiosk: React.FC = () => {
         </div>
       )}
 
-      {/* Convidado já fotografado: revê a foto, substitui ou libera o voto */}
-      {sheetFor && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-gray-800 rounded-2xl w-full max-w-sm overflow-hidden">
+      {/* Convidado ou Grupo já fotografado: revê a foto, substitui ou exclui */}
+      {sheetFor && (() => {
+        const sheetLabel = sheetFor.option?.name || sheetFor.customLabel || (sheetFor.entry ? getEntryDisplayName(sheetFor.entry) : 'Candidatura');
+        return (
+          <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
+            <div className="bg-gray-800 rounded-2xl w-full max-w-sm overflow-hidden border border-white/10 shadow-2xl">
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <div className="flex items-center gap-2 min-w-0">
+                  {sheetFor.entryType && sheetFor.entryType !== 'individual' && (
+                    <span className="p-1 bg-purple-500/20 rounded-lg text-purple-300 flex-shrink-0">
+                      {sheetFor.entryType === 'group' ? <Users className="w-4 h-4" /> : <Heart className="w-4 h-4 text-rose-400" />}
+                    </span>
+                  )}
+                  <h3 className="font-bold truncate">{sheetLabel}</h3>
+                </div>
+                <button onClick={() => setSheetFor(null)} className="p-1.5 hover:bg-white/10 rounded-lg flex-shrink-0">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {sheetFor.entry?.photo?.photo_url && (
+                <img
+                  src={sheetFor.entry.photo.photo_url}
+                  alt={sheetLabel}
+                  className="w-full aspect-square object-contain bg-gray-900"
+                />
+              )}
+
+              <div className="p-4 space-y-2">
+                <button
+                  onClick={() => startCapture(sheetFor)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-medium"
+                >
+                  <RefreshCw className="w-4 h-4" /> Substituir foto
+                </button>
+                <button
+                  onClick={() => askDelete(sheetFor)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl"
+                >
+                  <Trash2 className="w-4 h-4" /> Excluir foto
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {confirmDelete && (() => {
+        const deleteLabel = confirmDelete.target.option?.name
+          || confirmDelete.target.customLabel
+          || (confirmDelete.target.entry ? getEntryDisplayName(confirmDelete.target.entry) : 'Candidatura');
+        return (
+          <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
+            <div className="bg-gray-800 rounded-2xl w-full max-w-sm p-5 border border-white/10 shadow-2xl">
+              <div className="flex items-start gap-3 mb-3">
+                <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <h3 className="font-bold">Excluir a foto de {deleteLabel}?</h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    {confirmDelete.votes > 0 ? (
+                      <>
+                        Esta foto já recebeu <strong>{confirmDelete.votes} voto{confirmDelete.votes !== 1 ? 's' : ''}</strong>.
+                        Remover do concurso apaga esses votos, e quem votou nela poderá votar de novo.
+                      </>
+                    ) : (
+                      <>
+                        A foto sai do concurso e a imagem continua no acervo do evento.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={doDelete}
+                  disabled={deleting}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-medium disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {confirmDelete.votes > 0
+                    ? `Remover e excluir ${confirmDelete.votes} voto${confirmDelete.votes !== 1 ? 's' : ''}`
+                    : 'Excluir do concurso'}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(null)}
+                  disabled={deleting}
+                  className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl disabled:opacity-50"
+                >
+                  {confirmDelete.votes > 0 ? 'Manter no concurso' : 'Cancelar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal para criar candidatura coletiva (Grupo ou Casal) */}
+      {newCollectiveModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-gray-800 border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-white/10">
-              <h3 className="font-bold truncate">{sheetFor.option.name}</h3>
-              <button onClick={() => setSheetFor(null)} className="p-1.5 hover:bg-white/10 rounded-lg flex-shrink-0">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-400" /> Nova Candidatura
+              </h3>
+              <button
+                onClick={() => setNewCollectiveModalOpen(false)}
+                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {sheetFor.entry?.photo?.photo_url && (
-              <img
-                src={sheetFor.entry.photo.photo_url}
-                alt={sheetFor.option.name}
-                className="w-full aspect-square object-contain bg-gray-900"
-              />
-            )}
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1.5 uppercase tracking-wide">
+                  Modalidade
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCollectiveType('group')}
+                    className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-sm font-medium transition-all ${
+                      collectiveType === 'group'
+                        ? 'border-purple-500 bg-purple-600/30 text-white font-semibold shadow-inner'
+                        : 'border-white/10 bg-gray-900/50 text-gray-400 hover:bg-white/5'
+                    }`}
+                  >
+                    <Users className="w-4 h-4 text-purple-400" /> Grupo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCollectiveType('couple')}
+                    className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-sm font-medium transition-all ${
+                      collectiveType === 'couple'
+                        ? 'border-purple-500 bg-purple-600/30 text-white font-semibold shadow-inner'
+                        : 'border-white/10 bg-gray-900/50 text-gray-400 hover:bg-white/5'
+                    }`}
+                  >
+                    <Heart className="w-4 h-4 text-rose-400" /> Casal
+                  </button>
+                </div>
+              </div>
 
-            <div className="p-4 space-y-2">
-              <button
-                onClick={() => startCapture(sheetFor)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-medium"
-              >
-                <RefreshCw className="w-4 h-4" /> Substituir foto
-              </button>
-              <button
-                onClick={() => askDelete(sheetFor)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl"
-              >
-                <Trash2 className="w-4 h-4" /> Excluir foto
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-gray-800 rounded-2xl w-full max-w-sm p-5">
-            <div className="flex items-start gap-3 mb-3">
-              <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <h3 className="font-bold">Excluir a foto de {confirmDelete.target.option.name}?</h3>
-                <p className="text-sm text-gray-400 mt-1">
-                  {confirmDelete.votes > 0 ? (
-                    <>
-                      Esta foto já recebeu <strong>{confirmDelete.votes} voto{confirmDelete.votes !== 1 ? 's' : ''}</strong>.
-                      Remover do concurso apaga esses votos, e quem votou nela poderá votar de novo.
-                    </>
-                  ) : (
-                    <>
-                      A foto sai do concurso e o convidado volta para a lista "Capturar".
-                      A imagem continua no acervo do evento.
-                    </>
-                  )}
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1.5 uppercase tracking-wide">
+                  {collectiveType === 'group' ? 'Nome ou Tema do Grupo (opcional)' : 'Identificação do Casal (opcional)'}
+                </label>
+                <input
+                  type="text"
+                  value={collectiveName}
+                  onChange={(e) => setCollectiveName(e.target.value)}
+                  placeholder={collectiveType === 'group' ? 'Ex: Os Anões, Liga da Justiça' : 'Ex: Romeu & Julieta, Noivos'}
+                  className="w-full px-3 py-2.5 bg-gray-900 border border-white/10 rounded-xl text-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder-gray-500"
+                  autoFocus
+                />
+                <p className="mt-1 text-[11px] text-gray-400">
+                  {collectiveType === 'group'
+                    ? 'Se deixar em branco, aparecerá como "Grupo" na apuração e no telão.'
+                    : 'Se deixar em branco, aparecerá como "Casal" na apuração e no telão.'}
                 </p>
+              </div>
+
+              <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-xs text-purple-200">
+                Esta foto não será associada a nenhum participante nominal e estará aberta para votos de todos os convidados.
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="p-4 bg-gray-900/70 border-t border-white/10 flex gap-2">
               <button
-                onClick={doDelete}
-                disabled={deleting}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-medium disabled:opacity-50"
+                onClick={() => setNewCollectiveModalOpen(false)}
+                className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-medium transition-colors"
               >
-                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                {confirmDelete.votes > 0
-                  ? `Remover e excluir ${confirmDelete.votes} voto${confirmDelete.votes !== 1 ? 's' : ''}`
-                  : 'Excluir do concurso'}
+                Cancelar
               </button>
               <button
-                onClick={() => setConfirmDelete(null)}
-                disabled={deleting}
-                className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl disabled:opacity-50"
+                onClick={() => {
+                  const fallbackLabel = collectiveType === 'group' ? 'Grupo' : 'Casal';
+                  startCapture({
+                    entryType: collectiveType,
+                    customLabel: collectiveName.trim() || fallbackLabel,
+                  });
+                  setNewCollectiveModalOpen(false);
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-purple-900/40"
               >
-                {confirmDelete.votes > 0 ? 'Manter no concurso' : 'Cancelar'}
+                <Camera className="w-4 h-4" /> Abrir Câmera
               </button>
             </div>
           </div>

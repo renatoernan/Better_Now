@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Trash2, Undo2, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { ContestEntry } from '../../shared/hooks/hooks/useEventContests';
+import { ContestEntry, getEntryDisplayName } from '../../shared/hooks/hooks/useEventContests';
 import { useContestVotes } from '../../shared/hooks/hooks/useContestVotes';
 import { formatPersonName } from '../../shared/utils/utils/eventAttendees';
 import ConfirmModal from './ConfirmModal';
@@ -54,7 +54,7 @@ const ContestVotersPanel: React.FC<Props> = ({ contestId, entries, voterNames })
           {entry?.photo?.photo_url && (
             <img
               src={entry.photo.photo_url}
-              alt={entry.participant_name}
+              alt={getEntryDisplayName(entry)}
               loading="lazy"
               className="w-full h-full object-contain"
             />
@@ -66,7 +66,7 @@ const ContestVotersPanel: React.FC<Props> = ({ contestId, entries, voterNames })
             {voterName}
           </p>
           <p className="text-xs text-gray-500 truncate">
-            votou em {entry ? formatPersonName(entry.participant_name) : 'candidatura removida'}
+            votou em {entry ? getEntryDisplayName(entry) : 'candidatura removida'}
             {' · '}
             {new Date(v.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </p>

@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trophy, Trash2, Edit, X, Loader2, Images, AlertTriangle, Users, Tablet,
-  Sparkles, MonitorPlay, RefreshCw, BarChart3, QrCode,
+  Sparkles, MonitorPlay, RefreshCw, BarChart3, QrCode, Heart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../shared/services/lib/supabase';
 import {
-  useEventContests, EventContest, ContestInput, ContestStatus,
+  useEventContests, EventContest, ContestInput, ContestStatus, getEntryDisplayName,
 } from '../../shared/hooks/hooks/useEventContests';
 import { formatPersonName, fetchEventAttendees } from '../../shared/utils/utils/eventAttendees';
 import ContestVotersPanel from '../shared/ContestVotersPanel';
@@ -159,7 +159,7 @@ const AdminEventContests: React.FC = () => {
     const winner = ranking[0];
     const tied = ranking.filter(r => r.vote_count === winner.vote_count).length > 1;
 
-    const winnerName = formatPersonName(winner.participant_name);
+    const winnerName = getEntryDisplayName(winner);
     const message = tied
       ? `Há empate em ${winner.vote_count} voto(s). Pelo critério de desempate, ${winnerName} vence por ter recebido o primeiro voto. A revelação não pode ser desfeita no telão.`
       : `${winnerName} venceu com ${winner.vote_count} voto(s). A revelação não pode ser desfeita no telão.`;
@@ -172,7 +172,7 @@ const AdminEventContests: React.FC = () => {
       run: async () => {
         try {
           await updateContest(c.id, { status: 'published' });
-          toast.success(`${formatPersonName(winner.participant_name)} revelado no telão.`);
+          toast.success(`${winnerName} revelado no telão.`);
         } catch (err: any) {
           toast.error(err.message || 'Erro ao revelar o vencedor.');
         }
@@ -350,7 +350,7 @@ const AdminEventContests: React.FC = () => {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-gray-900 truncate">
-                                {formatPersonName(r.participant_name)}
+                                {getEntryDisplayName(r)}
                               </p>
                               <div className="h-1.5 mt-1.5 bg-gray-100 rounded-full overflow-hidden max-w-md">
                                 <div className="h-full bg-purple-500" style={{ width: `${share}%` }} />
@@ -485,22 +485,27 @@ const AdminEventContests: React.FC = () => {
                             {e.photo && (
                               <img
                                 src={e.photo.photo_url}
-                                alt={e.participant_name}
+                                alt={getEntryDisplayName(e)}
                                 loading="lazy"
                                 className="w-full h-full object-contain"
                               />
                             )}
                           </div>
                           <p className="mt-1 text-xs text-gray-800 truncate font-medium">
-                            {formatPersonName(e.participant_name)}
+                            {getEntryDisplayName(e)}
                           </p>
-                          {!e.participant_person_id && (
+                          {e.entry_type && e.entry_type !== 'individual' ? (
+                            <p className="text-[10px] text-purple-600 flex items-center gap-1 font-medium">
+                              {e.entry_type === 'group' ? <Users className="w-3 h-3" /> : <Heart className="w-3 h-3 text-rose-500" />}
+                              {e.entry_type === 'group' ? 'grupo' : 'casal'}
+                            </p>
+                          ) : !e.participant_person_id ? (
                             <p className="text-[10px] text-amber-600 flex items-center gap-0.5">
                               <AlertTriangle className="w-3 h-3" /> sem cadastro
                             </p>
-                          )}
+                          ) : null}
                           <button
-                            onClick={() => handleRemoveEntry(e.id, e.participant_name)}
+                            onClick={() => handleRemoveEntry(e.id, getEntryDisplayName(e))}
                             className="absolute top-1.5 right-1.5 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                             title="Remover do concurso"
                           >

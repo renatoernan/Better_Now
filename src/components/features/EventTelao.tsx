@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Camera } from 'lucide-react';
 import { supabase } from '../../shared/services/lib/supabase';
+import { getEntryDisplayName } from '../../shared/hooks/hooks/useEventContests';
 
 interface PublicEntry {
   contest_id: string;
@@ -10,7 +11,8 @@ interface PublicEntry {
   contest_status: string;
   show_live_results: boolean;
   entry_id: string;
-  participant_name: string;
+  participant_name?: string | null;
+  entry_type?: string | null;
   photo_url: string | null;
 }
 
@@ -19,7 +21,8 @@ interface PublicResult {
   contest_title: string;
   contest_status: string;
   entry_id: string;
-  participant_name: string;
+  participant_name?: string | null;
+  entry_type?: string | null;
   photo_url: string | null;
   vote_count: number;
   first_vote_at: string | null;
@@ -162,7 +165,7 @@ const EventTelao: React.FC = () => {
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.4, duration: 0.8 }}
               src={winner.photo_url}
-              alt={winner.participant_name}
+              alt={getEntryDisplayName(winner)}
               className="w-72 h-72 object-contain bg-black/40 rounded-3xl mx-auto mb-6 ring-4 ring-amber-400 shadow-2xl"
             />
           )}
@@ -173,7 +176,7 @@ const EventTelao: React.FC = () => {
             transition={{ delay: 0.9, duration: 0.6 }}
             className="text-6xl font-black mb-3"
           >
-            {winner.participant_name}
+            {getEntryDisplayName(winner)}
           </motion.h1>
           <p className="text-xl text-gray-300">
             {winner.vote_count} voto{Number(winner.vote_count) !== 1 ? 's' : ''}
@@ -189,7 +192,7 @@ const EventTelao: React.FC = () => {
               {runnersUp.map((r, i) => (
                 <div key={r.entry_id} className="text-center">
                   <p className="text-sm">{i + 2}º</p>
-                  <p className="text-lg text-gray-200">{r.participant_name}</p>
+                  <p className="text-lg text-gray-200">{getEntryDisplayName(r)}</p>
                   <p className="text-sm">{r.vote_count}</p>
                 </div>
               ))}
@@ -274,7 +277,7 @@ const EventTelao: React.FC = () => {
                 {r.photo_url && (
                   <img src={r.photo_url} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/10" />
                 )}
-                <span className="flex-1 truncate">{r.participant_name}</span>
+                <span className="flex-1 truncate">{getEntryDisplayName(r)}</span>
                 <span className="font-bold text-lg">{r.vote_count}</span>
               </li>
             ))}

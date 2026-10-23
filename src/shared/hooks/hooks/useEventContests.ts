@@ -20,11 +20,14 @@ export interface EventContest {
   updated_at: string;
 }
 
+export type ContestEntryType = 'individual' | 'group' | 'couple' | 'other';
+
 export interface ContestEntry {
   id: string;
   contest_id: string;
   photo_id: string;
-  participant_name: string;
+  participant_name?: string | null;
+  entry_type?: ContestEntryType;
   participant_person_id?: string | null;
   participant_ticket_id?: string | null;
   display_order: number;
@@ -52,9 +55,10 @@ export interface ContestInput {
 }
 
 export interface ParticipantRef {
-  name: string;
+  name?: string | null;
   personId?: string | null;
   ticketId?: string | null;
+  entryType?: ContestEntryType;
 }
 
 export interface EventParticipantOption {
@@ -69,13 +73,29 @@ export interface EventParticipantOption {
 export interface ContestResult {
   contest_id: string;
   entry_id: string;
-  participant_name: string;
+  participant_name?: string | null;
+  entry_type?: ContestEntryType;
   participant_person_id?: string | null;
   photo_id: string;
   entry_status: 'active' | 'disqualified';
   vote_count: number;
   first_vote_at?: string | null;
 }
+
+/**
+ * Retorna o nome formatado de exibição para a candidatura,
+ * com fallback inteligente para "Grupo", "Casal" ou "Candidato".
+ */
+export const getEntryDisplayName = (
+  entry?: { participant_name?: string | null; entry_type?: ContestEntryType | string | null } | null
+): string => {
+  if (!entry) return 'Candidato';
+  const name = entry.participant_name?.trim();
+  if (name) return formatPersonName(name);
+  if (entry.entry_type === 'group') return 'Grupo';
+  if (entry.entry_type === 'couple') return 'Casal';
+  return 'Candidato';
+};
 
 export const useEventContests = (eventId: string) => {
   const [contests, setContests] = useState<EventContest[]>([]);
@@ -203,8 +223,10 @@ export const useEventContests = (eventId: string) => {
       if (!personId && !name?.trim()) return [];
       return entries.filter(e => {
         if (e.contest_id !== contestId) return false;
+        // Candidaturas de grupo ou casal não geram colisão com pessoas físicas
+        if (e.entry_type && e.entry_type !== 'individual') return false;
         if (personId && e.participant_person_id) return e.participant_person_id === personId;
-        if (name?.trim()) {
+        if (name?.trim() && e.participant_name?.trim()) {
           return e.participant_name.trim().toLowerCase() === name.trim().toLowerCase();
         }
         return false;
@@ -215,14 +237,17 @@ export const useEventContests = (eventId: string) => {
 
   const promotePhoto = useCallback(
     async (contestId: string, photoId: string, participant: ParticipantRef): Promise<ContestEntry> => {
+      const entryType = participant.entryType || 'individual';
+      const cleanName = participant.name?.trim() || null;
       const { data, error: err } = await supabase
         .from('app_contest_entries')
         .insert([{
           contest_id: contestId,
           photo_id: photoId,
-          participant_name: participant.name.trim(),
-          participant_person_id: participant.personId || null,
-          participant_ticket_id: participant.ticketId || null,
+          participant_name: cleanName,
+          entry_type: entryType,
+          participant_person_id: entryType === 'individual' ? (participant.personId || null) : null,
+          participant_ticket_id: entryType === 'individual' ? (participant.ticketId || null) : null,
         }])
         .select('*, photo:app_event_photos(id, photo_url, media_type, caption, uploaded_by)')
         .single();

@@ -6,7 +6,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '../../shared/services/lib/supabase';
 import { useEventMural, ModerationStatus, MuralItem } from '../../shared/hooks/hooks/useEventMural';
-import { useEventContests } from '../../shared/hooks/hooks/useEventContests';
+import { useEventContests, getEntryDisplayName } from '../../shared/hooks/hooks/useEventContests';
 import PromoteToContestModal from '../shared/PromoteToContestModal';
 
 type Tab = ModerationStatus;
@@ -272,7 +272,7 @@ const AdminEventMural: React.FC = () => {
                     {entriesByPhoto.has(item.id) && (
                       <span className="absolute bottom-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-amber-500 text-white text-[10px] font-medium rounded">
                         <Trophy className="w-3 h-3" />
-                        {entriesByPhoto.get(item.id)![0].participant_name}
+                        {getEntryDisplayName(entriesByPhoto.get(item.id)![0])}
                       </span>
                     )}
                   </div>
