@@ -202,7 +202,51 @@ describe('guestListPrintService', () => {
       expect(html).toContain('Ana Clara');
       expect(html).toContain('LETRA A');
       expect(html).toContain('Espaço Jardins');
+      expect(html).toContain('Lote / Ingresso');
+      expect(html).toContain('>Pagantes<');
+      expect(html).toContain('>Cortesias<');
+      expect(html).toContain('colspan="7"');
       expect(html).toContain('window.print()');
+    });
+
+    it('deve omitir a coluna de lote/ingresso e os cards Pagantes e Cortesias quando includeBatchColumn for false', () => {
+      const prepared = prepareGuestListItems([
+        {
+          id: 'ticket-1',
+          ticketIndex: 1,
+          ticketNumber: '1',
+          holderName: 'Ana Clara',
+          hasNamedHolder: true,
+          buyerName: 'Comprador A',
+          unitPrice: 100,
+          ticketStatus: 'valid',
+          order: {
+            id: 'ord-1',
+            event_id: 'event-1',
+            amount_total: 100,
+            currency: 'BRL',
+            quantity: 1,
+            batch_index: 1,
+            batch_name: 'Lote 1',
+            status: 'paid',
+            created_at: new Date().toISOString(),
+          },
+        },
+      ]);
+
+      const htmlWithoutBatch = renderGuestListPrintHtml(mockEvent, prepared, {
+        orientation: 'landscape',
+        density: 'compact',
+        includeSignatureLine: true,
+        includeInstructions: true,
+        includeBatchColumn: false,
+      });
+
+      expect(htmlWithoutBatch).not.toContain('>Lote / Ingresso<');
+      expect(htmlWithoutBatch).not.toContain('>Pagantes<');
+      expect(htmlWithoutBatch).not.toContain('>Cortesias<');
+      expect(htmlWithoutBatch).toContain('grid-template-columns: repeat(3, 1fr)');
+      expect(htmlWithoutBatch).toContain('colspan="6"');
     });
   });
 });

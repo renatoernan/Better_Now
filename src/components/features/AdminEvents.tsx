@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin, ArrowLeft, Globe, Link2, Copy, Images, Trophy, Smartphone } from 'lucide-react';
+import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin, ArrowLeft, Globe, Link2, Copy, Images, Trophy, Smartphone, Share2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { Event } from '../../shared/types/types/event';
@@ -16,6 +16,7 @@ const AdminEventOrders = React.lazy(() => import('./AdminEventOrders'));
 const AdminEventCoupons = React.lazy(() => import('./AdminEventCoupons'));
 const ConfirmModal = React.lazy(() => import('../shared/ConfirmModal'));
 const AdminCheckInShareModal = React.lazy(() => import('../shared/AdminCheckInShareModal').then(m => ({ default: m.AdminCheckInShareModal })));
+const AdminTicketRescueShareModal = React.lazy(() => import('../shared/AdminTicketRescueShareModal').then(m => ({ default: m.AdminTicketRescueShareModal })));
 
 type ViewMode = 'list' | 'form' | 'gallery' | 'checkin' | 'reports' | 'event-types' | 'orders' | 'coupons';
 
@@ -55,6 +56,10 @@ const AdminEvents: React.FC = () => {
   // Modal de compartilhamento do link de portaria/tablet
   const [isCheckInShareModalOpen, setIsCheckInShareModalOpen] = useState(false);
   const [eventForCheckInShare, setEventForCheckInShare] = useState<Event | null>(null);
+
+  // Modal de compartilhamento do link de resgate de ingressos (WhatsApp)
+  const [isRescueShareModalOpen, setIsRescueShareModalOpen] = useState(false);
+  const [eventForRescueShare, setEventForRescueShare] = useState<Event | null>(null);
 
   useEffect(() => {
     fetchEvents();
@@ -667,6 +672,19 @@ const AdminEvents: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
+                          setEventForRescueShare(event);
+                          setIsRescueShareModalOpen(true);
+                        }}
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100 transition-colors cursor-pointer"
+                        title="Link de Resgate de Ingressos (WhatsApp do Evento)"
+                      >
+                        <Share2 className="w-4 h-4 mb-1" />
+                        <span>Resgate</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
                           setSelectedEvent(event);
                           setViewMode('coupons');
                         }}
@@ -860,6 +878,16 @@ const AdminEvents: React.FC = () => {
                               title="Portaria & Check-in"
                             >
                               <QrCode className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEventForRescueShare(event);
+                                setIsRescueShareModalOpen(true);
+                              }}
+                              className="text-teal-600 hover:text-teal-800 p-1.5 rounded-lg hover:bg-teal-50 transition-colors cursor-pointer"
+                              title="Link de Resgate de Ingressos (WhatsApp)"
+                            >
+                              <Share2 className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => {
@@ -1085,6 +1113,17 @@ const AdminEvents: React.FC = () => {
             eventId={eventForCheckInShare.id}
             eventTitle={eventForCheckInShare.title}
             eventDate={eventForCheckInShare.event_date}
+          />
+        )}
+
+        {isRescueShareModalOpen && eventForRescueShare && (
+          <AdminTicketRescueShareModal
+            isOpen={isRescueShareModalOpen}
+            onClose={() => {
+              setIsRescueShareModalOpen(false);
+              setEventForRescueShare(null);
+            }}
+            event={eventForRescueShare}
           />
         )}
       </Suspense>

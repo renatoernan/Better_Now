@@ -36,6 +36,7 @@ export const AdminGuestListPrintModal: React.FC<AdminGuestListPrintModalProps> =
   const [letterFilter, setLetterFilter] = useState<string>('all');
   const [includeSignatureLine, setIncludeSignatureLine] = useState<boolean>(true);
   const [includeInstructions, setIncludeInstructions] = useState<boolean>(true);
+  const [includeBatchColumn, setIncludeBatchColumn] = useState<boolean>(true);
   
   // Busca na pré-visualização ao vivo
   const [previewSearch, setPreviewSearch] = useState<string>('');
@@ -108,6 +109,7 @@ export const AdminGuestListPrintModal: React.FC<AdminGuestListPrintModalProps> =
       density,
       includeSignatureLine,
       includeInstructions,
+      includeBatchColumn,
       batchFilter,
       statusFilter,
       letterFilter,
@@ -179,28 +181,34 @@ export const AdminGuestListPrintModal: React.FC<AdminGuestListPrintModalProps> =
         <div className="p-6 overflow-y-auto space-y-5 flex-1 bg-slate-50/50">
 
           {/* Cards de Resumo Rápido */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className={`grid gap-3 ${includeBatchColumn ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-1 sm:grid-cols-3'}`}>
             <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-2xs">
               <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">Total na Lista</span>
               <div className="text-xl font-black text-gray-900 mt-0.5">{kpis.total}</div>
               <span className="text-[10px] text-gray-400">Ingressos ordenados</span>
             </div>
-            <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-2xs">
-              <span className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider block">Pagantes</span>
-              <div className="text-xl font-black text-blue-700 mt-0.5">{kpis.paid}</div>
-              <span className="text-[10px] text-blue-500">Ingressos normais</span>
-            </div>
-            <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-2xs">
-              <span className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider block">Cortesias</span>
-              <div className="text-xl font-black text-emerald-700 mt-0.5">{kpis.complimentary}</div>
-              <span className="text-[10px] text-emerald-500">Valor zerado</span>
-            </div>
+
+            {includeBatchColumn && (
+              <>
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider block">Pagantes</span>
+                  <div className="text-xl font-black text-blue-700 mt-0.5">{kpis.paid}</div>
+                  <span className="text-[10px] text-blue-500">Ingressos normais</span>
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider block">Cortesias</span>
+                  <div className="text-xl font-black text-emerald-700 mt-0.5">{kpis.complimentary}</div>
+                  <span className="text-[10px] text-emerald-500">Valor zerado</span>
+                </div>
+              </>
+            )}
+
             <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-2xs">
               <span className="text-[11px] font-semibold text-amber-600 uppercase tracking-wider block">Já Entraram</span>
               <div className="text-xl font-black text-amber-700 mt-0.5">{kpis.used}</div>
               <span className="text-[10px] text-amber-500">Check-in prévio</span>
             </div>
-            <div className="bg-white p-3.5 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50/60 to-white shadow-2xs col-span-2 sm:col-span-1">
+            <div className={`bg-white p-3.5 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50/60 to-white shadow-2xs ${includeBatchColumn ? 'col-span-2 sm:col-span-1' : ''}`}>
               <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider block">Páginas A4</span>
               <div className="text-xl font-black text-indigo-700 mt-0.5">~{estimatedPages} {estimatedPages === 1 ? 'folha' : 'folhas'}</div>
               <span className="text-[10px] text-indigo-500 font-medium">Estimativa de impressão</span>
@@ -352,6 +360,17 @@ export const AdminGuestListPrintModal: React.FC<AdminGuestListPrintModalProps> =
                   <span>Linha de Rubrica / Assinatura Manual</span>
                 </label>
 
+                {/* Coluna Lote / Ingresso */}
+                <label className="inline-flex items-center gap-2 cursor-pointer font-medium">
+                  <input
+                    type="checkbox"
+                    checked={includeBatchColumn}
+                    onChange={(e) => setIncludeBatchColumn(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                  />
+                  <span>Coluna Lote / Ingresso</span>
+                </label>
+
                 {/* Instruções */}
                 <label className="inline-flex items-center gap-2 cursor-pointer font-medium">
                   <input
@@ -402,7 +421,7 @@ export const AdminGuestListPrintModal: React.FC<AdminGuestListPrintModalProps> =
                       <th className="py-2.5 px-3">Titular / Convidado</th>
                       <th className="py-2.5 px-3">Documento</th>
                       <th className="py-2.5 px-3">Telefone</th>
-                      <th className="py-2.5 px-3">Lote / Ingresso</th>
+                      {includeBatchColumn && <th className="py-2.5 px-3">Lote / Ingresso</th>}
                       <th className="py-2.5 px-3">Pedido / Cód</th>
                       <th className="py-2.5 px-3 text-center">Status Portaria</th>
                     </tr>
@@ -427,15 +446,17 @@ export const AdminGuestListPrintModal: React.FC<AdminGuestListPrintModalProps> =
                           <td className="py-2 px-3 font-mono text-[11px] text-gray-600">
                             {formatPhone(item.holderPhone) || '-'}
                           </td>
-                          <td className="py-2 px-3">
-                            <span className={`inline-block px-2 py-0.5 rounded-md font-bold text-[10px] ${
-                              item.isComplimentary
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-indigo-100 text-indigo-800'
-                            }`}>
-                              {item.isComplimentary ? 'Cortesia' : item.batchName}
-                            </span>
-                          </td>
+                          {includeBatchColumn && (
+                            <td className="py-2 px-3">
+                              <span className={`inline-block px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                                item.isComplimentary
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-indigo-100 text-indigo-800'
+                              }`}>
+                                {item.isComplimentary ? 'Cortesia' : item.batchName}
+                              </span>
+                            </td>
+                          )}
                           <td className="py-2 px-3 font-mono text-[10px] text-gray-500">
                             #{item.orderId.substring(0, 8).toUpperCase()} (Ing #{item.ticketNumber})
                           </td>

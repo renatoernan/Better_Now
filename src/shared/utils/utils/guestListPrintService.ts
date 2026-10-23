@@ -9,6 +9,7 @@ export interface GuestListPrintOptions {
   density: 'comfortable' | 'compact';
   includeSignatureLine: boolean;
   includeInstructions: boolean;
+  includeBatchColumn?: boolean;
   batchFilter?: string;
   statusFilter?: string;
   letterFilter?: string;
@@ -215,6 +216,7 @@ export const renderGuestListPrintHtml = (
   const emissionDate = formatDateTimeBR(new Date());
   const isLandscape = options.orientation === 'landscape';
   const isCompact = options.density === 'compact';
+  const includeBatch = options.includeBatchColumn !== false;
 
   // Métricas para o Resumo Executivo
   const totalCount = items.length;
@@ -393,7 +395,7 @@ export const renderGuestListPrintHtml = (
     /* Cards de Resumo */
     .kpi-row {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(${includeBatch ? 5 : 3}, 1fr);
       gap: 8px;
       margin-bottom: 12px;
     }
@@ -674,6 +676,7 @@ export const renderGuestListPrintHtml = (
         <div class="num">${totalCount}</div>
         <div class="label">Total na Lista</div>
       </div>
+      ${includeBatch ? `
       <div class="kpi-card">
         <div class="num" style="color:#2563eb;">${paidCount}</div>
         <div class="label">Pagantes</div>
@@ -682,6 +685,7 @@ export const renderGuestListPrintHtml = (
         <div class="num" style="color:#059669;">${complimentaryCount}</div>
         <div class="label">Cortesias</div>
       </div>
+      ` : ''}
       <div class="kpi-card">
         <div class="num" style="color:#d97706;">${usedCount}</div>
         <div class="label">Já Entraram</div>
@@ -697,20 +701,21 @@ export const renderGuestListPrintHtml = (
       <thead>
         <tr>
           <th style="width: ${isLandscape ? '38px' : '30px'};" class="center">#</th>
-          <th style="width: ${isLandscape ? '28%' : '27%'};">Titular do Ingresso / Convidado</th>
-          <th style="width: ${isLandscape ? '14%' : '14%'};">Documento</th>
-          <th style="width: ${isLandscape ? '14%' : '13%'};">WhatsApp / Tel</th>
-          <th style="width: ${isLandscape ? '14%' : '13%'};">Lote / Ingresso</th>
-          <th style="width: ${isLandscape ? '11%' : '11%'};">Identificador</th>
-          <th style="width: ${isLandscape ? '19%' : '22%'};">Validação Portaria</th>
+          <th style="width: ${isLandscape ? (includeBatch ? '28%' : '32%') : (includeBatch ? '27%' : '30%')};">Titular do Ingresso / Convidado</th>
+          <th style="width: ${isLandscape ? (includeBatch ? '14%' : '16%') : (includeBatch ? '14%' : '16%')};">Documento</th>
+          <th style="width: ${isLandscape ? (includeBatch ? '14%' : '15%') : (includeBatch ? '13%' : '14%')};">WhatsApp / Tel</th>
+          ${includeBatch ? `<th style="width: ${isLandscape ? '14%' : '13%'};">Lote / Ingresso</th>` : ''}
+          <th style="width: ${isLandscape ? (includeBatch ? '11%' : '13%') : (includeBatch ? '11%' : '13%')};">Identificador</th>
+          <th style="width: ${isLandscape ? (includeBatch ? '19%' : '24%') : (includeBatch ? '22%' : '27%')};">Validação Portaria</th>
         </tr>
       </thead>
       <tbody>
         ${letters.map((letter) => {
           const group = letterGroups[letter];
+          const colSpan = includeBatch ? 7 : 6;
           const letterHeader = `
             <tr class="letter-row">
-              <td colspan="7">
+              <td colspan="${colSpan}">
                 LETRA ${letter} &nbsp;—&nbsp; <span style="font-size:9px; font-weight:normal; opacity:0.85;">${group.length} ${group.length === 1 ? 'convidado' : 'convidados'}</span>
               </td>
             </tr>
@@ -758,9 +763,11 @@ export const renderGuestListPrintHtml = (
                 <td>
                   <div class="phone-num">${esc(formatPhone(item.holderPhone) || '-')}</div>
                 </td>
+                ${includeBatch ? `
                 <td>
                   <span class="badge-batch ${isComp ? 'badge-comp' : ''}">${esc(batchLabel)}</span>
                 </td>
+                ` : ''}
                 <td>
                   <div class="ticket-code">#${esc(item.orderId.substring(0, 8).toUpperCase())}</div>
                   <div style="font-size:7.5px; color:#94a3b8;">Ing. #${esc(item.ticketNumber)} ${item.qrCodeShort ? `• ${esc(item.qrCodeShort)}` : ''}</div>

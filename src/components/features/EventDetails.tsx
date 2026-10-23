@@ -7,7 +7,7 @@ import EventInfo from '../shared/EventInfo';
 import EventDescription from '../shared/EventDescription';
 import TicketCard from '../shared/TicketCard';
 import { usePublicEvents } from '../../shared/hooks/hooks/usePublicEvents';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Ticket, ShieldCheck } from 'lucide-react';
 import { Event as EventType, PriceBatch, ScheduleItem, PaymentMethodFee } from '../../shared/types/types/event';
 import { CouponValidationResult } from '../../shared/types/types/coupon';
 import { processPriceBatches, getBatchStatus, formatPrice, isBatchVisiblePublicly } from '../../shared/utils/utils/eventUtils';
@@ -1231,6 +1231,24 @@ const EventDetails: React.FC = () => {
                     onCouponApply={setAppliedCoupon}
                     clientDocument={currentClientCpf}
                   />
+
+                  {/* Link Seguro para Resgate de Ingressos já comprados */}
+                  <div className="mt-4 p-4 rounded-2xl bg-indigo-50/90 border border-indigo-200/90 shadow-2xs text-center space-y-2">
+                    <div className="flex items-center justify-center gap-1.5 text-indigo-900 font-bold text-xs">
+                      <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                      <span>Já comprou e perdeu seu QR Code?</span>
+                    </div>
+                    <p className="text-[11px] text-indigo-800 leading-relaxed">
+                      Resgate todos os seus ingressos digitando o CPF do comprador e envie direto para o WhatsApp.
+                    </p>
+                    <Link
+                      to={`/eventos/${id}/resgate`}
+                      className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Ticket className="w-3.5 h-3.5" />
+                      <span>Resgatar Ingressos com CPF</span>
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>

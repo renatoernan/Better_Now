@@ -23,6 +23,7 @@ const EventDetails = React.lazy(() => import('./components/features/EventDetails
 const EventMural = React.lazy(() => import('./components/features/EventMural'));
 const EventTelao = React.lazy(() => import('./components/features/EventTelao'));
 const PublicEventOrders = React.lazy(() => import('./components/features/PublicEventOrders'));
+const PublicEventTicketRescue = React.lazy(() => import('./components/features/PublicEventTicketRescue'));
 
 // Admin Components (Lazy Loading)
 const AdminLogin = React.lazy(() => import('./components/forms/AdminLogin'));
@@ -89,7 +90,9 @@ const AppContent: React.FC = () => {
     pathname.startsWith('/concursos/tablet') ||
     pathname.startsWith('/tablet') ||
     pathname.startsWith('/portaria') ||
-    pathname.startsWith('/checkin');
+    pathname.startsWith('/checkin') ||
+    pathname.includes('/resgate') ||
+    pathname.startsWith('/resgate');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -118,6 +121,38 @@ const AppContent: React.FC = () => {
           element={
             <Suspense fallback={<LoadingFallback message="Carregando detalhes do evento..." />}>
               <EventDetails />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/eventos/:id/resgate"
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando resgate de ingressos..." />}>
+              <PublicEventTicketRescue />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/eventos/:id/ingressos"
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando resgate de ingressos..." />}>
+              <PublicEventTicketRescue />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/resgate/:id"
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando resgate de ingressos..." />}>
+              <PublicEventTicketRescue />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/resgate"
+          element={
+            <Suspense fallback={<LoadingFallback message="Carregando resgate de ingressos..." />}>
+              <PublicEventTicketRescue />
             </Suspense>
           }
         />
