@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   X, QrCode, CheckCircle2, AlertTriangle, WifiOff, CloudUpload, Loader2, Search, RotateCcw,
-  Camera, Image as ImageIcon, RefreshCw, Vote, Trophy, Trash2,
+  Camera, Image as ImageIcon, RefreshCw, Vote, Trophy, Trash2, Tablet,
 } from 'lucide-react';
 import { supabase } from '../../shared/services/lib/supabase';
 import {
@@ -61,14 +61,87 @@ const votingEndedAt = (
 };
 
 const ContestKiosk: React.FC = () => {
-  const { id: eventId, contestId } = useParams<{ id: string; contestId: string }>();
+  const { id: routeEventId, contestId: routeContestId, token: routeToken } = useParams<{
+    id?: string;
+    contestId?: string;
+    token?: string;
+  }>();
   const navigate = useNavigate();
+
+  const [tokenMeta, setTokenMeta] = useState<any>(null);
+  const [tokenLoading, setTokenLoading] = useState<boolean>(Boolean(routeToken));
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!routeToken) return;
+    let isCancelled = false;
+    const validateToken = async () => {
+      setTokenLoading(true);
+      setTokenError(null);
+      try {
+        const { data, error } = await supabase.rpc('verify_contest_tablet_token', { p_token: routeToken });
+        if (isCancelled) return;
+        if (error) {
+          console.error('Erro ao validar token do tablet:', error);
+          setTokenError(error.message || 'Erro ao validar o link do tablet.');
+          return;
+        }
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row || !row.valid) {
+          setTokenError(row?.error || 'Link do tablet inválido, expirado ou revogado pela organização.');
+          return;
+        }
+        setTokenMeta(row);
+      } catch (err: any) {
+        if (!isCancelled) {
+          console.error('Erro na validação do token do tablet:', err);
+          setTokenError('Não foi possível verificar a validade deste link de tablet.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setTokenLoading(false);
+        }
+      }
+    };
+    validateToken();
+    return () => {
+      isCancelled = true;
+    };
+  }, [routeToken]);
+
+  const eventId = routeToken ? (tokenMeta?.event_id || '') : (routeEventId || '');
+  const contestId = routeToken ? (tokenMeta?.contest_id || '') : (routeContestId || '');
 
   const {
     contests, entriesFor, promotePhoto, replaceEntryPhoto, removeEntry, resultsFor,
     refetch: refetchContests, refetchEntries, refetchResults,
-  } = useEventContests(eventId || '');
-  const contest = contests.find(c => c.id === contestId);
+  } = useEventContests(eventId);
+
+  const contest = useMemo(() => {
+    if (contests.length > 0) {
+      const found = contests.find(c => c.id === contestId);
+      if (found) return found;
+    }
+    if (tokenMeta) {
+      return {
+        id: tokenMeta.contest_id,
+        event_id: tokenMeta.event_id,
+        title: tokenMeta.contest_title,
+        description: tokenMeta.contest_description,
+        prize_description: tokenMeta.prize_description,
+        status: tokenMeta.contest_status,
+        voting_opens_at: tokenMeta.voting_opens_at,
+        voting_closes_at: tokenMeta.voting_closes_at,
+        show_live_results: tokenMeta.show_live_results,
+        require_checkin: tokenMeta.require_checkin,
+        allow_self_vote: tokenMeta.allow_self_vote,
+        created_at: '',
+        updated_at: '',
+      } as any;
+    }
+    return undefined;
+  }, [contests, contestId, tokenMeta]);
+
   const entries = entriesFor(contestId || '').filter(e => e.status === 'active');
 
   const [adminId, setAdminId] = useState<string | null>(null);
@@ -141,9 +214,33 @@ const ContestKiosk: React.FC = () => {
     return () => clearInterval(t);
   }, []);
 
+  const [tokenResults, setTokenResults] = useState<any[]>([]);
+
+  const loadTokenResults = useCallback(async () => {
+    if (!routeToken || !tokenMeta?.valid) return;
+    const { data, error } = await supabase.rpc('kiosk_get_results', { p_token: routeToken });
+    if (!error && data) {
+      setTokenResults(data);
+    }
+  }, [routeToken, tokenMeta?.valid]);
+
+  useEffect(() => {
+    if (routeToken && tokenMeta?.valid) {
+      loadTokenResults();
+    }
+  }, [routeToken, tokenMeta?.valid, loadTokenResults, reloadKey]);
+
   // Quem já votou: some da fila e volta a aparecer se a organização anular o
   // voto. Os votos vêm de vários tablets, então a lista precisa ser ao vivo.
   const loadVotedTickets = useCallback(async () => {
+    if (routeToken) {
+      if (!tokenMeta?.valid) return;
+      const { data, error } = await supabase.rpc('kiosk_get_voted_tickets', { p_token: routeToken });
+      if (!error && data) {
+        setVotedTickets(new Set(data.map((v: any) => v.ticket_id)));
+      }
+      return;
+    }
     if (!contestId) return;
     const { data, error } = await supabase
       .from('app_contest_votes')
@@ -152,7 +249,7 @@ const ContestKiosk: React.FC = () => {
       .is('voided_at', null);
     if (error) return;
     setVotedTickets(new Set((data || []).map(v => v.ticket_id)));
-  }, [contestId]);
+  }, [contestId, routeToken]);
 
   useEffect(() => { loadVotedTickets(); }, [loadVotedTickets, reloadKey]);
 
@@ -163,11 +260,15 @@ const ContestKiosk: React.FC = () => {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'app_contest_votes', filter: `contest_id=eq.${contestId}` },
-        () => { loadVotedTickets(); refetchResults(); }
+        () => {
+          loadVotedTickets();
+          if (routeToken) loadTokenResults();
+          else refetchResults();
+        }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [contestId, loadVotedTickets, refetchResults]);
+  }, [contestId, loadVotedTickets, refetchResults, routeToken, loadTokenResults]);
 
   const liveVotingOpen = votingOpenAt(contest, nowTs);
   const liveVotingEnded = votingEndedAt(contest, nowTs);
@@ -388,7 +489,9 @@ const ContestKiosk: React.FC = () => {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      await Promise.all([refetchContests(), refetchEntries(), refetchResults()]);
+      const promises: Promise<any>[] = [refetchContests(), refetchEntries(), refetchResults()];
+      if (routeToken) promises.push(loadTokenResults());
+      await Promise.all(promises);
       setReloadKey(k => k + 1);
     } finally {
       setRefreshing(false);
@@ -559,22 +662,49 @@ const ContestKiosk: React.FC = () => {
     if (!shot || !target || !eventId || !contestId || saving) return;
     setSaving(true);
     try {
-      const photo = await uploadEventPhoto(eventId, shot.file, {
-        source: 'admin',
-        moderationStatus: 'approved',
-        caption: target.option.name,
-        ticketId: target.option.ticketId || null,
-        personId: target.option.personId || null,
-      });
+      if (routeToken) {
+        const ext = shot.file.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const storagePath = `event-mural/${eventId}/${unique}.${ext}`;
 
-      if (target.entry) {
-        await replaceEntryPhoto(target.entry.id, photo.id);
-      } else {
-        await promotePhoto(contestId, photo.id, {
-          name: target.option.name,
-          personId: target.option.personId,
-          ticketId: target.option.ticketId,
+        const { error: uploadError } = await supabase.storage
+          .from('events')
+          .upload(storagePath, shot.file, { contentType: shot.file.type });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage.from('events').getPublicUrl(storagePath);
+
+        const { error: rpcError } = await supabase.rpc('kiosk_save_contest_photo', {
+          p_token: routeToken,
+          p_photo_url: publicUrl,
+          p_storage_path: storagePath,
+          p_participant_name: target.option.name,
+          p_participant_ticket_id: target.option.ticketId,
+          p_participant_person_id: target.option.personId || null,
+          p_existing_entry_id: target.entry?.id || null,
         });
+
+        if (rpcError) throw rpcError;
+        await refetchEntries();
+      } else {
+        const photo = await uploadEventPhoto(eventId, shot.file, {
+          source: 'admin',
+          moderationStatus: 'approved',
+          caption: target.option.name,
+          ticketId: target.option.ticketId || null,
+          personId: target.option.personId || null,
+        });
+
+        if (target.entry) {
+          await replaceEntryPhoto(target.entry.id, photo.id);
+        } else {
+          await promotePhoto(contestId, photo.id, {
+            name: target.option.name,
+            personId: target.option.personId,
+            ticketId: target.option.ticketId,
+          });
+        }
       }
 
       setFeedback({
@@ -608,7 +738,16 @@ const ContestKiosk: React.FC = () => {
     if (!confirmDelete?.target.entry || deleting) return;
     setDeleting(true);
     try {
-      await removeEntry(confirmDelete.target.entry.id);
+      if (routeToken) {
+        const { error: rpcError } = await supabase.rpc('kiosk_remove_contest_entry', {
+          p_token: routeToken,
+          p_entry_id: confirmDelete.target.entry.id,
+        });
+        if (rpcError) throw rpcError;
+        await refetchEntries();
+      } else {
+        await removeEntry(confirmDelete.target.entry.id);
+      }
       setFeedback({
         title: 'Foto removida do concurso',
         detail: confirmDelete.votes > 0
@@ -665,11 +804,47 @@ const ContestKiosk: React.FC = () => {
     }
   };
 
+  if (tokenLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-6">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-purple-600/20 text-purple-400 flex items-center justify-center mx-auto border border-purple-500/30">
+            <Tablet className="w-6 h-6 animate-pulse" />
+          </div>
+          <Loader2 className="w-7 h-7 animate-spin mx-auto text-purple-500" />
+          <p className="text-sm font-medium text-gray-300">Validando acesso ao modo tablet...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokenError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-6">
+        <div className="max-w-md w-full bg-gray-800/90 border border-red-500/30 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center mx-auto border border-red-500/30">
+            <AlertTriangle className="w-7 h-7" />
+          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-white">Acesso ao Tablet Indisponível</h2>
+          <p className="text-sm text-gray-300 leading-relaxed">{tokenError}</p>
+          <div className="pt-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+            >
+              Tentar Novamente
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!contest) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-6">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-purple-500" />
           <p>Carregando concurso...</p>
         </div>
       </div>
@@ -680,10 +855,19 @@ const ContestKiosk: React.FC = () => {
   const votingEnded = votingEndedAt(contest, nowTs);
   const visible = listTab === 'todo' ? todoList : capturedList;
   const requiresCheckin = contest.require_checkin;
-  const ranking = resultsFor(contest.id).map(r => ({
-    ...r,
-    photoUrl: entries.find(e => e.id === r.entry_id)?.photo?.photo_url,
-  }));
+  const rawResults = routeToken ? tokenResults : resultsFor(contest.id);
+  const ranking = rawResults
+    .filter((r: any) => r.entry_status === 'active')
+    .sort((a: any, b: any) => {
+      if (b.vote_count !== a.vote_count) return b.vote_count - a.vote_count;
+      if (!a.first_vote_at) return 1;
+      if (!b.first_vote_at) return -1;
+      return Date.parse(a.first_vote_at) - Date.parse(b.first_vote_at);
+    })
+    .map((r: any) => ({
+      ...r,
+      photoUrl: entries.find(e => e.id === r.entry_id)?.photo?.photo_url,
+    }));
   const totalVotes = ranking.reduce((sum, r) => sum + r.vote_count, 0);
   // Na votação a ordem alfabética da busca ajuda mais que agrupar por foto.
   const voterList: CaptureTarget[] = filteredOptions.map(o => ({ option: o, entry: entryOf(o) }));
@@ -808,13 +992,25 @@ const ContestKiosk: React.FC = () => {
           >
             <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
-          <button
-            onClick={() => navigate(`/admin/events/${eventId}/concursos`)}
-            className="p-2 hover:bg-white/10 rounded-lg"
-            aria-label="Sair do modo tablet"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!routeToken && (
+            <button
+              onClick={() => navigate(`/admin/events/${eventId}/concursos`)}
+              className="p-2 hover:bg-white/10 rounded-lg cursor-pointer"
+              aria-label="Sair do modo tablet"
+              title="Voltar aos concursos"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+          {routeToken && (
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-lg text-xs font-semibold"
+              title="Dispositivo Operador de Concurso"
+            >
+              <Tablet className="w-3.5 h-3.5" />
+              <span className="truncate max-w-[120px]">{tokenMeta?.label || 'Modo Tablet'}</span>
+            </div>
+          )}
         </div>
       </header>
 

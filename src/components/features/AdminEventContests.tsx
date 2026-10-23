@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trophy, Trash2, Edit, X, Loader2, Images, AlertTriangle, Users, Tablet,
-  Sparkles, MonitorPlay, RefreshCw, BarChart3,
+  Sparkles, MonitorPlay, RefreshCw, BarChart3, QrCode,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../shared/services/lib/supabase';
@@ -12,6 +12,7 @@ import {
 import { formatPersonName, fetchEventAttendees } from '../../shared/utils/utils/eventAttendees';
 import ContestVotersPanel from '../shared/ContestVotersPanel';
 import ConfirmModal from '../shared/ConfirmModal';
+import AdminContestTabletShareModal from '../shared/AdminContestTabletShareModal';
 
 const STATUS_LABEL: Record<ContestStatus, string> = {
   draft: 'Rascunho',
@@ -74,6 +75,7 @@ const AdminEventContests: React.FC = () => {
   const [editing, setEditing] = useState<EventContest | null>(null);
   const [form, setForm] = useState<ContestInput>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [shareModalContest, setShareModalContest] = useState<EventContest | null>(null);
 
   useEffect(() => {
     if (!eventId) return;
@@ -420,11 +422,18 @@ const AdminEventContests: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={() => setShareModalContest(c)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg transition-colors font-medium cursor-pointer"
+                      title="Gerar e gerenciar links para tablets físicos operarem este concurso"
+                    >
+                      <QrCode className="w-4 h-4 text-purple-600" /> Link do tablet
+                    </button>
                     {c.status === 'voting' && (
                       <button
                         onClick={() => navigate(`/admin/events/${eventId}/concursos/${c.id}/tablet`)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors cursor-pointer"
                       >
                         <Tablet className="w-4 h-4" /> Abrir tablet
                       </button>
@@ -632,6 +641,16 @@ const AdminEventContests: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {shareModalContest && (
+        <AdminContestTabletShareModal
+          isOpen={Boolean(shareModalContest)}
+          onClose={() => setShareModalContest(null)}
+          contestId={shareModalContest.id}
+          contestTitle={shareModalContest.title}
+          eventTitle={eventTitle}
+        />
       )}
     </div>
   );

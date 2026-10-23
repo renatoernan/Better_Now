@@ -140,6 +140,24 @@ const AppContent: React.FC = () => {
           }
         />
         
+        {/* Modo tablet público via link seguro/token (fora do admin, sem login, sem dados confidenciais) */}
+        <Route
+          path="/concursos/tablet/:token"
+          element={
+            <Suspense fallback={<LoadingFallback message="Abrindo modo tablet..." />}>
+              <ContestKiosk />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/tablet/:token"
+          element={
+            <Suspense fallback={<LoadingFallback message="Abrindo modo tablet..." />}>
+              <ContestKiosk />
+            </Suspense>
+          }
+        />
+
         {/* Rotas administrativas */}
         {/* Modo tablet: tela cheia, fora do AdminLayout (sem menu lateral) */}
         <Route
