@@ -35,6 +35,7 @@ const AdminSolicitations = React.lazy(() => import('./components/features/AdminS
 const AdminEventMural = React.lazy(() => import('./components/features/AdminEventMural'));
 const AdminEventContests = React.lazy(() => import('./components/features/AdminEventContests'));
 const ContestKiosk = React.lazy(() => import('./components/features/ContestKiosk'));
+const DigitalCheckIn = React.lazy(() => import('./components/features/DigitalCheckIn'));
 const AdminPayouts = React.lazy(() => import('./components/features/AdminPayouts'));
 
 // Supplier Components (Lazy Loading)
@@ -83,7 +84,12 @@ const AppContent: React.FC = () => {
   // O botão do WhatsApp fala com o público do site; na área administrativa ele
   // só cobre os controles de tela (modo tablet, check-in) sem servir a ninguém.
   const { pathname } = useLocation();
-  const isAdminArea = pathname.startsWith('/admin');
+  const isKioskOrAdminArea =
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/concursos/tablet') ||
+    pathname.startsWith('/tablet') ||
+    pathname.startsWith('/portaria') ||
+    pathname.startsWith('/checkin');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -154,6 +160,24 @@ const AppContent: React.FC = () => {
           element={
             <Suspense fallback={<LoadingFallback message="Abrindo modo tablet..." />}>
               <ContestKiosk />
+            </Suspense>
+          }
+        />
+
+        {/* Modo portaria / check-in público via link seguro/token (fora do admin, sem login, sem dados confidenciais) */}
+        <Route
+          path="/portaria/:token"
+          element={
+            <Suspense fallback={<LoadingFallback message="Abrindo portaria..." />}>
+              <DigitalCheckIn />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/checkin/:token"
+          element={
+            <Suspense fallback={<LoadingFallback message="Abrindo portaria..." />}>
+              <DigitalCheckIn />
             </Suspense>
           }
         />
@@ -325,7 +349,7 @@ const AppContent: React.FC = () => {
         closeButton
         duration={4000}
       />
-      {!isAdminArea && (
+      {!isKioskOrAdminArea && (
         <Suspense fallback={null}>
           <WhatsAppButton />
         </Suspense>

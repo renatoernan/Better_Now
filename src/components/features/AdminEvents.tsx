@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin, ArrowLeft, Globe, Link2, Copy, Images, Trophy } from 'lucide-react';
+import { Calendar, Plus, Search, Filter, Clock, Users, Eye, Edit, Trash2, Settings, BarChart3, Camera, QrCode, Bell, Tag, RotateCcw, X, Receipt, Ticket, MapPin, ArrowLeft, Globe, Link2, Copy, Images, Trophy, Smartphone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { Event } from '../../shared/types/types/event';
@@ -15,6 +15,7 @@ const AdminEventTypes = React.lazy(() => import('../AdminEventTypes'));
 const AdminEventOrders = React.lazy(() => import('./AdminEventOrders'));
 const AdminEventCoupons = React.lazy(() => import('./AdminEventCoupons'));
 const ConfirmModal = React.lazy(() => import('../shared/ConfirmModal'));
+const AdminCheckInShareModal = React.lazy(() => import('../shared/AdminCheckInShareModal').then(m => ({ default: m.AdminCheckInShareModal })));
 
 type ViewMode = 'list' | 'form' | 'gallery' | 'checkin' | 'reports' | 'event-types' | 'orders' | 'coupons';
 
@@ -50,6 +51,10 @@ const AdminEvents: React.FC = () => {
   const [eventToDelete, setEventToDelete] = useState<string | null>(null);
   const [eventToRestore, setEventToRestore] = useState<string | null>(null);
   const [eventToPermanentDelete, setEventToPermanentDelete] = useState<string | null>(null);
+
+  // Modal de compartilhamento do link de portaria/tablet
+  const [isCheckInShareModalOpen, setIsCheckInShareModalOpen] = useState(false);
+  const [eventForCheckInShare, setEventForCheckInShare] = useState<Event | null>(null);
 
   useEffect(() => {
     fetchEvents();
@@ -274,14 +279,39 @@ const AdminEvents: React.FC = () => {
             <h2 className="text-lg sm:text-2xl font-bold text-gray-900 leading-tight">Check-in - {selectedEvent.title}</h2>
             <p className="text-xs sm:text-sm text-gray-500">Gerencie a entrada e validação dos participantes</p>
           </div>
-          <button
-            onClick={() => setViewMode('list')}
-            className="self-start sm:self-auto bg-gray-800 hover:bg-black text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shrink-0 shadow-xs"
-          >
-            ← Voltar
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => {
+                setEventForCheckInShare(selectedEvent);
+                setIsCheckInShareModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs"
+              title="Gerar link de acesso para celulares ou tablets da portaria"
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>Link da Portaria</span>
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className="bg-gray-800 hover:bg-black text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shrink-0 shadow-xs"
+            >
+              ← Voltar
+            </button>
+          </div>
         </div>
         <DigitalCheckIn eventId={selectedEvent.id} />
+        {isCheckInShareModalOpen && eventForCheckInShare && (
+          <Suspense fallback={null}>
+            <AdminCheckInShareModal
+              isOpen={isCheckInShareModalOpen}
+              onClose={() => setIsCheckInShareModalOpen(false)}
+              eventId={eventForCheckInShare.id}
+              eventTitle={eventForCheckInShare.title}
+              eventDate={eventForCheckInShare.event_date}
+            />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -1047,6 +1077,16 @@ const AdminEvents: React.FC = () => {
           cancelText="Cancelar"
           type="danger"
         />
+
+        {isCheckInShareModalOpen && eventForCheckInShare && (
+          <AdminCheckInShareModal
+            isOpen={isCheckInShareModalOpen}
+            onClose={() => setIsCheckInShareModalOpen(false)}
+            eventId={eventForCheckInShare.id}
+            eventTitle={eventForCheckInShare.title}
+            eventDate={eventForCheckInShare.event_date}
+          />
+        )}
       </Suspense>
     </div>
   );

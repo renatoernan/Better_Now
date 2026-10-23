@@ -554,12 +554,11 @@ export const AdminCheckInShareModal: React.FC<Props> = ({
         isOpen={Boolean(shareToRevoke)}
         title="Revogar Link de Portaria?"
         message={`Tem certeza que deseja revogar o link "${shareToRevoke?.label || 'Portaria'}"? Dispositivos conectados por este link perderão o acesso imediatamente.`}
-        confirmText="Revogar Acesso"
+        confirmText={revoking ? 'Revogando...' : 'Revogar Acesso'}
         cancelText="Manter Ativo"
-        variant="danger"
-        isLoading={revoking}
+        type="danger"
         onConfirm={handleRevokeConfirm}
-        onCancel={() => setShareToRevoke(null)}
+        onClose={() => setShareToRevoke(null)}
       />
     </>
   );

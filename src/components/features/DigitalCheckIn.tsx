@@ -30,14 +30,16 @@ import {
   Volume2,
   AlertTriangle
 } from 'lucide-react';
+import { useParams } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { isPaidOrderStatus } from '../../shared/utils/utils/eventAttendees';
 import { supabase } from '../../shared/services/lib/supabase';
 import { useSupabaseEvents } from '../../shared/hooks/hooks/useSupabaseEvents';
 import { toast } from 'sonner';
+import { AdminCheckInShareModal } from '../shared/AdminCheckInShareModal';
 
 interface DigitalCheckInProps {
-  eventId: string;
+  eventId?: string;
 }
 
 interface TicketWithOrder {
@@ -184,8 +186,69 @@ export const maskPhone = (phone?: string): string => {
   return phone;
 };
 
-const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
+const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId: propEventId }) => {
+  const { token: routeToken } = useParams<{ token?: string }>();
+  const isTokenMode = Boolean(routeToken);
+
+  const [tokenMeta, setTokenMeta] = useState<any>(null);
+  const [tokenLoading, setTokenLoading] = useState<boolean>(isTokenMode);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
+  // Modal para gerar/compartilhar link da portaria no modo admin
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
   const { events, fetchEvents } = useSupabaseEvents();
+
+  // Validação do Token da Portaria quando acessado via link direto
+  useEffect(() => {
+    if (!routeToken) return;
+    let isCancelled = false;
+
+    const validateToken = async () => {
+      setTokenLoading(true);
+      setTokenError(null);
+      try {
+        const { data, error } = await supabase.rpc('verify_checkin_token', {
+          p_token: routeToken,
+        });
+
+        if (isCancelled) return;
+        if (error) {
+          console.error('Erro ao verificar token da portaria:', error);
+          setTokenError(error.message || 'Erro ao validar o link de portaria.');
+          return;
+        }
+
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row || !row.valid) {
+          setTokenError(row?.error || 'Link de portaria inválido, expirado ou revogado.');
+          return;
+        }
+
+        setTokenMeta(row);
+      } catch (err: any) {
+        if (!isCancelled) {
+          console.error('Falha de conexão com a portaria:', err);
+          setTokenError('Não foi possível verificar a validade deste link de portaria.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setTokenLoading(false);
+        }
+      }
+    };
+
+    validateToken();
+    return () => {
+      isCancelled = true;
+    };
+  }, [routeToken]);
+
+  const effectiveEventId = isTokenMode ? (tokenMeta?.event_id || '') : (propEventId || '');
+  const currentEvent = events.find(e => e.id === effectiveEventId);
+  const effectiveEventTitle = currentEvent?.title || tokenMeta?.event_title || 'Portaria do Evento';
+  const effectiveEventDate = currentEvent?.event_date || tokenMeta?.event_date;
+  const effectiveTokenLabel = tokenMeta?.label || 'Portaria Conectada';
   
   const [tickets, setTickets] = useState<TicketWithOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -219,7 +282,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
 
   // Carregar ingressos reais do evento
   const loadEventTickets = async () => {
-    if (!eventId) return;
+    if (!effectiveEventId) return;
     setLoading(true);
     try {
       // 1. Buscar ingressos do evento trazendo dados da pessoa associada
@@ -229,7 +292,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
           *,
           person:app_people(id, nome, documento, whatsapp, email)
         `)
-        .eq('event_id', eventId)
+        .eq('event_id', effectiveEventId)
         .order('created_at', { ascending: false });
 
       if (ticketsErr) throw ticketsErr;
@@ -377,11 +440,13 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
   };
 
   useEffect(() => {
-    fetchEvents();
-    loadEventTickets();
-  }, [eventId]);
-
-  const currentEvent = events.find(e => e.id === eventId);
+    if (!isTokenMode) {
+      fetchEvents();
+    }
+    if (effectiveEventId) {
+      loadEventTickets();
+    }
+  }, [effectiveEventId, isTokenMode]);
 
   // Gerenciamento da Câmera com Html5Qrcode com Estratégia em Cascata Resiliente para Android/iOS
   const startCameraScanner = async (mode: 'environment' | 'user' = facingMode) => {
@@ -689,15 +754,34 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
     setLoading(true);
     const nowIso = new Date().toISOString();
     try {
-      const { error } = await supabase
-        .from('app_event_tickets')
-        .update({
-          status: 'used',
-          used_at: nowIso
-        })
-        .eq('id', ticketId);
+      if (isTokenMode && routeToken) {
+        // Validação via RPC segura com verificação de integridade do token de portaria
+        const { data, error } = await supabase.rpc('kiosk_checkin_ticket', {
+          p_token: routeToken,
+          p_ticket_id: ticketId,
+        });
 
-      if (error) throw error;
+        if (error) throw error;
+        const res = Array.isArray(data) ? data[0] : data;
+        if (!res?.success) {
+          if (res?.already_used) {
+            playWarningBeep();
+            toast.warning('Este ingresso já foi utilizado anteriormente!');
+            return;
+          }
+          throw new Error(res?.error || 'Não foi possível confirmar o check-in.');
+        }
+      } else {
+        const { error } = await supabase
+          .from('app_event_tickets')
+          .update({
+            status: 'used',
+            used_at: nowIso
+          })
+          .eq('id', ticketId);
+
+        if (error) throw error;
+      }
 
       playSuccessBeep();
       
@@ -705,7 +789,7 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
         ? { ...selectedTicket, status: 'used', used_at: nowIso }
         : tickets.find(t => t.id === ticketId)
           ? { ...tickets.find(t => t.id === ticketId)!, status: 'used', used_at: nowIso }
-          : { id: ticketId, event_id: eventId, order_id: '', ticket_number: 1, qr_code_hash: '', status: 'used', used_at: nowIso, created_at: nowIso } as any;
+          : { id: ticketId, event_id: effectiveEventId, order_id: '', ticket_number: 1, qr_code_hash: '', status: 'used', used_at: nowIso, created_at: nowIso } as any;
 
       // Atualizar lista local
       setTickets(prev => prev.map(t => 
@@ -715,9 +799,9 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
       // Fecha o modal de conferência e abre o modal de sucesso com botão de próxima leitura
       setSelectedTicket(null);
       setCheckInSuccessTicket(updatedTicket);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao confirmar check-in:', err);
-      toast.error('Não foi possível confirmar o check-in');
+      toast.error(err.message || 'Não foi possível confirmar o check-in');
     } finally {
       setLoading(false);
     }
@@ -727,15 +811,28 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
   const handleUndoCheckIn = async (ticketId: string) => {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('app_event_tickets')
-        .update({
-          status: 'valid',
-          used_at: null
-        })
-        .eq('id', ticketId);
+      if (isTokenMode && routeToken) {
+        const { data, error } = await supabase.rpc('kiosk_undo_checkin_ticket', {
+          p_token: routeToken,
+          p_ticket_id: ticketId,
+        });
 
-      if (error) throw error;
+        if (error) throw error;
+        const res = Array.isArray(data) ? data[0] : data;
+        if (!res?.success) {
+          throw new Error(res?.error || 'Erro ao desfazer check-in.');
+        }
+      } else {
+        const { error } = await supabase
+          .from('app_event_tickets')
+          .update({
+            status: 'valid',
+            used_at: null
+          })
+          .eq('id', ticketId);
+
+        if (error) throw error;
+      }
 
       toast.info('Check-in desfeito. Ingresso revalidado.');
       
@@ -747,15 +844,15 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
       if (selectedTicket && selectedTicket.id === ticketId) {
         setSelectedTicket({ ...selectedTicket, status: 'valid', used_at: undefined });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao desfazer check-in:', err);
-      toast.error('Erro ao desfazer check-in');
+      toast.error(err.message || 'Erro ao desfazer check-in');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
+  const checkInContent = (
     <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200/80 overflow-hidden">
       {/* Header com Informações do Evento e Ações */}
       <div className="p-4 sm:p-6 border-b border-gray-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white">
@@ -765,14 +862,33 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
               <UserCheck className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-xl font-bold truncate">Portaria & Check-in</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-xl font-bold truncate">Portaria & Check-in</h2>
+                {isTokenMode && (
+                  <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {effectiveTokenLabel}
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] sm:text-xs text-slate-300 truncate mt-0.5">
-                {currentEvent?.title || 'Gerenciamento de Entrada'}
+                {effectiveEventTitle}
               </p>
             </div>
           </div>
           
           <div className="flex items-center gap-2 shrink-0">
+            {!isTokenMode && effectiveEventId && (
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(true)}
+                className="p-2 sm:p-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+                title="Gerar link ou QR Code para celulares/tablets da portaria"
+              >
+                <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Link da Portaria</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -1564,6 +1680,111 @@ const DigitalCheckIn: React.FC<DigitalCheckInProps> = ({ eventId }) => {
         )}
       </div>
     </div>
+  );
+
+  // Tela de Carregamento inicial ao validar Token de Portaria
+  if (isTokenMode && tokenLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto animate-pulse">
+            <Smartphone className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-white">Conectando à Portaria</h3>
+            <p className="text-xs text-slate-400">Validando credencial segura de acesso...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Tela de Erro ao validar Token de Portaria (inválido, revogado ou expirado)
+  if (isTokenMode && tokenError) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto shadow-inner">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-bold text-white">Acesso à Portaria Indisponível</h2>
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+              {tokenError}
+            </p>
+          </div>
+          <div className="pt-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-xs"
+            >
+              <RefreshCw className="w-4 h-4" /> Tentar Novamente
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500 pt-2">
+            Solicite um novo link ou QR Code ao administrador do evento.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Modo Público Tokenizado (fora do admin, seguro em tela cheia)
+  if (isTokenMode) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-2 sm:p-4 md:p-6">
+        <header className="max-w-5xl mx-auto w-full mb-3 flex items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-3 sm:p-4 rounded-2xl shadow-lg backdrop-blur-md">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <Smartphone className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-white truncate">
+                  Portaria Digital
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  {effectiveTokenLabel}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 truncate">
+                {effectiveEventTitle}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] text-slate-400 hidden sm:inline-block">
+              Acesso Isolado e Seguro
+            </span>
+            <div className="p-1.5 bg-slate-800 text-slate-300 rounded-lg" title="Acesso isolado e seguro para portaria">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-start w-full">
+          {checkInContent}
+        </main>
+      </div>
+    );
+  }
+
+  // Modo Admin Padrão
+  return (
+    <>
+      {checkInContent}
+      {isShareModalOpen && effectiveEventId && (
+        <AdminCheckInShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          eventId={effectiveEventId}
+          eventTitle={effectiveEventTitle}
+          eventDate={effectiveEventDate}
+        />
+      )}
+    </>
   );
 };
 

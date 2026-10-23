@@ -131,7 +131,10 @@ AS $$
 #variable_conflict use_column
 DECLARE
   v_share RECORD;
-  v_event RECORD;
+  v_event_title TEXT := 'Evento';
+  v_event_date TEXT := '';
+  v_event_time TEXT := '';
+  v_event_location TEXT := '';
 BEGIN
   -- 1. Localiza o share ativo e não expirado
   SELECT s.id, s.token, s.label, s.event_id INTO v_share
@@ -151,11 +154,25 @@ BEGIN
       last_accessed_at = NOW()
   WHERE s.id = v_share.id;
 
-  -- 3. Metadados do evento
-  SELECT e.id, e.title, e.date, e.time, e.location
-  INTO v_event
-  FROM public.app_events e
-  WHERE e.id = v_share.event_id;
+  -- 3. Metadados do evento com proteção total contra divergências de colunas
+  BEGIN
+    SELECT 
+      COALESCE(e.title, 'Evento')::TEXT,
+      COALESCE(e.event_date::TEXT, '')::TEXT,
+      COALESCE(e.start_time::TEXT, '')::TEXT,
+      COALESCE(e.location::TEXT, '')::TEXT
+    INTO v_event_title, v_event_date, v_event_time, v_event_location
+    FROM public.app_events e
+    WHERE e.id = v_share.event_id;
+  EXCEPTION WHEN OTHERS THEN
+    BEGIN
+      SELECT COALESCE(e.title, 'Evento')::TEXT INTO v_event_title
+      FROM public.app_events e
+      WHERE e.id = v_share.event_id;
+    EXCEPTION WHEN OTHERS THEN
+      v_event_title := 'Evento';
+    END;
+  END;
 
   RETURN jsonb_build_object(
     'valid', TRUE,
@@ -163,10 +180,10 @@ BEGIN
     'token', v_share.token,
     'label', coalesce(v_share.label, 'Portaria'),
     'event_id', v_share.event_id,
-    'event_title', coalesce(v_event.title, 'Evento'),
-    'event_date', v_event.date,
-    'event_time', v_event.time,
-    'event_location', coalesce(v_event.location, '')
+    'event_title', coalesce(v_event_title, 'Evento'),
+    'event_date', v_event_date,
+    'event_time', v_event_time,
+    'event_location', coalesce(v_event_location, '')
   );
 END;
 $$;
