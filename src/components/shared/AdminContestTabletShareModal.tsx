@@ -448,8 +448,14 @@ export const AdminContestTabletShareModal: React.FC<Props> = ({
 
       {/* Submodal de Exibição do QR Code para Tablet */}
       {qrModalShare && (
-        <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl border border-gray-100">
+        <div
+          className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setQrModalShare(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl border border-gray-100"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b pb-3">
               <div className="text-left">
                 <h4 className="font-bold text-gray-900 text-sm">

@@ -4,7 +4,7 @@ import {
   CheckCircle2, XCircle, Eye, FileText, Globe, RefreshCw, User, Phone, 
   Calendar, Layers, CreditCard, ChevronRight, AlertCircle, Ban, Trash2, 
   RotateCcw, Zap, MessageSquare, Gift, Users, ArrowRightLeft, QrCode, ShoppingBag,
-  Receipt, Wallet, Percent, Link2
+  Receipt, Wallet, Percent, Link2, Printer
 } from 'lucide-react';
 import { Event } from '../../shared/types/types/event';
 import { useEventOrders, EventOrderRecord, EventTicketRecord } from '../../shared/hooks/hooks/useEventOrders';
@@ -20,6 +20,7 @@ import AdminRefundOrderModal from '../shared/AdminRefundOrderModal';
 import AdminTransferTicketModal from '../shared/AdminTransferTicketModal';
 import AdminSendOrderNotificationModal from '../shared/AdminSendOrderNotificationModal';
 import AdminOrderShareModal from '../shared/AdminOrderShareModal';
+import AdminGuestListPrintModal from '../shared/AdminGuestListPrintModal';
 import { toast } from 'sonner';
 import { isPartialRefund } from '../../shared/utils/utils/refundReceipt';
 
@@ -86,6 +87,7 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
   const [ticketToTransfer, setTicketToTransfer] = useState<{ ticket: EventTicketRecord; order: EventOrderRecord } | null>(null);
   const [showComplimentaryModal, setShowComplimentaryModal] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
+  const [showGuestListPrintModal, setShowGuestListPrintModal] = useState<boolean>(false);
 
   // Manter selectedOrderForDetail sincronizado em tempo real caso orders mude
   useEffect(() => {
@@ -566,6 +568,18 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
           >
             <Link2 className="w-4 h-4" />
             <span>Link de Consulta</span>
+          </button>
+
+          <button
+            onClick={() => setShowGuestListPrintModal(true)}
+            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 shadow-xs flex items-center gap-2 transition-all cursor-pointer hover:border-slate-400 group"
+            title="Imprimir relatório de contingência da lista de convidados em ordem alfabética para portaria (Plano B)"
+          >
+            <Printer className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform" />
+            <span>Imprimir Lista (Portaria)</span>
+            <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase bg-rose-50 text-rose-600 rounded-md border border-rose-200">
+              Plano B
+            </span>
           </button>
 
           <button
@@ -1301,6 +1315,14 @@ export const AdminEventOrders: React.FC<AdminEventOrdersProps> = ({ event, onBac
           }
           setTicketToTransfer(null);
         }}
+      />
+
+      {/* Modal Premium de Impressão da Lista de Convidados (Plano B de Portaria) */}
+      <AdminGuestListPrintModal
+        isOpen={showGuestListPrintModal}
+        onClose={() => setShowGuestListPrintModal(false)}
+        event={event}
+        tickets={flattenedTickets}
       />
     </div>
   );

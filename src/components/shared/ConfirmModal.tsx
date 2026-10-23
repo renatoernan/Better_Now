@@ -10,6 +10,7 @@ interface ConfirmModalProps {
   confirmText?: string;
   cancelText?: string;
   type?: 'danger' | 'warning' | 'info';
+  zIndex?: string;
 }
 
 const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -20,7 +21,8 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   message,
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
-  type = 'danger'
+  type = 'danger',
+  zIndex = 'z-[70]',
 }) => {
   // Fechar modal com ESC
   useEffect(() => {
@@ -90,7 +92,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm animate-in fade-in duration-200"
+      className={`fixed inset-0 ${zIndex} flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm animate-in fade-in duration-200`}
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"

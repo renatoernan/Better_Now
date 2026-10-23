@@ -57,6 +57,7 @@ export interface EventTicketRecord {
   qr_code_hash: string;
   status: 'valid' | 'used' | 'cancelled';
   checked_in_at?: string;
+  used_at?: string;
   created_at: string;
   person?: {
     id?: string;
