@@ -899,7 +899,8 @@ const ContestKiosk: React.FC = () => {
               src={photo}
               alt={t.option.name}
               loading="lazy"
-              className="w-full h-full object-contain"
+              className={`w-full h-full object-contain ${showEligibility ? 'grayscale contrast-110' : ''}`}
+              style={showEligibility ? { filter: 'grayscale(100%) contrast(1.1)' } : undefined}
             />
           </div>
         )}
